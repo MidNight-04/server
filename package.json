@@ -1,0 +1,61 @@
+{
+  "name": "thikedaar",
+  "version": "0.0.1",
+  "proxy": "http://3.6.218.211:8080",
+  "private": true,
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.335.0",
+    "@ckeditor/ckeditor5-react": "^9.3.1",
+    "@testing-library/user-event": "^13.5.0",
+    "aws-sdk": "^2.1495.0",
+    "axios": "^1.2.4",
+    "bcryptjs": "^2.4.3",
+    "body-parser": "^1.20.3",
+    "ckeditor5": "^43.2.0",
+    "ckeditor5-premium-features": "^43.2.0",
+    "cookie-session": "^2.0.0",
+    "cors": "^2.8.5",
+    "date-fns": "^3.6.0",
+    "dayjs": "^1.11.13",
+    "dotenv": "^16.0.3",
+    "express": "^4.18.2",
+    "file-saver": "^2.0.5",
+    "jimp-watermark": "^1.1.0",
+    "joi": "^17.13.1",
+    "jquery": "^3.7.1",
+    "jsonwebtoken": "^9.0.0",
+    "mongoose": "^6.8.4",
+    "morgan": "^1.10.0",
+    "multer": "^1.4.5-lts.1",
+    "multer-s3": "^3.0.1",
+    "node-fetch": "^3.3.2",
+    "nodemailer": "^6.9.4",
+    "nodemon": "^2.0.20",
+    "otp-generator": "^4.0.1",
+    "pdf-watermark": "^1.0.4",
+    "pdfjs-dist": "^4.4.168",
+    "web-vitals": "^2.1.4",
+    "xlsx": "^0.18.5"
+  },
+  "scripts": {
+    "start": "nodemon server.js"
+  },
+  "eslintConfig": {
+    "extends": []
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  },
+  "devDependencies": {
+    "parcel": "^2.8.2"
+  }
+}

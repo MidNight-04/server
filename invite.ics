@@ -1,0 +1,114 @@
+BEGIN:VCALENDAR
+METHOD:REQUEST
+PRODID:Microsoft Exchange Server 2010
+VERSION:2.0
+BEGIN:VTIMEZONE
+TZID:India Standard Time
+BEGIN:STANDARD
+DTSTART:16010101T000000
+TZOFFSETFROM:+0530
+TZOFFSETTO:+0530
+END:STANDARD
+BEGIN:DAYLIGHT
+DTSTART:16010101T000000
+TZOFFSETFROM:+0530
+TZOFFSETTO:+0530
+END:DAYLIGHT
+END:VTIMEZONE
+BEGIN:VEVENT
+ORGANIZER;CN=Deepak6 Singh:mailto:Deepak6.Singh@infogain.com
+ATTENDEE;ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=TRUE;CN=Ajay Kumar
+ :mailto:ajaykan47@gmail.com
+ATTENDEE;ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=TRUE;CN=Sajal Shar
+ ma:mailto:Sajal.Sharma@infogain.com
+ATTACH:CID:E5E695ABE929F74F872F8A65AEACF17F@INDPRD01.PROD.OUTLOOK.COM
+ATTACH:CID:E78E97CC01CE7C4A8BBF307E9F95623C@INDPRD01.PROD.OUTLOOK.COM
+ATTACH:CID:CF9173DBF842724D9A1DA8FE37E10462@INDPRD01.PROD.OUTLOOK.COM
+DESCRIPTION;LANGUAGE=en-US:[\\\\ipagfileserver\\Photos\\ATS\\ImpDocs\\Infog
+ ainLogo.png]\n\nDear Ajay Kumar\,\n\nGreeting from Infogain!!!\nyou have b
+ een short listed for the next round interview. Attaching the job descripti
+ on for your reference.\n\nDay & Date:     Saturday\, 3/11/2023\nInterview 
+ Time:         13:00 PM IST\nMode of Interview:      MS Teams\nInterview Li
+ nk Details:         Click here to join<https://teams.microsoft.com/l/meetu
+ p-join/19%3ameeting_OWM3NjQ5ZmQtYjNiMS00ZWM3LWFiYTItOWUyMTY4Zjk3MDMw%40thr
+ ead.v2/0?context=%7b%22Tid%22%3a%223f7f52c7-07b2-4cb1-a07a-496256021e6f%22
+ %2c%22Oid%22%3a%22588406ef-209e-4029-b556-b21affdac0b8%22%7d>\nInterviewer
+ :    Sajal Sharma\nContact Person:         Deepak Singh\nPrerequisites:\n\
+ n  *   A government photo ID proof to be handy (Aadhar Card / Pan Card / P
+ assport / Voter ID Card / Driving License).\n  *   Webcam to be enabled pr
+ ior to interview commencement and the same to be switched on throughout th
+ e interview.\n  *   Ensure high-speed network connectivity for seamless di
+ scussion.\n  *   Login to the call 5 minutes prior to the scheduled interv
+ iew time. Choose a quiet\, private\, and well-lit place free from possible
+  interruptions.\n  *   Request you to login through your Laptop / Desktop 
+ only.\n  *   Kindly ensure to have appropriate software pre-installed enab
+ ling you to respond to the coding / programming-related queries effectivel
+ y.\n  *   Dress professionally.\n\nAbout Infogain:\n\nWe combine people\, 
+ platforms\, and software.\n\nInfogain is a human-centered digital platform
+  and software engineering company based out of Silicon Valley. We engineer
+  business outcomes for Fortune 500 companies and digital natives in the te
+ chnology\, healthcare\, insurance\, travel\, and retail industries using t
+ echnologies such as cloud\, microservices\, automation\, IoT\, and artific
+ ial intelligence. We accelerate experience-led transformation in the deliv
+ ery of digital platforms. Infogain is also a Microsoft Gold Partner and Az
+ ure Expert Managed Services Provider (MSP).\n\nInfogain\, a Apax portfolio
+  company\, has offices in California\, Washington\, Texas\, the UK\, the U
+ AE and Singapore\, with delivery centres in Seattle\, Houston\, Austin\, K
+ raków\, New Delhi\, Mumbai\, Pune\, and Bengaluru.\n\nTo explore life at 
+ Infogain and know more about us\, click here<https://www.infogain.com>\n\n
+ The information in this email is confidential and may be legally privilege
+ d. It is intended solely for the addressee and access to it by anyone else
+  is unauthorized. If you are not the intended recipient\, any disclosure\,
+  copying\, distribution or any action taken or omitted to be taken based o
+ n it\, is strictly prohibited and may be unlawful.\n
+UID:040000008200E00074C5B7101A82E008000000008914FB0B2653D901000000000000000
+ 010000000FFAC8037911FA740B76086EC19A983EF
+SUMMARY;LANGUAGE=en-US:Technical Round || Interview Scheduled at Infogain
+DTSTART;TZID=India Standard Time:20230311T130000
+DTEND;TZID=India Standard Time:20230311T133000
+CLASS:PUBLIC
+PRIORITY:1
+DTSTAMP:20230310T075815Z
+TRANSP:OPAQUE
+STATUS:CONFIRMED
+SEQUENCE:0
+LOCATION;LANGUAGE=en-US:Microsoft Teams Meeting
+X-MICROSOFT-CDO-APPT-SEQUENCE:0
+X-MICROSOFT-CDO-OWNERAPPTID:2121486729
+X-MICROSOFT-CDO-BUSYSTATUS:TENTATIVE
+X-MICROSOFT-CDO-INTENDEDSTATUS:BUSY
+X-MICROSOFT-CDO-ALLDAYEVENT:FALSE
+X-MICROSOFT-CDO-IMPORTANCE:2
+X-MICROSOFT-CDO-INSTTYPE:0
+X-MICROSOFT-ONLINEMEETINGINFORMATION:{"OnlineMeetingChannelId":null\,"Onlin
+ eMeetingProvider":3}
+X-MICROSOFT-SKYPETEAMSMEETINGURL:https://teams.microsoft.com/l/meetup-join/
+ 19%3ameeting_OWM3NjQ5ZmQtYjNiMS00ZWM3LWFiYTItOWUyMTY4Zjk3MDMw%40thread.v2/
+ 0?context=%7b%22Tid%22%3a%223f7f52c7-07b2-4cb1-a07a-496256021e6f%22%2c%22O
+ id%22%3a%22588406ef-209e-4029-b556-b21affdac0b8%22%7d
+X-MICROSOFT-SCHEDULINGSERVICEUPDATEURL:https://api.scheduler.teams.microsof
+ t.com/teams/3f7f52c7-07b2-4cb1-a07a-496256021e6f/588406ef-209e-4029-b556-b
+ 21affdac0b8/19_meeting_OWM3NjQ5ZmQtYjNiMS00ZWM3LWFiYTItOWUyMTY4Zjk3MDMw@th
+ read.v2/0
+X-MICROSOFT-SKYPETEAMSPROPERTIES:{"cid":"19:meeting_OWM3NjQ5ZmQtYjNiMS00ZWM
+ 3LWFiYTItOWUyMTY4Zjk3MDMw@thread.v2"\,"rid":0\,"mid":0\,"uid":null\,"priva
+ te":true\,"type":0}
+X-MICROSOFT-ONLINEMEETINGCONFLINK:conf:sip:deepak6.singh@igglobal.com\;gruu
+ \;opaque=app:conf:focus:id:teams:2:0!19:meeting_OWM3NjQ5ZmQtYjNiMS00ZWM3LW
+ FiYTItOWUyMTY4Zjk3MDMw-thread.v2!588406ef209e4029b556b21affdac0b8!3f7f52c7
+ 07b24cb1a07a496256021e6f
+X-MICROSOFT-DONOTFORWARDMEETING:FALSE
+X-MICROSOFT-DISALLOW-COUNTER:FALSE
+X-MICROSOFT-LOCATIONDISPLAYNAME:Microsoft Teams Meeting
+X-MICROSOFT-LOCATIONSOURCE:None
+X-MICROSOFT-LOCATIONS:[{"DisplayName":"Microsoft Teams Meeting"\,"LocationA
+ nnotation":""\,"LocationUri":""\,"LocationStreet":""\,"LocationCity":""\,"
+ LocationState":""\,"LocationCountry":""\,"LocationPostalCode":""\,"Locatio
+ nFullAddress":""}]
+BEGIN:VALARM
+DESCRIPTION:REMINDER
+TRIGGER;RELATED=START:-PT15M
+ACTION:DISPLAY
+END:VALARM
+END:VEVENT
+END:VCALENDAR

@@ -1,0 +1,445 @@
+{
+	"info": {
+		"_postman_id": "30df650d-e4a3-4f8d-b9c7-a2ad73e1bff9",
+		"name": "Thikedaar",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Admin Routes",
+			"item": [
+				{
+					"name": "Approve Application Status",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"_id\": \"63e8c227ea1bcd8ed9be64b0\",\n    \"approvalStatus\": true\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{local}}api/admin/application/update",
+							"host": [
+								"{{local}}api"
+							],
+							"path": [
+								"admin",
+								"application",
+								"update"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Lists of all applications",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{local}}api/architect/applications",
+							"host": [
+								"{{local}}api"
+							],
+							"path": [
+								"architect",
+								"applications"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Dealer Module",
+			"item": [
+				{
+					"name": "Save Dealer Details",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n        \"id\": 1,\n        \"name\": \"Upnishad Deo\",\n        \"photo\": null,\n        \"designation\": \"Dealer and contractor\",\n        \"companyNameShopName\": \"Thikedaar testing site\",\n        \"address\": \"Ghaziabad, UP, 201012\",\n        \"gst\": \"ADSASD4562NSD\",\n        \"pan\": \"ERVPI1673L\",\n        \"bankDetails\": \"Icici Bank sector - 5\",\n        \"upiDetails\": \"upanishaddeo@okicici\",\n        \"aadharNumber\": \"123412341234\",\n        \"dateOfCompanyFormation\": \"2019\",\n        \"businessContactNumber\": \"7065389837\",\n        \"serviceLocation\": \"Ghaziabad, Gurgaon, Delhi\",\n        \"radiusOfDelivery\": \"10KM\",\n        \"merchantType\": \"Dealer\",\n        \"approvalStatus\": false\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{local}}api/dealer/details",
+							"host": [
+								"{{local}}api"
+							],
+							"path": [
+								"dealer",
+								"details"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Update Details of Dealer",
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "GET",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n        \"_id\": \"6405e41ccc256d571c12b287\",\n        \"id\": 1,\n        \"name\": \"Upnishad Deo\",\n        \"photo\": null,\n        \"designation\": \"Dealer\",\n        \"companyNameShopName\": \"Thikedaar testing site 1\",\n        \"address\": \"Ghaziabad, UP, 201012\",\n        \"gst\": \"ADSASD4562NSD\",\n        \"pan\": \"ERVPI1673L\",\n        \"bankDetails\": \"State Bank Of India sector - 5\",\n        \"upiDetails\": \"upanishaddeo@okaxis\",\n        \"aadharNumber\": \"123412341234\",\n        \"dateOfCompanyFormation\": \"2019\",\n        \"businessContactNumber\": \"7065389837\",\n        \"serviceLocation\": \"Ghaziabad, Gurgaon, Delhi\",\n        \"radiusOfDelivery\": \"10KM\",\n        \"merchantType\": \"Dealer\",\n        \"approvalStatus\": false\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{local}}api/dealer/update-details",
+							"host": [
+								"{{local}}api"
+							],
+							"path": [
+								"dealer",
+								"update-details"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Details of individual dealer",
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "GET",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{local}}api/dealer/details?id=6405e41ccc256d571c12b280",
+							"host": [
+								"{{local}}api"
+							],
+							"path": [
+								"dealer",
+								"details"
+							],
+							"query": [
+								{
+									"key": "id",
+									"value": "6405e41ccc256d571c12b280"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "/api/dealer/upload-brand",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n        \"name\": \"Ambuja Cement\",\n        \"photo\": null,\n        \"price\": \"410\",\n        \"descriptionOne\": \"Strongest and sturdiest cement in the world\",\n        \"descriptionTwo\": \"Low price, high quality\",\n        \"descriptionThree\": \"High in demand, used across India\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{local}}api/dealer/upload-brand",
+							"host": [
+								"{{local}}api"
+							],
+							"path": [
+								"dealer",
+								"upload-brand"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "/api/auth/signup",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"username\": \"test6@architect\",\n    \"email\": \"test6architect@gmail.com\",\n    \"password\": \"test6@architect\",\n    \"roles\": [\"architect\"]\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{local}}api/auth/signup",
+					"host": [
+						"{{local}}api"
+					],
+					"path": [
+						"auth",
+						"signup"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "/api/auth/signin",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"username\": \"test6@architect\",\n    \"password\": \"test6@architect\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{local}}api/auth/signin",
+					"host": [
+						"{{local}}api"
+					],
+					"path": [
+						"auth",
+						"signin"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "/api/test/all",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{local}}api/test/all",
+					"host": [
+						"{{local}}api"
+					],
+					"path": [
+						"test",
+						"all"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "/api/test/user",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{local}}api/test/user",
+					"host": [
+						"{{local}}api"
+					],
+					"path": [
+						"test",
+						"user"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "/api/users",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{local}}api/users",
+					"host": [
+						"{{local}}api"
+					],
+					"path": [
+						"users"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "/api/architect/details",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"id\": \"63f7d6e2f0bf63b80b82bbd5\",\n    \"name\": \"Sunil Deo\",\n    \"photo\" : null,\n    \"designation\" : \"Software Developer\",\n    \"companyName\" : \"Chetu Inc\",\n    \"address\" : \"217, sector-1, vasundhara, Ghaziabad\",\n    \"gst\" : \"1234GHB56H\",\n    \"pan\" : \"ERVPD1578L\",\n    \"paymentMethod\" : \"paytm\",\n    \"bankDetails\" : \"12313213123132\",\n    \"coaLicenseNumber\" : \"6754545\",\n    \"otherLicense\" : null,\n    \"qualification\" : \"Masters\",\n    \"servicesOffered\" : \"frontend, Backend, QA\",\n    \"qualificationDocument\" : null,\n    \"aadharNumber\" : \"935195640678\",\n    \"dateOfBirth\" : \"31/12/1998\",\n    \"businessContactNumber\" : \"8989898898\",\n    \"email\" : \"upanishaddeo@gmail.com\",\n    \"serviceLocation\" : \"Ghaziabad\",\n    \"yearsOfExperience\" : \"3\",\n    \"yearOfGraduation\" : \"2017\",\n    \"approvalStatus\": null\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{local}}api/architect/details",
+					"host": [
+						"{{local}}api"
+					],
+					"path": [
+						"architect",
+						"details"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "/api/architect/update-details",
+			"protocolProfileBehavior": {
+				"disableBodyPruning": true
+			},
+			"request": {
+				"method": "GET",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"_id\": \"63e8c23cea1bcd8ed9be64b2\",\n    \"id\": 2,\n    \"name\": \"Upnishad Deo\",\n    \"photo\" : null,\n    \"designation\" : \"Frontend Developer\",\n    \"companyName\" : \"Chetu Inc\",\n    \"address\" : \"217, sector-1, vasundhara, Ghaziabad\",\n    \"gst\" : \"1234GHB56H\",\n    \"pan\" : \"ERVPD1578L\",\n    \"paymentMethod\" : \"paytm\",\n    \"bankDetails\" : \"12313213123132\",\n    \"coaLicenseNumber\" : \"6754545\",\n    \"otherLicense\" : null,\n    \"qualification\" : \"Masters\",\n    \"servicesOffered\" : \"frontend, Backend, QA\",\n    \"qualificationDocument\" : null,\n    \"aadharNumber\" : \"935195640678\",\n    \"dateOfBirth\" : \"31/12/1998\",\n    \"businessContactNumber\" : \"8989898898\",\n    \"email\" : \"upanishaddeo@gmail.com\",\n    \"serviceLocation\" : \"Ghaziabad\",\n    \"yearsOfExperience\" : \"3\",\n    \"yearOfGraduation\" : \"2017\",\n    \"approvalStatus\": null\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{local}}api/architect/update-details",
+					"host": [
+						"{{local}}api"
+					],
+					"path": [
+						"architect",
+						"update-details"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "/api/architect/details?id=1",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{local}}api/architect/details?id=63f7d6e2f0bf63b80b82bbd5",
+					"host": [
+						"{{local}}api"
+					],
+					"path": [
+						"architect",
+						"details"
+					],
+					"query": [
+						{
+							"key": "id",
+							"value": "63f7d6e2f0bf63b80b82bbd5"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "upload designs",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"uploadingUser\": \"63e4948d8085ed408796a031\",\n    \"suitableLocation\": \"Noida, Delhi NCR\",\n    \"plotLength\": \"170m\",\n    \"plotWidth\": \"250m\",\n    \"numberOfBedrooms\": \"4\",\n    \"numberOfToilets\": \"3\",\n    \"numberOfFloor\": \"2\",\n    \"buildingType\": \"Residential\",\n    \"isVastu\": true,\n    \"isStiltdParking\": false,\n    \"purpose\": \"Residential\",\n    \"specialFeature\": \"Ventilated, open terrace\",\n    \"description\": \"A vastu backed home for you to live with perfectly built interior as well as exterior\",\n    \"approvalStatus\": null\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{local}}api/design/upload",
+					"host": [
+						"{{local}}api"
+					],
+					"path": [
+						"design",
+						"upload"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "get all designs on user bases",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"uploadingUser\": \"63e4948d8085ed408796a031\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{local}}api/user/design",
+					"host": [
+						"{{local}}api"
+					],
+					"path": [
+						"user",
+						"design"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "get all designs for users",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{local}}api/architect/designs",
+					"host": [
+						"{{local}}api"
+					],
+					"path": [
+						"architect",
+						"designs"
+					]
+				}
+			},
+			"response": []
+		}
+	]
+}

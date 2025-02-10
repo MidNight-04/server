@@ -1,0 +1,52 @@
+[
+    {
+        "id": 1,
+        "name": "Construction Site Details",
+        "icon":"https://icones.pro/wp-content/uploads/2021/05/icone-d-information-jaune.png"
+    },
+    {
+        "id": 2,
+        "name": "2D+3D Drawings",
+        "icon":"https://static.vecteezy.com/system/resources/thumbnails/016/516/991/small/to-do-list-icon-free-vector.jpg"
+    },
+    {
+        "id": 3,
+        "name": "Project Quotation",
+        "icon":"https://image.pngaaa.com/158/823158-middle.png"
+    },
+    {
+        "id": 4,
+        "name": "Project Timeline",
+        "icon":"https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRo6Xx_Vl3GzJXOs9yd0t4C0l0mdsXv2yFxr6BaiX6_Mg&s"
+    },
+    {
+        "id": 5,
+        "name": "Your Document",
+        "icon":"https://icones.pro/wp-content/uploads/2021/06/icone-fichier-document-jaune.png"
+    },
+    {
+        "id": 6,
+        "name": "Team Members",
+        "icon":"https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSzvyFd_8i86jChzAnp3e4u2ZyRuib78tvhI6zVcz1rbQ&s"
+    },
+    {
+        "id": 7,
+        "name": "Rewards For you",
+        "icon":"https://cdn-icons-png.flaticon.com/512/5219/5219258.png"
+    },
+    {
+        "id": 8,
+        "name": "Service Request",
+        "icon":"https://static.vecteezy.com/system/resources/previews/015/383/340/original/yellow-graph-bar-icon-isometric-style-vector.jpg"
+    },
+    {
+        "id": 9,
+        "name": "Expense Tracker",
+        "icon":"https://play-lh.googleusercontent.com/A8RgolvE6W-LwUwt6u2yGo3kFTY1TAc8xP_8MfJK8bwAaUyX95toP9mUiXnsAiwzJmip=w240-h480-rw"
+    },
+    {
+        "id": 10,
+        "name": "Shop Materials",
+        "icon":"https://cdn-icons-png.flaticon.com/512/5219/5219258.png"
+    }
+]

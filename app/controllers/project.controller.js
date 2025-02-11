@@ -868,18 +868,55 @@ exports.updateProjectStatusById = async (req, res) => {
 };
 
 exports.updateImageStatus = async (req, res) => {
-  const { id, name, point, userName, userId, url } = req.body;
-  await Project.findOne({ siteID: id }).then(response => {
-    const imageObject = response.project_status
-      .filter(item => item.name === name)[0]
-      .step[point - 1].finalStatus[0].image.filter(img => img.image === url)[0];
-    imageObject.isApproved = true;
-    imageObject.approvedBy = { userId, userName };
-  });
-  return res.json({
-    status: 200,
-    message: "Project image updated successfully.",
-  });
+  try {
+    const { id, name, point, userName, userId, url } = req.body;
+    const project = await Project.findOne({ siteID: id });
+
+    if (!project) {
+      return res.status(404).json({ message: "Project not found" });
+    }
+
+    const statusIndex = project.project_status.findIndex(
+      item => item.name === name
+    );
+    if (statusIndex === -1) {
+      return res.status(404).json({ message: "Project status not found" });
+    }
+
+    const stepIndex = project.project_status[statusIndex].step.findIndex(
+      item => item.point === parseInt(point, 10)
+    );
+    if (stepIndex === -1) {
+      return res.status(404).json({ message: "Step not found" });
+    }
+
+    const finalStatus =
+      project.project_status[statusIndex].step[stepIndex].finalStatus;
+    if (!finalStatus || finalStatus.length === 0) {
+      return res.status(404).json({ message: "Final status not found" });
+    }
+
+    const imageIndex = finalStatus[0].image.findIndex(item => item.url === url);
+    if (imageIndex === -1) {
+      return res.status(404).json({ message: "Image not found" });
+    }
+
+    finalStatus[0].image[imageIndex].isApproved = true;
+    finalStatus[0].image[imageIndex].approvedBy = { userId, userName };
+    project.markModified("project_status");
+
+    await project.save();
+
+    return res.json({
+      status: 200,
+      message: "Project image updated successfully.",
+    });
+  } catch (error) {
+    console.error(error);
+    return res
+      .status(500)
+      .json({ message: "Error while updating image status" });
+  }
 };
 
 exports.deleteImage = async (req, res) => {

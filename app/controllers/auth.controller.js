@@ -51,7 +51,7 @@ exports.signup = (req, res) => {
             res.status(500).send({ message: err });
             return;
           }
-          query["roles"] = roles.map((role) => role._id);
+          query["roles"] = roles.map(role => role._id);
           if (helperFunction.checkEmailPhone(req.body.email) === "phone") {
             query["email"] = "";
           } else if (
@@ -263,7 +263,7 @@ exports.signinOtp = (req, res) => {
             });
 
             // Define the email
-            const mailOptions = (email) => ({
+            const mailOptions = email => ({
               from: "Sender",
               to: email,
               subject: "OTP Verification for Login",
@@ -360,7 +360,7 @@ exports.signin = (req, res) => {
                   username: user.username,
                   email: user.email,
                   phone: user.phone,
-                  roles: authorities,
+                  roles: authorities[0],
                   token: token,
                   country: user.country,
                   city: user.city,
@@ -407,7 +407,7 @@ exports.forgotPassword = function (req, res) {
       let random = "pass_" + new Date().getTime();
 
       // Define the email
-      const mailOptions = (email) => ({
+      const mailOptions = email => ({
         from: "Sender",
         to: email,
         subject: "Subject",
@@ -579,7 +579,7 @@ exports.login = (req, res) => {
     } else if (!user) {
       //CREATE NEW USER
       let role = await Role.find({ name: "user" });
-      role = role.filter((el) => {
+      role = role.filter(el => {
         return el._id;
       });
       User.create(
@@ -607,7 +607,7 @@ exports.login = (req, res) => {
         expiresIn: 86400, // 24 hours
       });
       let role = await Role.find({ name: "user" });
-      role = role.filter((el) => {
+      role = role.filter(el => {
         return el._id;
       });
       user.roles = role;
@@ -1260,12 +1260,12 @@ exports.initiatePayment = (req, res) => {
 
       axios
         .request(config)
-        .then((response) => {
+        .then(response => {
           // console.log(response.data)
           res.status(200).send({ data: response.data });
           return;
         })
-        .catch((error) => {
+        .catch(error => {
           console.log(error);
         });
     }
@@ -1331,7 +1331,7 @@ exports.verifyPayment = (req, res) => {
 
       axios
         .request(config)
-        .then((response) => {
+        .then(response => {
           console.log(response.data);
           const query = {
             architectId,
@@ -1391,7 +1391,7 @@ exports.verifyPayment = (req, res) => {
             });
           }
         })
-        .catch((error) => {
+        .catch(error => {
           console.log(error);
         });
     }
@@ -1494,7 +1494,7 @@ exports.orderDetailsByData = (req, res) => {
   const { vendor, product } = req.body;
   if (vendor && product) {
     Order.find(
-      { architectId: vendor, "productDetail._id": product },
+      { "architectId": vendor, "productDetail._id": product },
       (err, orders) => {
         if (err) {
           res.status(500).send({

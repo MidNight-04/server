@@ -1,7 +1,10 @@
 const db = require("../models");
 const Task = db.task;
+const TaskComment = require("../models/taskCommentModel");
+const TeamMembers = require("../models/teamMember.model");
 const Project = db.projects;
 const mongoose = require("mongoose");
+const User = require("../models/user.model");
 
 let today = new Date();
 let yyyy = today.getFullYear();
@@ -11,10 +14,11 @@ if (dd < 10) dd = "0" + dd;
 if (mm < 10) mm = "0" + mm;
 let formatedtoday = yyyy + "-" + mm + "-" + dd;
 
+const limit = 10;
+
 exports.addTask = (req, res) => {
   let files = [];
   let audios = [];
-  // console.log(req.files)
   if (req.files.file) {
     for (let i = 0; i < req.files.file.length; i++) {
       files.push(req.files.file[i].location);
@@ -28,11 +32,8 @@ exports.addTask = (req, res) => {
   const task = {
     title: req.body.title,
     description: req.body.description,
-    issueMember: [{ name: req.body.memberName, employeeID: req.body.member }],
-    assignedBy: {
-      name: req.body.assignedName,
-      employeeID: req.body.assignedID,
-    },
+    issueMember: req.body.member,
+    assignedBy: req.body.assignedID,
     category: req.body.category,
     priority: req.body.priority,
     repeat: {
@@ -42,19 +43,9 @@ exports.addTask = (req, res) => {
     dueDate: req.body.dueDate,
     file: files,
     audio: audios,
-    reminder: JSON.parse(req.body.reminder || "[]"),
-    progress: {
-      status: "Pending",
-      image: [],
-      date: "",
-    },
-    adminStatus: {
-      status: "Pending",
-      image: [],
-      date: "",
-    },
+    reminder: JSON.parse(req.body.reminder),
   };
-  // console.log(task)
+
   Task.create(task).then((taskSave, err) => {
     if (err) {
       res.status(500).send({ message: "There was problelm while create task" });
@@ -70,41 +61,59 @@ exports.addTask = (req, res) => {
 };
 
 exports.getAllTask = (req, res) => {
-  Task.find({}).then((task, err) => {
-    if (err) {
-      res.status(500).send({
-        message: "There was a problem in getting the list of task",
-      });
-      return;
-    }
-    if (task) {
-      res.status(200).send({
-        message: "List of tak fetched successfuly",
-        data: task,
-      });
-    }
-  });
+  Task.find({})
+    .limit(limit)
+    .skip(limit * req.body.page)
+    .sort({ createdAt: -1 })
+    .populate(["issueMember", "assignedBy"])
+    .exec()
+    .then((task, err) => {
+      if (err) {
+        res.status(500).send({
+          message: "There was a problem in getting the list of task",
+        });
+        return;
+      }
+      if (task) {
+        res.status(200).send({
+          message: "List of tak fetched successfuly",
+          data: task,
+        });
+      }
+    });
   return;
 };
 
 exports.getTaskByEmployeeId = async (req, res) => {
-  Task.find({ "issueMember.employeeID": req.params.id }).then((task, err) => {
-    if (err) {
-      res.status(500).send({
-        message: "There was a problem in getting the list of task",
+  const { id } = req.params;
+  const { page } = req.body;
+
+  try {
+    const tasks = await Task.find({ issueMember: id })
+      .limit(limit)
+      .skip(limit * page)
+      .sort({ createdAt: -1 })
+      .populate(["issueMember", "assignedBy"])
+      .exec();
+
+    if (!tasks) {
+      return res.status(404).send({
+        message: "No tasks found for the given employee ID",
       });
-      return;
     }
-    // console.log(task)
-    if (task) {
-      res.status(200).send({
-        message: "List of tak fetched successfuly",
-        data: task,
-      });
-    }
-  });
-  return;
+
+    res.status(200).send({
+      message: "List of tasks fetched successfully",
+      data: tasks,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).send({
+      message: "Error while getting tasks by employee ID",
+    });
+  }
 };
+
 exports.taskUpdateByMember = async (req, res) => {
   const { status, date, id } = req.body;
   let updateFiles = [];
@@ -147,6 +156,7 @@ exports.taskUpdateByMember = async (req, res) => {
     });
   }
 };
+
 exports.deleteTaskByAdmin = async (req, res) => {
   const id = req.params.id;
   // console.log("calllllllll")
@@ -207,6 +217,7 @@ exports.taskUpdateByAdmin = async (req, res) => {
     });
   }
 };
+
 exports.getAllProjectTaskByClient = async (req, res) => {
   try {
     const ticket = await Project.find({
@@ -282,7 +293,7 @@ exports.getTicketByTicketId = async (req, res) => {
     // Check if we found any tickets
     if (ticket.length > 0 && ticket[0].matchedTicket.length > 0) {
       // Add the extra object to the matchedTicket array
-      const response = ticket[0].matchedTicket.map((tick) => ({
+      const response = ticket[0].matchedTicket.map(tick => ({
         ...tick,
         projectId: ticket[0]?._id, // Add your extra property here
       }));
@@ -330,5 +341,138 @@ exports.getAllProjectTaskByMember = async (req, res) => {
       status: 400,
       message: "Error while get task of client",
     });
+  }
+};
+
+exports.getTaskByid = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const task = await Task.findById(id)
+      .populate([
+        "assignedBy",
+        "issueMember",
+        {
+          path: "comments",
+          populate: {
+            path: "createdBy",
+          },
+        },
+      ])
+      .exec()
+      .then(task => {
+        if (!task) {
+          throw new Error("Task not found");
+        }
+        return task;
+      })
+      .catch(error => {
+        throw error;
+      });
+    if (!task) {
+      return res.status(404).send({
+        message: "Task not found",
+      });
+    }
+    res.status(200).send({
+      message: "Task fetched successfully",
+      data: task,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).send({
+      message: "Error while getting task by id",
+    });
+  }
+};
+
+exports.searchTask = async (req, res) => {
+  try {
+    const { searchTerm } = req.params;
+    const searchQuery = [
+      { title: { $regex: searchTerm, $options: "i" } },
+      { description: { $regex: searchTerm, $options: "i" } },
+      { category: { $regex: searchTerm, $options: "i" } },
+      { priority: { $regex: searchTerm, $options: "i" } },
+      { "assignedBy.name": { $regex: searchTerm, $options: "i" } },
+      { "issueMember.name": { $regex: searchTerm, $options: "i" } },
+      { "issueMember.employeeID": { $regex: searchTerm, $options: "i" } },
+      { "assignedBy.employeeID": { $regex: searchTerm, $options: "i" } },
+      { "repeat.repeatType": { $regex: searchTerm, $options: "i" } },
+      { "progress.status": { $regex: searchTerm, $options: "i" } },
+    ];
+    const task = await Task.find({ $or: searchQuery });
+    if (task.length === 0) {
+      return res.status(404).send({
+        message: "Task not found",
+      });
+    }
+    res.status(200).send({
+      message: "Task fetched successfully",
+      data: task,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).send({
+      message: "Error while getting task",
+    });
+  }
+};
+
+exports.taskAddComment = async (req, res) => {
+  try {
+    const { taskId, type, comment, userId } = req.body;
+    const task = await Task.findById(taskId);
+    let referenceModel;
+    const issueMember = await TeamMembers.findById(userId);
+    if (!issueMember) {
+      const user = await User.findById(userId);
+      if (user) {
+        referenceModel = "User";
+      }
+    } else {
+      referenceModel = "teammembers";
+    }
+    if (!task) {
+      return res.status(404).send({ message: "Task not found" });
+    }
+    if (type === "Complete" || type === "In Progress") {
+      task.status = type;
+    }
+    const newComment = {
+      comment,
+      type,
+      createdBy: userId,
+      referenceModel,
+      taskId,
+    };
+    const data = await TaskComment.create(newComment);
+    if (!data) {
+      return res.status(404).send({ message: "Comment not created" });
+    }
+    task.comments.push(data._id);
+    await task.save();
+    res.status(200).send({ message: "Comment added successfully", data });
+  } catch (error) {
+    console.error(error);
+    res.status(500).send({ message: "Error while adding comment" });
+  }
+};
+
+exports.editTask = async (req, res) => {
+  try {
+    const { id, title, description, issueMember, dueDate } = req.body;
+    const task = await Task.findById(id);
+    if (!task) {
+      return res.status(404).send({ message: "Task not found" });
+    }
+    task.title = title;
+    task.description = description;
+    task.issueMember = issueMember;
+    task.dueDate = dueDate;
+    await task.save();
+    res.status(200).send({ message: "Task updated successfully" });
+  } catch (error) {
+    console.error(error);
+    res.status(500).send({ message: "Error while updating task" });
   }
 };

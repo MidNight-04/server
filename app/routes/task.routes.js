@@ -21,26 +21,44 @@ module.exports = function (app) {
     ]),
     controller.addTask
   );
-  app.get("/api/task/getall", controller.getAllTask);
-  app.get("/api/task/employeeID/:id", controller.getTaskByEmployeeId);
-  app.put("/api/task/update/member",uploadImage.fields([
-    {
-      name: "image",
-      maxCount: 20,
-    },
-  ]), controller.taskUpdateByMember);
+  app.post("/api/task/getall", controller.getAllTask);
+  app.post("/api/task/employeeID/:id", controller.getTaskByEmployeeId);
+  app.put(
+    "/api/task/update/member",
+    uploadImage.fields([
+      {
+        name: "image",
+        maxCount: 20,
+      },
+    ]),
+    controller.taskUpdateByMember
+  );
 
-  app.put("/api/task/update/admin",uploadImage.fields([
-    {
-      name: "image",
-      maxCount: 20,
-    },
-  ]), controller.taskUpdateByAdmin);
+  app.put(
+    "/api/task/update/admin",
+    uploadImage.fields([
+      {
+        name: "image",
+        maxCount: 20,
+      },
+    ]),
+    controller.taskUpdateByAdmin
+  );
   app.delete("/api/task/delete/:id", controller.deleteTaskByAdmin);
-  app.get("/api/projecttask/byclient/:id", controller.getAllProjectTaskByClient);
+  app.get(
+    "/api/projecttask/byclient/:id",
+    controller.getAllProjectTaskByClient
+  );
   app.get("/api/projecttask/viewbyid/:id", controller.getTicketByTicketId);
-  app.get("/api/projecttask/bymember/:id", controller.getAllProjectTaskByMember);
+  app.get(
+    "/api/projecttask/bymember/:id",
+    controller.getAllProjectTaskByMember
+  );
   app.get("/api/projectticket/byclient/all", controller.getAllProjectTickets);
   // app.put("/api/constructionstep/deletefield", controller.deleteConstructionPointById);
   // app.delete("/api/constructionstep/delete/:id", controller.deleteConstructionStepById);
+  app.get("/api/task/gettaskbyid/:id", controller.getTaskByid);
+  app.post("/api/task/search/:searchTerm", controller.searchTask);
+  app.post("/api/task/taskaddcomment", controller.taskAddComment);
+  app.post("/api/task/edittask", controller.editTask);
 };

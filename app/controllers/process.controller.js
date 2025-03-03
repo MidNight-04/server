@@ -7,7 +7,7 @@ const axios = require("axios");
 
 exports.addConstructionStep = async (req, res) => {
   const { name, priority } = req.body;
-  const find = await Process.find({ priority: priority });
+  const find = await Process.find({ name: name.trim() });
   if (find?.length > 0) {
     res.json({
       status: 200,
@@ -36,9 +36,7 @@ exports.addConstructionStep = async (req, res) => {
           content: data[i].content,
           duration: data[i].duration ? data[i].duration : "",
           issueMember: data[i].issueMember
-            ? data[i].issueMember
-                .split("/")
-                .filter((role) => role.trim() !== "")
+            ? data[i].issueMember.split("/").filter(role => role.trim() !== "")
             : [],
           checkList: data[i].checkList ? data[i].checkList : "no",
           checkListName: data[i].checkListName ? data[i].checkListName : "",
@@ -72,7 +70,7 @@ exports.addConstructionStep = async (req, res) => {
             message: "Record created successfully",
           });
         })
-        .catch((err) => {
+        .catch(err => {
           // console.error('Error saving data:', err);
           res.json({
             status: 400,
@@ -121,14 +119,22 @@ exports.deleteConstructionStepById = (req, res) => {
   });
 };
 exports.addNewFieldConstructionStepById = async (req, res) => {
-  const { id, previousPoint, newField, checkList, checkListName, duration, issueMember } = req.body;
+  const {
+    id,
+    previousPoint,
+    newField,
+    checkList,
+    checkListName,
+    duration,
+    issueMember,
+  } = req.body;
   // console.log(req.body);
   try {
     var findData = await Process.find({ _id: id });
     var newObj = {
       point: parseInt(previousPoint) + 1,
       content: newField,
-      issueMember:issueMember,
+      issueMember: issueMember,
       duration: duration,
       checkList: checkList,
       checkListName: checkListName,
@@ -138,7 +144,7 @@ exports.addNewFieldConstructionStepById = async (req, res) => {
       dailyTask: [],
     };
     var index = findData[0]?.points?.findIndex(
-      (obj) => obj.point === previousPoint
+      obj => obj.point === previousPoint
     );
     // console.log(index);
     findData[0]?.points?.splice(index + 1, 0, newObj);
@@ -175,7 +181,7 @@ exports.deleteConstructionPointById = async (req, res) => {
   // console.log(req.body);
   try {
     var findData = await Process.find({ _id: id });
-    var index = findData[0]?.points?.findIndex((obj) => obj.point === point);
+    var index = findData[0]?.points?.findIndex(obj => obj.point === point);
     findData[0]?.points?.splice(index, 1);
     // Update 'point' numbers starting from the newly inserted object
     for (let i = index; i < findData[0]?.points?.length; i++) {

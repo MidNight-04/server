@@ -114,7 +114,7 @@ exports.signinOtp = (req, res) => {
           });
 
           // Define the email
-          const mailOptions = (email) => ({
+          const mailOptions = email => ({
             from: "Sender",
             to: email,
             subject: "OTP Verification for Login",
@@ -252,20 +252,22 @@ exports.addMember = (req, res) => {
 };
 
 exports.getAllMember = (req, res) => {
-  Member.find({}).then((member, err) => {
-    if (err) {
-      res.status(500).send({
-        message: "There was a problem in getting the list of role",
-      });
-      return;
-    }
-    if (member) {
-      res.status(200).send({
-        message: "List of member fetched successfuly",
-        data: member,
-      });
-    }
-  });
+  Member.find({})
+    .populate("role")
+    .then((member, err) => {
+      if (err) {
+        res.status(500).send({
+          message: "There was a problem in getting the list of role",
+        });
+        return;
+      }
+      if (member) {
+        res.status(200).send({
+          message: "List of member fetched successfuly",
+          data: member,
+        });
+      }
+    });
   return;
 };
 exports.deleteMemberById = (req, res) => {

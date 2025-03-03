@@ -1,21 +1,23 @@
-const { type } = require('@testing-library/user-event/dist/type');
-const mongoose = require('mongoose');
+const mongoose = require("mongoose");
 
-const memberModel = mongoose.model(
-    'teammembers',
-    new mongoose.Schema({
-        name: String,
-        employeeID:String,
-        role: String,
-        email:String,
-        phone: String,
-        address: String,
-        loginOtp:{
-            type:String,
-            default:""
-        },
-        profileImage:[],
-    }, { timestamps: true })
+const memberSchema = new mongoose.Schema(
+  {
+    name: { type: String, required: true },
+    employeeID: { type: String, unique: true, required: true },
+    role: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "projectroles",
+      required: true,
+    },
+    email: { type: String, unique: true, required: true },
+    phone: { type: String },
+    address: { type: String },
+    loginOtp: { type: String, default: "" },
+    profileImage: { type: String },
+  },
+  { timestamps: true }
 );
 
-module.exports = memberModel
+const memberModel = mongoose.model("teammembers", memberSchema);
+
+module.exports = memberModel;

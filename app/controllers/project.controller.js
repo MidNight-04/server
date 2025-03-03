@@ -4,6 +4,7 @@ const Process = db.constructionsteps;
 const PaymentStages = db.paymentStages;
 const ProjectPaymentStages = db.projectPaymentStages;
 const ProjectPaymentDetails = db.projectPaymentDetails;
+const ProjectRole = db.projectroles;
 const axios = require("axios");
 const PaytmChecksum = require("../helper/PaytmChecksum");
 const PayProjects = db.projectPay;
@@ -14,6 +15,7 @@ const ProjectLog = db.projectlogs;
 const { ObjectId } = require("mongoose").Types;
 const uploadImage = require("../middlewares/uploadImage");
 const awsS3 = require("../middlewares/aws-s3");
+const { response } = require("express");
 // Make sure to import ObjectId
 
 let today = new Date();
@@ -80,7 +82,6 @@ exports.deleteStatusImage = async (req, res) => {
     res.send({ message: "Image removed successfully" });
   } catch (error) {
     console.error(error);
-
     res.status(500).send({ message: "Error while removing image" });
   }
 };
@@ -116,7 +117,7 @@ exports.addProject = async (req, res) => {
         });
       }
     }
-    // console.log(projectArray)
+
     const dataAdd = {
       project_name: uploadData.name,
       siteID: uploadData.siteID,
@@ -139,6 +140,7 @@ exports.addProject = async (req, res) => {
       project_status: projectArray,
       inspections: [],
     };
+
     const findStage = await PaymentStages.find({ floor: uploadData.floor });
     if (findStage?.length > 0) {
       const stageData = {
@@ -148,20 +150,15 @@ exports.addProject = async (req, res) => {
         stages: findStage[0]?.stages,
       };
       let payStage = new ProjectPaymentStages(stageData);
-      const memberData = await TeamMember.aggregate([
-        {
-          $group: {
-            _id: null,
-            uniqueRoles: { $addToSet: "$role" }, // Collect unique roles into an array
-          },
-        },
-        {
-          $project: {
-            _id: 0, // Exclude the _id field
-            uniqueRoles: 1, // Include the uniqueRoles field
-          },
-        },
-      ]);
+
+      const uniqueRoleIds = await TeamMember.distinct("role");
+      const uniqueRoles = await ProjectRole.find({
+        _id: { $in: uniqueRoleIds },
+      }).then(response => {
+        const array = response.map(item => item.name);
+        return array;
+      });
+
       payStage.save((err, result) => {
         if (err) {
           console.log(err);
@@ -179,103 +176,71 @@ exports.addProject = async (req, res) => {
                   passed: false,
                 });
               }
-              var task = {
+
+              let issueMember;
+              let referenceModel;
+
+              const task = {
                 title: el.content,
                 description: el.content,
-                assignedBy: {
-                  name: uploadData.assignedName,
-                  employeeID: uploadData.assignedID,
-                },
+                assignedBy: uploadData.assignedID,
                 siteID: uploadData.siteID,
-                category: "project",
-                priority: "High",
-                repeat: {
-                  repeatType: "",
-                  repeatTime: "",
-                },
                 dueDate: changeTime(),
-                file: [],
-                audio: [],
-                reminder: JSON.parse(req.body.reminder || "[]"),
-                progress: {
-                  status: "Pending",
-                  image: [],
-                  date: "",
-                },
-                adminStatus: {
-                  status: "Pending",
-                  image: [],
-                  date: "",
-                },
+                // reminder: JSON.parse(req.body.reminder),
               };
-              var issueMemberList = [];
-
               for (i = 0; i < el.issueMember?.length; i++) {
                 if (el.issueMember[i]?.toLowerCase() === "admin") {
-                  issueMemberList.push({
-                    name: uploadData.assignedName,
-                    employeeID: uploadData.assignedID,
-                  });
+                  issueMember = uploadData.assignedID;
                 }
-                for (let j = 0; j < memberData[0]?.uniqueRoles?.length; j++) {
-                  if (
-                    memberData[0]?.uniqueRoles[j].toLowerCase() ===
-                    el.issueMember[i]?.toLowerCase()
-                  ) {
-                    if (
-                      memberData[0]?.uniqueRoles[j].toLowerCase() ===
-                      "project admin"
-                    ) {
-                      uploadData.admin?.forEach(elem =>
-                        issueMemberList.push(elem)
-                      );
-                    } else if (
-                      memberData[0]?.uniqueRoles[j].toLowerCase() ===
-                      "project manager"
-                    ) {
-                      uploadData.manager?.forEach(elem =>
-                        issueMemberList.push(elem)
-                      );
-                    } else if (
-                      memberData[0]?.uniqueRoles[j].toLowerCase() ===
-                      "sr. engineer"
-                    ) {
-                      uploadData.sr_engineer?.forEach(elem =>
-                        issueMemberList.push(elem)
-                      );
-                    } else if (
-                      memberData[0]?.uniqueRoles[j].toLowerCase() ===
-                      "site engineer"
-                    ) {
-                      uploadData.engineer?.forEach(elem =>
-                        issueMemberList.push(elem)
-                      );
-                    } else if (
-                      memberData[0]?.uniqueRoles[j].toLowerCase() ===
-                      "accountant"
-                    ) {
-                      uploadData.accountant?.forEach(elem =>
-                        issueMemberList.push(elem)
-                      );
-                    } else if (
-                      memberData[0]?.uniqueRoles[j].toLowerCase() ===
-                      "operation"
-                    ) {
-                      uploadData.operation?.forEach(elem =>
-                        issueMemberList.push(elem)
-                      );
-                    } else if (
-                      memberData[0]?.uniqueRoles[j].toLowerCase() === "sales"
-                    ) {
-                      uploadData.sales?.forEach(elem =>
-                        issueMemberList.push(elem)
-                      );
-                    }
+                const roleIndex = uniqueRoles.findIndex(
+                  role =>
+                    role.toLowerCase() === el.issueMember[i]?.toLowerCase()
+                );
+                if (roleIndex !== -1) {
+                  switch (uniqueRoles[roleIndex].toLowerCase()) {
+                    case "admin":
+                      issueMember = uploadData?.admin;
+                      referenceModel = "teammembers";
+                      break;
+                    case "manager":
+                      issueMember = uploadData?.manager;
+                      referenceModel = "teammembers";
+                      break;
+                    case "architect":
+                      issueMember = uploadData?.architect;
+                      referenceModel = "teammembers";
+                      break;
+                    case "sr. engineer":
+                      issueMember = uploadData?.sr_engineer;
+                      referenceModel = "teammembers";
+                      break;
+                    case "site engineer":
+                      issueMember = uploadData?.engineer;
+                      referenceModel = "teammembers";
+                      break;
+                    case "accountant":
+                      issueMember = uploadData?.accountant;
+                      referenceModel = "teammembers";
+                      break;
+                    case "operations":
+                      issueMember = uploadData?.operation;
+                      referenceModel = "teammembers";
+                      break;
+                    case "sales":
+                      issueMember = uploadData?.sales;
+                      referenceModel = "teammembers";
+                      break;
+                    default:
+                      break;
                   }
+                } else if (el.issueMember[i]?.toLowerCase() === "client") {
+                  issueMember = uploadData?.client;
+                  referenceModel = "clients";
                 }
               }
-              task["issueMember"] = issueMemberList;
-              // console.log(task)
+              // console.log(issueMemberList);
+              task["issueMember"] = issueMember;
+              task["referenceModel"] = referenceModel;
               await Task.create(task);
             });
           });
@@ -286,7 +251,6 @@ exports.addProject = async (req, res) => {
               res.status(500).send({ message: "Could not create record" });
               return;
             } else {
-              //   console.log(result)
               res
                 .status(201)
                 .send({ message: "Record created Successfuly", status: 201 });
@@ -302,6 +266,11 @@ exports.addProject = async (req, res) => {
       });
     }
   }
+  // let result = await TeamMembers.findOne({ _id: objectId });
+
+  //       if (!result) {
+  //           result = await Client.findOne({ _id: objectId });
+  //       }
 };
 
 exports.getAllProject = (req, res) => {
@@ -1799,7 +1768,6 @@ exports.AddNewProjectPoint = async (req, res) => {
 };
 
 exports.DeleteProjectPoint = async (req, res) => {
-  // console.log(req.body);
   const {
     id,
     name,
@@ -1950,18 +1918,18 @@ exports.ProjectStepDelete = async (req, res) => {
       // Batch delete tasks
       await Task.deleteMany({ $or: tasksToDelete });
 
-      const logData = {
-        log: `<span style="color: black;">${name}</span> ->> <em style="color: #fec20e;">Delete</em>`,
-        file: [],
-        date: date,
-        siteID: id,
-        member: {
-          name: userName,
-          Id: activeUser,
-        },
-      };
-      const logSave = new ProjectLog(logData);
-      await logSave.save();
+      // const logData = {
+      //   log: `<span style="color: black;">${name}</span> ->> <em style="color: #fec20e;">Delete</em>`,
+      //   file: [],
+      //   date: date,
+      //   siteID: id,
+      //   member: {
+      //     name: userName,
+      //     Id: activeUser,
+      //   },
+      // };
+      // const logSave = new ProjectLog(logData);
+      // await logSave.save();
       return res.json({
         status: 200,
         message: "Step removed successfully",

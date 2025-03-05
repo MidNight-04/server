@@ -101,6 +101,7 @@ require("./app/routes/payProjectNotification.routes")(app);
 require("./app/routes/task.routes")(app);
 require("./app/routes/taskCategory.routes")(app);
 require("./app/routes/projectLog.routes")(app);
+require("./app/routes/rolesRoutes")(app);
 
 const PORT = process.env.PORT || 4000;
 

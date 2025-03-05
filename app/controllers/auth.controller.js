@@ -485,7 +485,6 @@ exports.getallusers = async (req, res) => {
 
 exports.singleProfile = (req, res) => {
   let id = req.params.id;
-  console.log("params_id---------", id);
   User.findById(id, (err, user) => {
     if (err) {
       res.status(500).send({ Error: err });

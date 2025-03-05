@@ -22,6 +22,12 @@ const taskSchema = new Schema(
       type: Schema.Types.ObjectId,
       ref: "User",
     },
+    subscribedMembers: [
+      {
+        type: Schema.Types.ObjectId,
+        ref: "teammembers",
+      },
+    ],
     siteID: {
       type: String,
       trim: true,

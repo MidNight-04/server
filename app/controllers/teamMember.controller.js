@@ -169,49 +169,54 @@ exports.signin = (req, res) => {
   } else {
     Member.findOne({
       [helperFunction.checkEmailPhone(req.body.username)]: req.body.username,
-    }).exec((err, user) => {
-      if (err) {
-        res.status(500).send({ message: err });
-        return;
-      } else if (!user) {
-        return res.status(404).send({ message: "User Not found." });
-      } else {
-        if (user.loginOtp === req.body.otp) {
-          let token = jwt.sign({ id: user.id }, config.secret, {
-            expiresIn: 86400, // 24 hours
-          });
-          req.session.token = token;
-
-          user.token = token;
-          user.save((err, success) => {
-            if (err) {
-              res.status(500).send({ message: "Oops, Internal server error" });
-              return;
-            }
-            if (success) {
-              res.status(200).send({
-                status: 200,
-                message: "You have been logged in",
-                id: user._id,
-                username: user.name,
-                employeeID: user.employeeID,
-                email: user.email,
-                phone: user.phone,
-                roles:
-                  user?.role?.toLowerCase() === "admin"
-                    ? "ROLE_" + "PROJECT " + user.role.toUpperCase()
-                    : "ROLE_" + user.role.toUpperCase(),
-                token: token,
-              });
-              return;
-            }
-          });
+    })
+      .populate("role")
+      .exec((err, user) => {
+        console.log(user);
+        if (err) {
+          res.status(500).send({ message: err });
           return;
+        } else if (!user) {
+          return res.status(404).send({ message: "User Not found." });
         } else {
-          return res.status(500).send({ message: "Invalid OTP" });
+          if (user.loginOtp === req.body.otp) {
+            let token = jwt.sign({ id: user.id }, config.secret, {
+              expiresIn: 86400, // 24 hours
+            });
+            req.session.token = token;
+
+            user.token = token;
+            user.save((err, success) => {
+              if (err) {
+                res
+                  .status(500)
+                  .send({ message: "Oops, Internal server error" });
+                return;
+              }
+              if (success) {
+                res.status(200).send({
+                  status: 200,
+                  message: "You have been logged in",
+                  id: user._id,
+                  username: user.name,
+                  employeeID: user.employeeID,
+                  email: user.email,
+                  phone: user.phone,
+                  roles:
+                    user?.role?.name.toLowerCase() === "admin"
+                      ? "ROLE_" + "PROJECT " + user.role.name.toUpperCase()
+                      : "ROLE_" + user.role.name.toUpperCase(),
+                  token: token,
+                });
+                return;
+              }
+            });
+            return;
+          } else {
+            return res.status(500).send({ message: "Invalid OTP" });
+          }
         }
-      }
-    });
+      });
   }
 };
 

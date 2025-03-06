@@ -93,12 +93,18 @@ exports.addProject = async (req, res) => {
     res.status(200).send({ message: "Project already exist with siteID" });
   } else {
     const allStep = await Process.find();
+    const flr = uploadData?.floor?.split("+");
     var projectArray = [];
     for (let i = 0; i < allStep?.length; i++) {
       if (allStep[i]?.priority === "2") {
-        for (let j = 0; j <= parseInt(uploadData?.floor); j++) {
+        for (let j = 0; j <= parseInt(flr[1]); j++) {
           projectArray.push({
-            name: j === 0 ? "Ground Floor" : `Floor ${j}`,
+            name:
+              j === 0
+                ? flr[0] === "S"
+                  ? "Stilt"
+                  : "Ground Floor"
+                : `Floor ${j}`,
             priority: parseInt(allStep[i]?.priority) + j,
             step: allStep[i]?.points,
           });
@@ -112,7 +118,7 @@ exports.addProject = async (req, res) => {
       } else {
         projectArray.push({
           name: allStep[i]?.name,
-          priority: parseInt(uploadData?.floor) + 3,
+          priority: parseInt(flr[1]) + 3,
           step: allStep[i]?.points,
         });
       }
@@ -143,11 +149,17 @@ exports.addProject = async (req, res) => {
 
     const findStage = await PaymentStages.find({ floor: uploadData.floor });
     if (findStage?.length > 0) {
+      const stages = findStage[0]?.stages?.map(item => ({
+        ...item,
+        paymentStatus: "Pending",
+        paymentDueDate: "",
+        paidOn: "",
+      }));
       const stageData = {
         siteID: uploadData.siteID,
         clientID: uploadData?.client?.id,
         floor: findStage[0]?.floor,
-        stages: findStage[0]?.stages,
+        stages: stages,
       };
       let payStage = new ProjectPaymentStages(stageData);
 
@@ -266,12 +278,12 @@ exports.addProject = async (req, res) => {
       });
     }
   }
-  // let result = await TeamMembers.findOne({ _id: objectId });
-
-  //       if (!result) {
-  //           result = await Client.findOne({ _id: objectId });
-  //       }
 };
+// let result = await TeamMembers.findOne({ _id: objectId });
+
+//       if (!result) {
+//           result = await Client.findOne({ _id: objectId });
+//       }
 
 exports.getAllProject = (req, res) => {
   Project.find({}).then((project, err) => {

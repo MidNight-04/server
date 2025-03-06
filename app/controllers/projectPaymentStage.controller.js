@@ -21,9 +21,54 @@ exports.getPaymentStages = (req, res) => {
   });
   return;
 };
+
 exports.getPaymentStagesBySiteID = (req, res) => {
-    const {id} = req.params;
-    PaymentStages.find({siteID:id}).then((stage, err) => {
+  const { id } = req.params;
+  PaymentStages.find({ siteID: id }).then((stage, err) => {
+    if (err) {
+      res.status(500).send({
+        message: "Internal service error",
+      });
+      return;
+    }
+    if (stage) {
+      res.status(200).send({
+        data: stage,
+      });
+    }
+  });
+  return;
+};
+
+exports.updatePaymentStagesBySiteID = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { stage } = req.body;
+    const payment = await PaymentStages.findOneAndUpdate(
+      { siteID: id },
+      { $set: { "stages.$[elem].paymentStatus": "Paid" } },
+      { arrayFilters: [{ "elem.stage": stage }], new: true }
+    );
+    if (!payment) {
+      res.status(404).send({
+        message: "Payment stage not found",
+      });
+      return;
+    }
+    res.status(200).send({
+      data: payment,
+    });
+  } catch (err) {
+    res.status(500).send({
+      message: "Internal service error",
+    });
+  }
+};
+
+exports.getPaymentStagesBySiteIDClientID = (req, res) => {
+  const { siteID, clientID } = req.body;
+  PaymentStages.find({ siteID: siteID, clientID: clientID }).then(
+    (stage, err) => {
       if (err) {
         res.status(500).send({
           message: "Internal service error",
@@ -35,26 +80,10 @@ exports.getPaymentStagesBySiteID = (req, res) => {
           data: stage,
         });
       }
-    });
-    return;
-  };
-  exports.getPaymentStagesBySiteIDClientID = (req,res)=>{
-    const {siteID,clientID} = req.body;
-    PaymentStages.find({siteID:siteID,clientID:clientID}).then((stage, err) => {
-        if (err) {
-          res.status(500).send({
-            message: "Internal service error",
-          });
-          return;
-        }
-        if (stage) {
-          res.status(200).send({
-            data: stage,
-          });
-        }
-      });
-      return;
-  }
+    }
+  );
+  return;
+};
 exports.deletePaymentStages = (req, res) => {
   const id = req.params.id;
   PaymentStages.deleteOne({ _id: id }, (err, dealer) => {
@@ -72,9 +101,19 @@ exports.deletePaymentStages = (req, res) => {
   });
 };
 exports.updatePaymentStagePointById = async (req, res) => {
-  const { id, prevPayment, prevStage, payment, stage,date,siteID,userName,activeUser } = req.body;
+  const {
+    id,
+    prevPayment,
+    prevStage,
+    payment,
+    stage,
+    date,
+    siteID,
+    userName,
+    activeUser,
+  } = req.body;
   await PaymentStages.updateOne(
-    { _id: id, "stages.payment": prevPayment, "stages.stage": prevStage },
+    { "_id": id, "stages.payment": prevPayment, "stages.stage": prevStage },
     {
       $set: {
         "stages.$.payment": parseFloat(payment),
@@ -82,17 +121,17 @@ exports.updatePaymentStagePointById = async (req, res) => {
       },
     }
   )
-    .then(async() => {
-      const logData={
+    .then(async () => {
+      const logData = {
         log: `<span style="color: black;">${stage} (${payment}%) payment stage</span> ->> <em style="color: green">update</em>`,
         file: [],
-        date:date,
-        siteID:siteID,
+        date: date,
+        siteID: siteID,
         member: {
           name: userName,
           Id: activeUser,
         },
-      }
+      };
       const logSave = new ProjectLog(logData);
       await logSave.save();
       res.json({
@@ -100,7 +139,7 @@ exports.updatePaymentStagePointById = async (req, res) => {
         message: "Payment stage update successfully",
       });
     })
-    .catch((err) => {
+    .catch(err => {
       res.json({
         status: 400,
         message: "Error on update payment stage",
@@ -109,23 +148,23 @@ exports.updatePaymentStagePointById = async (req, res) => {
     });
 };
 exports.addNewPaymentStagePointById = async (req, res) => {
-  const { id, payment, stage,date,siteID,userName,activeUser } = req.body;
+  const { id, payment, stage, date, siteID, userName, activeUser } = req.body;
   const newObj = {
     payment: parseFloat(payment),
     stage: stage,
   };
   await PaymentStages.updateOne({ _id: id }, { $push: { stages: newObj } })
-    .then(async() => {
-      const logData={
+    .then(async () => {
+      const logData = {
         log: `<span style="color: black;">${stage} (${payment}%) payment stage</span> ->> <em style="color: green">added</em>`,
         file: [],
-        date:date,
-        siteID:siteID,
+        date: date,
+        siteID: siteID,
         member: {
           name: userName,
           Id: activeUser,
         },
-      }
+      };
       const logSave = new ProjectLog(logData);
       await logSave.save();
       return res.json({
@@ -133,7 +172,7 @@ exports.addNewPaymentStagePointById = async (req, res) => {
         message: "New Payment stage add successfully",
       });
     })
-    .catch((err) => {
+    .catch(err => {
       res.json({
         status: 400,
         message: "Error on add payment stage",
@@ -141,24 +180,24 @@ exports.addNewPaymentStagePointById = async (req, res) => {
       console.error("Error add payment stage point:", err);
     });
 };
-exports.deletePaymentStagePointById = async(req, res) => {
-    const { id, payment, stage,date,siteID,userName,activeUser } = req.body;
+exports.deletePaymentStagePointById = async (req, res) => {
+  const { id, payment, stage, date, siteID, userName, activeUser } = req.body;
   const delObj = {
     payment: parseFloat(payment),
     stage: stage,
   };
   await PaymentStages.updateOne({ _id: id }, { $pull: { stages: delObj } })
-    .then(async() => {
-      const logData={
+    .then(async () => {
+      const logData = {
         log: `<span style="color: black;">${stage} (${payment}%) payment stage</span> ->> <em style="color: green">delete</em>`,
         file: [],
-        date:date,
-        siteID:siteID,
+        date: date,
+        siteID: siteID,
         member: {
           name: userName,
           Id: activeUser,
         },
-      }
+      };
       const logSave = new ProjectLog(logData);
       await logSave.save();
       return res.json({
@@ -166,7 +205,7 @@ exports.deletePaymentStagePointById = async(req, res) => {
         message: "Payment stage point deleted successfully",
       });
     })
-    .catch((err) => {
+    .catch(err => {
       res.json({
         status: 400,
         message: "Error on delete payment stage point",

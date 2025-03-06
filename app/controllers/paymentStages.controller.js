@@ -6,6 +6,7 @@ const axios = require("axios");
 
 exports.addPaymentStages = async (req, res) => {
   const { floor } = req.body;
+  const f = floor.split("+");
   const find = await PaymentStages.find({ floor: floor });
   if (find?.length > 0) {
     res.json({
@@ -47,7 +48,7 @@ exports.addPaymentStages = async (req, res) => {
             message: "Record created successfully",
           });
         })
-        .catch((err) => {
+        .catch(err => {
           // console.error('Error saving data:', err);
           res.json({
             status: 400,
@@ -97,7 +98,7 @@ exports.deletePaymentStages = (req, res) => {
 exports.updatePaymentStagePointById = async (req, res) => {
   const { id, prevPayment, prevStage, payment, stage } = req.body;
   await PaymentStages.updateOne(
-    { _id: id, "stages.payment": prevPayment, "stages.stage": prevStage },
+    { "_id": id, "stages.payment": prevPayment, "stages.stage": prevStage },
     {
       $set: {
         "stages.$.payment": parseFloat(payment),
@@ -111,7 +112,7 @@ exports.updatePaymentStagePointById = async (req, res) => {
         message: "Payment stage update successfully",
       });
     })
-    .catch((err) => {
+    .catch(err => {
       res.json({
         status: 400,
         message: "Error on update payment stage",
@@ -132,7 +133,7 @@ exports.addNewPaymentStagePointById = async (req, res) => {
         message: "New Payment stage add successfully",
       });
     })
-    .catch((err) => {
+    .catch(err => {
       res.json({
         status: 400,
         message: "Error on add payment stage",
@@ -140,8 +141,8 @@ exports.addNewPaymentStagePointById = async (req, res) => {
       console.error("Error add payment stage point:", err);
     });
 };
-exports.deletePaymentStagePointById = async(req, res) => {
-    const { id, payment, stage } = req.body;
+exports.deletePaymentStagePointById = async (req, res) => {
+  const { id, payment, stage } = req.body;
   const delObj = {
     payment: parseFloat(payment),
     stage: stage,
@@ -153,7 +154,7 @@ exports.deletePaymentStagePointById = async(req, res) => {
         message: "Payment stage point deleted successfully",
       });
     })
-    .catch((err) => {
+    .catch(err => {
       res.json({
         status: 400,
         message: "Error on delete payment stage point",

@@ -259,6 +259,7 @@ exports.addMember = (req, res) => {
 exports.getAllMember = (req, res) => {
   Member.find({})
     .populate("role")
+    .sort({ employeeID: 1 })
     .then((member, err) => {
       if (err) {
         res.status(500).send({
@@ -354,6 +355,9 @@ exports.updateMemberById = (req, res) => {
     phone: phone,
     address: address,
   };
+  // Member.findById(id).then(respnse => {
+  //   console.log(respnse);
+  // });
   Member.updateOne({ _id: id }, data, (err, updated) => {
     if (err) {
       //   console.log(err);

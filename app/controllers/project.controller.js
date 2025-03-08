@@ -151,7 +151,7 @@ exports.addProject = async (req, res) => {
     if (findStage?.length > 0) {
       const stages = findStage[0]?.stages?.map(item => ({
         ...item,
-        paymentStatus: "Pending",
+        paymentStatus: "Not Due Yet",
         paymentDueDate: "",
         paidOn: "",
       }));
@@ -334,7 +334,7 @@ exports.getProjectByMember = (req, res) => {
 };
 
 exports.getProjectByClientId = (req, res) => {
-  Project.find({ "client.id": req.params.id }).then((project, err) => {
+  Project.find({ client: req.params.id }).then((project, err) => {
     if (err) {
       res.status(500).send({
         message: "There was a problem in getting the list of project",

@@ -43,10 +43,15 @@ exports.getPaymentStagesBySiteID = (req, res) => {
 exports.updatePaymentStagesBySiteID = async (req, res) => {
   try {
     const { id } = req.params;
-    const { stage } = req.body;
+    const { stage, status } = req.body;
     const payment = await PaymentStages.findOneAndUpdate(
       { siteID: id },
-      { $set: { "stages.$[elem].paymentStatus": "Paid" } },
+      {
+        $set: {
+          "stages.$[elem].paymentStatus": status,
+          "stages.$[elem].paidOn": new Date(),
+        },
+      },
       { arrayFilters: [{ "elem.stage": stage }], new: true }
     );
     if (!payment) {
@@ -66,22 +71,20 @@ exports.updatePaymentStagesBySiteID = async (req, res) => {
 };
 
 exports.getPaymentStagesBySiteIDClientID = (req, res) => {
-  const { siteID, clientID } = req.body;
-  PaymentStages.find({ siteID: siteID, clientID: clientID }).then(
-    (stage, err) => {
-      if (err) {
-        res.status(500).send({
-          message: "Internal service error",
-        });
-        return;
-      }
-      if (stage) {
-        res.status(200).send({
-          data: stage,
-        });
-      }
+  const { siteID } = req.body;
+  PaymentStages.find({ siteID: siteID }).then((stage, err) => {
+    if (err) {
+      res.status(500).send({
+        message: "Internal service error",
+      });
+      return;
     }
-  );
+    if (stage) {
+      res.status(200).send({
+        data: stage,
+      });
+    }
+  });
   return;
 };
 exports.deletePaymentStages = (req, res) => {

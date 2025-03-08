@@ -220,39 +220,34 @@ exports.signin = (req, res) => {
   }
 };
 
-exports.addMember = (req, res) => {
-  // console.log(req.body)
-  const { data } = req.body;
-  const dataAdd = {
-    name: data.name,
-    employeeID: data.employeeID,
-    role: data.role,
-    email: data.email,
-    phone: data.phone,
-    address: data.address,
-  };
-  //   console.log(dataAdd)
-  const findmember = Member.find({
-    $or: [
-      { employeeID: data.employeeID },
-      { email: data.email },
-      { phone: data.phone },
-    ],
-  });
-  if (findmember?.length > 0) {
-    res.status(200).send({ message: "Record already exist" });
-  } else {
-    let member = new Member(dataAdd);
-    member.save((err, result) => {
-      if (err) {
-        res.status(500).send({ message: "Could not create role" });
-        return;
-      } else {
-        //   console.log(result)
-        res.status(201).send({ message: "Record created Successfuly" });
-      }
-      return;
+exports.addMember = async (req, res) => {
+  try {
+    const { data } = req.body;
+    const dataAdd = {
+      name: data.name,
+      employeeID: data.employeeID,
+      role: data.role,
+      email: data.email,
+      phone: data.phone,
+      address: data.address,
+    };
+
+    const existingMember = await Member.findOne({
+      $or: [
+        { employeeID: data.employeeID },
+        { email: data.email },
+        { phone: data.phone },
+      ],
     });
+    if (existingMember) {
+      return res.status(200).send({ message: "Record already exists" });
+    }
+    const member = new Member(dataAdd);
+    await member.save();
+    return res.status(201).send({ message: "Record created successfully" });
+  } catch (error) {
+    console.log(error);
+    return res.status(500).send({ message: "Could not create member" });
   }
 };
 

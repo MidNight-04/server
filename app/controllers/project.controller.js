@@ -153,7 +153,7 @@ exports.addProject = async (req, res) => {
         ...item,
         paymentStatus: "Not Due Yet",
         paymentDueDate: "",
-        paidOn: "",
+        installments: [],
       }));
       const stageData = {
         siteID: uploadData.siteID,
@@ -250,7 +250,6 @@ exports.addProject = async (req, res) => {
                   referenceModel = "clients";
                 }
               }
-              // console.log(issueMemberList);
               task["issueMember"] = issueMember;
               task["referenceModel"] = referenceModel;
               await Task.create(task);
@@ -906,9 +905,21 @@ exports.deleteImage = async (req, res) => {
   uploadImage.deleteFile(url).then(res => console.log(res));
 };
 
+const Ticket = require("../models/ticketModel");
+const TaskComment = require("../models/taskCommentModel");
+
 exports.clientQueryForProject = async (req, res) => {
-  const { id, name, point, content, assignMember, status, log, date } =
-    req.body;
+  const {
+    id,
+    name,
+    point,
+    content,
+    assignedBy,
+    assignMember,
+    status,
+    log,
+    date,
+  } = req.body;
   let profileFiles = [];
   let mems = [];
   // Create a date object for September 28, 2024
@@ -931,7 +942,6 @@ exports.clientQueryForProject = async (req, res) => {
     }
   }
   try {
-    // Find the project document by _id
     const project = await Project.findOne({ siteID: id });
     if (!project) {
       res.json({
@@ -939,42 +949,37 @@ exports.clientQueryForProject = async (req, res) => {
         message: "Project not found",
       });
     } else {
-      // console.log(mems)
-      // Create a ticket ID using ObjectID
-      const ticketId = new ObjectId();
+      const ticket = new Ticket({
+        step: name,
+        point,
+        content,
+        query: log,
+        date: dateTime,
+        work: status,
+        assignedBy,
+        assignMember,
+        image: profileFiles,
+      });
 
-      Project.updateOne(
-        { siteID: id },
-        {
-          $push: {
-            openTicket: {
-              _id: ticketId,
-              step: name,
-              point: point,
-              content: content,
-              query: log,
-              date: dateTime,
-              work: status,
-              assignMember: JSON.parse(assignMember),
-              image: profileFiles,
-              memberStatus: [],
-              adminStatus: [],
-              finalStatus: "Pending",
-              finalDate: "",
-              finalImage: [],
-            },
-          },
-        }
-      )
+      await ticket
+        .save()
         .then(result => {
-          // console.log("Update successful:", result);
-          res.json({
-            status: 200,
-            message: "Client ticket raised successfully",
+          Project.updateOne(
+            { siteID: id },
+            {
+              $push: {
+                openTicket: result._id,
+              },
+            }
+          ).then(result => {
+            res.json({
+              status: 200,
+              message: "Client ticket raised successfully",
+            });
           });
         })
         .catch(err => {
-          // console.error("Update failed:", err);
+          console.log(err);
           res.json({
             status: 400,
             message: "Error on raised ticket",
@@ -1962,81 +1967,44 @@ exports.ProjectStepDelete = async (req, res) => {
 };
 
 exports.TicketUpdateByMember = async (req, res) => {
-  // console.log(req.body);
   try {
     let profileFiles = [];
-    const {
-      id,
-      ticketId,
-      name,
-      point,
-      content,
-      query,
-      work,
-      ticketdate,
-      status,
-      date,
-      userRole,
-    } = req.body;
-
-    if (req.files.image) {
+    const { userId, ticketId, type, comment } = req.body;
+    if (req.files && req.files.image) {
       for (let i = 0; i < req.files.image.length; i++) {
         profileFiles.push(req.files.image[i].location);
       }
     }
-
-    const projectId = id; // The _id of the document you want to update
-    const openTicketId = ticketId;
-
-    // Define the updates for the openTicket fields
-    const updateData = {
-      $set: {
-        "openTicket.$.adminStatus": [
-          { status: status, date: date, image: profileFiles },
-        ], // Update with the desired value
-        // "openTicket.$.memberStatus": [], // Update with the desired value
-        "openTicket.$.finalDate": new Date(date), // Set to current date or desired date
-        "openTicket.$.finalStatus": status, // New status
-        "openTicket.$.finalImage": profileFiles, // Update with new image URLs
-      },
-    };
-
-    // Define the updates for the openTicket fields
-    const updateData1 = {
-      $set: {
-        // "openTicket.$.adminStatus": [], // Update with the desired value
-        "openTicket.$.memberStatus": [
-          { status: status, date: date, image: profileFiles },
-        ], // Update with the desired value
-      },
-    };
-
-    // Use the updateOne method to update the document
-    Project.updateOne(
-      {
-        "_id": ObjectId(projectId), // Match the project by its _id
-        "openTicket._id": ObjectId(openTicketId), // Match the openTicket by its _id
-      },
-      userRole === "admin"
-        ? updateData
-        : userRole === "project admin"
-        ? updateData
-        : updateData1
-    )
-      .then(result => {
-        // console.log("Update successful:", result);
-        res.json({
-          status: 200,
-          message: "Ticket status update successfully",
-        });
-      })
-      .catch(err => {
-        // console.error("Update failed:", err);
-        res.json({
-          status: 400,
-          message: "Error on ticket status update",
-        });
+    try {
+      const ticket = await Ticket.findById(ticketId);
+      if (!ticket) {
+        return res.status(404).json({ message: "Ticket not found" });
+      }
+      const comments = await TaskComment.create({
+        taskId: ticketId,
+        type,
+        comment,
+        image: profileFiles,
+        createdBy: userId,
       });
+      if (type === "Comment") {
+        await ticket.updateOne({ $push: { comments: comments._id } });
+      } else {
+        await ticket.updateOne({ $set: { status: type } });
+        await ticket.updateOne({ $push: { comments: comments._id } });
+      }
+      console.log(ticket);
+      res.json({
+        status: 200,
+        message: "Ticket updated successfully",
+      });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({
+        status: 500,
+        message: "Error while update ticket status",
+      });
+    }
   } catch (error) {
     console.error(error);
     res.status(500).json({

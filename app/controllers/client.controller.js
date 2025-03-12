@@ -115,7 +115,7 @@ exports.signinOtp = (req, res) => {
           });
 
           // Define the email
-          const mailOptions = (email) => ({
+          const mailOptions = email => ({
             from: "Sender",
             to: email,
             subject: "OTP Verification for Login",
@@ -290,7 +290,7 @@ exports.updateClientProfileById = async (req, res) => {
 };
 
 exports.getAllClient = (req, res) => {
-  Client.find({}).then((member, err) => {
+  Client.find().then((member, err) => {
     if (err) {
       res.status(500).send({
         message: "There was a problem in getting the list of role",

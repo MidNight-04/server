@@ -5,6 +5,7 @@ const TeamMembers = require("../models/teamMember.model");
 const Project = db.projects;
 const mongoose = require("mongoose");
 const User = require("../models/user.model");
+const Ticket = require("../models/ticketModel");
 
 let today = new Date();
 let yyyy = today.getFullYear();
@@ -220,20 +221,37 @@ exports.taskUpdateByAdmin = async (req, res) => {
 
 exports.getAllProjectTaskByClient = async (req, res) => {
   try {
-    const ticket = await Project.find({
-      "client.id": req.params.id,
-    });
-    if (ticket?.length > 0) {
-      res.json({
-        status: 200,
-        data: ticket,
+    await Project.find({ client: req.params.id })
+      .populate({
+        path: "openTicket",
+        model: "Tickets",
+        populate: {
+          path: "assignMember",
+          model: "teammembers",
+          select: "_id name employeeID",
+        },
+      })
+      .select({
+        _id: 1,
+        siteID: 1,
+        openTicket: 1,
+      })
+      .lean()
+      .exec()
+      .then((ticket, err) => {
+        if (err) {
+          res.status(500).send({
+            message: "There was a problem in getting the list of task",
+          });
+          return;
+        }
+        if (ticket) {
+          res.status(200).send({
+            message: "List of tak fetched successfuly",
+            data: ticket,
+          });
+        }
       });
-    } else {
-      res.json({
-        status: 200,
-        message: "No ticket raised by client",
-      });
-    }
   } catch (error) {
     res.json({
       status: 400,
@@ -244,7 +262,13 @@ exports.getAllProjectTaskByClient = async (req, res) => {
 
 exports.getAllProjectTickets = async (req, res) => {
   try {
-    const ticket = await Project.find();
+    const ticket = await Project.find().populate({
+      path: "openTicket",
+      populate: {
+        path: "assignMember",
+        model: "teammembers",
+      },
+    });
     if (ticket?.length > 0) {
       res.json({
         status: 200,
@@ -267,40 +291,31 @@ exports.getAllProjectTickets = async (req, res) => {
 exports.getTicketByTicketId = async (req, res) => {
   try {
     const { id } = req.params;
-
-    // Use aggregation to find the ticket by its ID
-    const ticket = await Project.aggregate([
+    const project = await Project.aggregate([
       {
         $match: {
-          "openTicket._id": mongoose.Types.ObjectId(id),
-        },
-      },
-      {
-        $project: {
-          matchedTicket: {
-            $filter: {
-              input: "$openTicket",
-              as: "ticket",
-              cond: {
-                $eq: ["$$ticket._id", mongoose.Types.ObjectId(id)],
-              },
-            },
-          },
+          openTicket: mongoose.Types.ObjectId(id),
         },
       },
     ]);
+    const ticket = await Ticket.findById(id).populate("assignMember").populate({
+      path: "comments",
+      model: "TaskComment",
+    });
 
+    if (!ticket) {
+      return res.status(404).send({
+        message: "Ticket not found",
+      });
+    }
     // Check if we found any tickets
-    if (ticket.length > 0 && ticket[0].matchedTicket.length > 0) {
-      // Add the extra object to the matchedTicket array
-      const response = ticket[0].matchedTicket.map(tick => ({
-        ...tick,
-        projectId: ticket[0]?._id, // Add your extra property here
-      }));
-
+    if (ticket) {
       res.json({
         status: 200,
-        data: response,
+        data: {
+          ticket,
+          siteId: project.siteID,
+        },
       });
     } else {
       res.json({

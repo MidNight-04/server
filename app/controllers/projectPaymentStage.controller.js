@@ -43,13 +43,22 @@ exports.getPaymentStagesBySiteID = (req, res) => {
 exports.updatePaymentStagesBySiteID = async (req, res) => {
   try {
     const { id } = req.params;
-    const { stage, status } = req.body;
+    const { paymentDate, amount, mode, remarks, stage, status } = req.body;
+    const data = {
+      paymentDate,
+      amount,
+      mode,
+      remarks,
+    };
+
     const payment = await PaymentStages.findOneAndUpdate(
       { siteID: id },
       {
         $set: {
           "stages.$[elem].paymentStatus": status,
-          "stages.$[elem].paidOn": new Date(),
+        },
+        $push: {
+          "stages.$[elem].installments": data,
         },
       },
       { arrayFilters: [{ "elem.stage": stage }], new: true }
@@ -64,6 +73,7 @@ exports.updatePaymentStagesBySiteID = async (req, res) => {
       data: payment,
     });
   } catch (err) {
+    console.error("Error updating payment stage:", err);
     res.status(500).send({
       message: "Internal service error",
     });

@@ -10,7 +10,7 @@ const taskCommentSchema = new Schema(
     },
     type: {
       type: String,
-      enum: ["In Progress", "Complete", "Comment"],
+      enum: ["In Progress", "Complete", "Comment", "Closed", "Reopened"],
       required: true,
     },
     comment: {
@@ -22,10 +22,12 @@ const taskCommentSchema = new Schema(
       type: String,
       default: null,
     },
-    image: {
-      type: String,
-      default: null,
-    },
+    image: [
+      {
+        type: String,
+        default: null,
+      },
+    ],
     audio: {
       type: String,
       default: null,
@@ -38,6 +40,7 @@ const taskCommentSchema = new Schema(
     referenceModel: {
       type: String,
       enum: ["teammembers", "User"],
+      default: "teammembers",
     },
     createdAt: {
       type: Date,

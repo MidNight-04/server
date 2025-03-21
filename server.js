@@ -102,6 +102,7 @@ require("./app/routes/task.routes")(app);
 require("./app/routes/taskCategory.routes")(app);
 require("./app/routes/projectLog.routes")(app);
 require("./app/routes/rolesRoutes")(app);
+require("./app/routes/ticket.routes")(app);
 
 const PORT = process.env.PORT || 4000;
 

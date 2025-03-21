@@ -504,17 +504,28 @@ exports.deleteProjectMember = async (req, res) => {
 };
 exports.getProjectById = (req, res) => {
   const id = req.params.id;
-  Project.find({ siteID: id }, (err, data) => {
-    if (err) {
-      //   console.log(err);
-      res.status(500).send({ message: "Could not find id to get details" });
-      return;
-    }
-    if (data) {
+  Project.find({ siteID: id })
+    .populate({
+      path: "project_admin project_manager site_engineer accountant sr_engineer sales operation",
+      model: "teammembers",
+      populate: {
+        path: "role",
+        model: "projectroles",
+      },
+    })
+    .then(data => {
+      if (!data) {
+        res.status(404).send({ message: "Project not found" });
+        return;
+      }
       res.status(200).send({ data: data, status: 200 });
-    }
-  });
+    })
+    .catch(err => {
+      console.log(err);
+      res.status(500).send({ message: "Could not find id to get details" });
+    });
 };
+``;
 
 exports.updateProjectById = (req, res) => {
   const { id, name, role, phone, address } = req.body;
@@ -951,6 +962,7 @@ exports.clientQueryForProject = async (req, res) => {
     } else {
       const ticket = new Ticket({
         step: name,
+        siteID: id,
         point,
         content,
         query: log,
@@ -1161,7 +1173,6 @@ exports.deleteExtraPointById = async (req, res) => {
       userName,
       activeUser,
     } = req.body;
-    // console.log(req.body)
     await Project.updateOne(
       {
         "siteID": id,
@@ -1385,7 +1396,6 @@ exports.filterMemberData = async (req, res) => {
 
 exports.initiatePayment = (req, res) => {
   const { orderId, payAmount, callbackUrl, currency, activeUser } = req.body;
-  // console.log(req.body);
 
   // Sandbox Credentials
   let mid = "WBJIwm08119302462954"; // Merchant ID
@@ -1436,7 +1446,6 @@ exports.initiatePayment = (req, res) => {
       axios
         .request(config)
         .then(response => {
-          console.log(response.data);
           res.status(200).send({ data: response.data });
           return;
         })
@@ -1459,7 +1468,6 @@ exports.verifyPayment = (req, res) => {
     projectDetails,
     paymentType,
   } = req.body;
-  // console.log(req.body);
   // Sandbox Credentials
   let mid = "WBJIwm08119302462954"; // Merchant ID
   let mkey = "Ipb3#Bx%3RdHmr#M"; // Merchant Key
@@ -1506,7 +1514,6 @@ exports.verifyPayment = (req, res) => {
       axios
         .request(config)
         .then(response => {
-          // console.log(response.data);
           const query = {
             siteID,
             clientID,
@@ -1517,7 +1524,7 @@ exports.verifyPayment = (req, res) => {
             paymentInformation: response.data,
             projectDetails,
           };
-          // console.log(query)
+
           if (contactType == "Project Payment") {
             const saveOrder = new PayProjects(query);
             saveOrder.save((err, orderSaved) => {
@@ -1528,7 +1535,6 @@ exports.verifyPayment = (req, res) => {
                 return;
               }
               if (orderSaved) {
-                console.log(orderSaved);
                 res.send({
                   message: "Payment Done Successfully",
                   data: orderSaved,
@@ -1555,6 +1561,7 @@ exports.AddNewProjectPoint = async (req, res) => {
     pointName,
     checkList,
     checkListName,
+    forceMajeure,
     duration,
     issueMember,
     prevContent,
@@ -1564,15 +1571,21 @@ exports.AddNewProjectPoint = async (req, res) => {
     uploadData,
     date,
   } = req.body;
-  // console.log(req.body);
+
+  const member =
+    issueMember.role.name === "Manager"
+      ? "Project Manager"
+      : issueMember.role.name;
+
   try {
-    var findData = await Project.find({ siteID: id });
-    var newObj = {
+    const findData = await Project.find({ siteID: id });
+    const newObj = {
       point: parseInt(prevPoint) + 1,
       content: pointName,
-      issueMember: issueMember,
+      issueMember: member,
       duration: duration,
       checkList: checkList,
+      forceMajeure: forceMajeure.isForceMajeure,
       checkListName: checkListName,
       checkListPoint: [],
       finalStatus: [{ status: "Pending", image: [], date: "" }],
@@ -1580,9 +1593,7 @@ exports.AddNewProjectPoint = async (req, res) => {
       dailyTask: [],
     };
     var targetProjectIndex = findData[0]?.project_status.findIndex(
-      status =>
-        status.name ===
-        stepName /* some condition to identify the correct project_status */
+      status => status.name === stepName
     );
 
     // Find the index of the step within the targeted project_status
@@ -1601,7 +1612,6 @@ exports.AddNewProjectPoint = async (req, res) => {
         0,
         newObj
       );
-
       // Update 'point' numbers starting from the newly inserted object
       for (
         var i = stepIndex + 2;
@@ -1616,138 +1626,74 @@ exports.AddNewProjectPoint = async (req, res) => {
         .json({ message: "Step or Project Status not found" });
     }
 
-    // Update the project document with the modified points
-    const updateResult = await Project.updateOne(
-      { "siteID": id, "project_status.name": stepName },
-      {
-        $set: {
-          "project_status.$.step":
-            findData[0].project_status[targetProjectIndex].step,
-        },
-      } // Make sure you're updating the correct field
-    );
+    // console.log(findData[0]?.project_status[targetProjectIndex]?.step);
 
-    // console.log("update result--", updateResult);
-
-    const memberData = await TeamMember.aggregate([
-      {
-        $group: {
-          _id: null,
-          uniqueRoles: { $addToSet: "$role" }, // Collect unique roles into an array
-        },
-      },
-      {
-        $project: {
-          _id: 0, // Exclude the _id field
-          uniqueRoles: 1, // Include the uniqueRoles field
-        },
-      },
-    ]);
+    if (forceMajeure.isForceMajeure) {
+      const updateResult = await Project.updateOne(
+        { "siteID": id, "project_status.name": stepName },
+        {
+          $set: {
+            "project_status.$.step":
+              findData[0].project_status[targetProjectIndex].step,
+          },
+          $push: {
+            forceMajeure: {
+              reason: pointName,
+              duration,
+              startDate: forceMajeure.startDate,
+              endDate: forceMajeure.endDate,
+            },
+          },
+          $inc: {
+            extension: duration,
+          },
+        }
+      );
+    } else {
+      const updateResult = await Project.updateOne(
+        { "siteID": id, "project_status.name": stepName },
+        {
+          $set: {
+            "project_status.$.step":
+              findData[0].project_status[targetProjectIndex].step,
+          },
+          $inc: {
+            extension: duration,
+          },
+        }
+      );
+    }
 
     if (updateResult.modifiedCount === 1) {
-      // if (checkList?.toLowerCase() === "yes") {
-      //   const dataUpload = {
-      //     checkListStep: stepName,
-      //     name: checkListName,
-      //     checkListNumber: newObj.point,
-      //     checkList: [],
-      //   };
-      //   let Check = new CheckList(dataUpload);
-      //   Check.save();
-      // }
-      var task = {
+      if (checkList?.toLowerCase() === "yes") {
+        const dataUpload = {
+          checkListStep: stepName,
+          name: checkListName,
+          checkListNumber: newObj.point,
+          checkList: [],
+        };
+        let Check = new CheckList(dataUpload);
+        Check.save();
+      }
+      const task = {
         title: pointName,
         description: pointName,
-        assignedBy: {
-          name: userName,
-          employeeID: activeUser,
-        },
+        assignedBy: activeUser,
+        referenceModel: "teammembers",
         siteID: id,
-        category: "project",
         priority: "High",
-        repeat: {
-          repeatType: "",
-          repeatTime: "",
-        },
         dueDate: changeTime(),
-        file: [],
-        audio: [],
-        reminder: JSON.parse(req.body.reminder || "[]"),
-        progress: {
-          status: "Pending",
-          image: [],
-          date: formatedtoday,
-        },
-        adminStatus: {
-          status: "Pending",
-          image: [],
-          date: formatedtoday,
-        },
       };
 
-      var issueMemberList = [];
-      // console.log(issueMember)
-      for (i = 0; i < issueMember?.length; i++) {
-        if (issueMember[i]?.toLowerCase() === "admin") {
-          issueMemberList.push({
-            name: userName,
-            employeeID: activeUser,
-          });
-        }
-        for (let j = 0; j < memberData[0]?.uniqueRoles?.length; j++) {
-          if (
-            memberData[0]?.uniqueRoles[j].toLowerCase() ===
-            issueMember[i]?.toLowerCase()
-          ) {
-            if (
-              memberData[0]?.uniqueRoles[j].toLowerCase() === "project admin"
-            ) {
-              uploadData.admin?.forEach(elem => issueMemberList.push(elem));
-            } else if (
-              memberData[0]?.uniqueRoles[j].toLowerCase() === "project manager"
-            ) {
-              uploadData.manager?.forEach(elem => issueMemberList.push(elem));
-            } else if (
-              memberData[0]?.uniqueRoles[j].toLowerCase() === "sr. engineer"
-            ) {
-              uploadData.sr_engineer?.forEach(elem =>
-                issueMemberList.push(elem)
-              );
-            } else if (
-              memberData[0]?.uniqueRoles[j].toLowerCase() === "site engineer"
-            ) {
-              uploadData.engineer?.forEach(elem => issueMemberList.push(elem));
-            } else if (
-              memberData[0]?.uniqueRoles[j].toLowerCase() === "accountant"
-            ) {
-              uploadData.accountant?.forEach(elem =>
-                issueMemberList.push(elem)
-              );
-            } else if (
-              memberData[0]?.uniqueRoles[j].toLowerCase() === "operation"
-            ) {
-              uploadData.operation?.forEach(elem => issueMemberList.push(elem));
-            } else if (
-              memberData[0]?.uniqueRoles[j].toLowerCase() === "sales"
-            ) {
-              uploadData.sales?.forEach(elem => issueMemberList.push(elem));
-            }
-          }
-        }
-      }
-      task["issueMember"] = issueMemberList;
-      // console.log(task)
+      task["issueMember"] = member;
       await Task.create(task);
 
-      // push new point in inspection list
       if (checkList?.toLowerCase() === "yes") {
-        // console.log("checklist point")
         await Project.updateOne(
-          { siteID: id }, // Replace with your actual document ID
+          { siteID: id },
           {
             $push: {
               inspections: {
-                // Your new inspection object fields go here
                 checkListStep: stepName,
                 name: checkListName,
                 checkListNumber: newObj.point,
@@ -1757,18 +1703,6 @@ exports.AddNewProjectPoint = async (req, res) => {
           }
         );
       }
-      const logData = {
-        log: `<span style="color: black;">${pointName}</span> ->> <em style="color: green">added</em>`,
-        file: [],
-        date: date,
-        siteID: id,
-        member: {
-          name: userName,
-          Id: activeUser,
-        },
-      };
-      const logSave = new ProjectLog(logData);
-      await logSave.save();
       return res.json({
         status: 200,
         message: "New Field added successfully",
@@ -1784,126 +1718,188 @@ exports.AddNewProjectPoint = async (req, res) => {
   }
 };
 
+// exports.DeleteProjectPoint = async (req, res) => {
+//   const { id, name, point, content, checkList, checkListName, duration } =
+//     req.body;
+
+//   try {
+//     const project = await Project.findOne({ siteID: id });
+
+//     if (!project) {
+//       return res.status(404).json({ message: "Project not found" });
+//     }
+
+//     const projectStatus = project.project_status.find(
+//       status => status.name === name
+//     );
+
+//     if (!projectStatus) {
+//       return res.status(404).json({ message: "Project Status not found" });
+//     }
+
+//     const stepIndex = projectStatus.step.findIndex(
+//       step => step.point === point
+//     );
+
+//     if (stepIndex === -1) {
+//       return res.status(404).json({ message: "Step not found" });
+//     }
+
+//     // Handle force majeure removal
+//     const stepToRemove = projectStatus.step[stepIndex];
+
+//     if (stepToRemove.forceMajeure) {
+//       const fMIndex = project.forceMajeure.findIndex(
+//         item => item.reason === stepToRemove.content
+//       );
+
+//       if (fMIndex !== -1) {
+//         project.forceMajeure.splice(fMIndex, 1);
+//       }
+//     }
+
+//     // Remove the step
+//     projectStatus.step.splice(stepIndex, 1);
+
+//     // Reorder points
+//     projectStatus.step.forEach((step, index) => {
+//       step.point = index + 1;
+//     });
+
+//     // MongoDB update
+//     const updatePayload = {
+//       $set: { "project_status.$.step": projectStatus.step },
+//       $inc: { extension: -duration },
+//     };
+
+//     if (checkList?.toLowerCase() === "yes") {
+//       updatePayload.$pull = {
+//         inspections: {
+//           checkListStep: name,
+//           name: checkListName,
+//           checkListNumber: point,
+//         },
+//       };
+//     }
+
+//     const updateResult = await Project.updateOne(
+//       { "siteID": id, "project_status.name": name },
+//       updatePayload
+//     );
+
+//     project.save();
+
+//     if (updateResult.modifiedCount === 0) {
+//       return res
+//         .status(500)
+//         .json({ message: "No changes were made to the project" });
+//     }
+
+//     if (checkList?.toLowerCase() === "yes") {
+//       await CheckList.deleteMany({
+//         checkListStep: name,
+//         name: checkListName,
+//         checkListNumber: point,
+//       });
+//     }
+
+//     await Task.deleteMany({
+//       siteID: id,
+//       title: content,
+//       description: content,
+//       category: "project",
+//     });
+
+//     res.json({ status: 200, message: "Point removed successfully" });
+//   } catch (error) {
+//     console.error("Error while removing point:", error);
+//     res
+//       .status(500)
+//       .json({ message: "Error while removing point", error: error.message });
+//   }
+// };
+
 exports.DeleteProjectPoint = async (req, res) => {
-  const {
-    id,
-    name,
-    point,
-    content,
-    checkList,
-    checkListName,
-    activeUser,
-    userName,
-    date,
-  } = req.body;
+  const { id, name, point, content, checkList, checkListName, duration } =
+    req.body;
 
   try {
-    // Fetch the project data
-    const findData = await Project.find({ siteID: id });
+    const project = await Project.findOne({ siteID: id });
 
-    if (!findData.length) {
+    if (!project) {
       return res.status(404).json({ message: "Project not found" });
     }
 
-    // Find the index of the targeted project_status
-    const targetProjectIndex = findData[0]?.project_status.findIndex(
+    const projectStatus = project.project_status.find(
       status => status.name === name
     );
 
-    // Find the index of the step within the targeted project_status
-    const stepIndex =
-      targetProjectIndex !== -1
-        ? findData[0]?.project_status[targetProjectIndex]?.step?.findIndex(
-            obj => obj.point === point
-          )
-        : -1;
-
-    // If both indices are found, proceed to remove the point from the step array
-    if (targetProjectIndex !== -1 && stepIndex !== -1) {
-      // Remove the point using splice
-      findData[0].project_status[targetProjectIndex].step.splice(stepIndex, 1);
-
-      // Update 'point' numbers starting from the index of the removed point
-      for (
-        let i = stepIndex;
-        i < findData[0].project_status[targetProjectIndex].step.length;
-        i++
-      ) {
-        findData[0].project_status[targetProjectIndex].step[i].point -= 1;
-      }
-
-      // Update the project document with the modified step array
-      const updateResult = await Project.updateOne(
-        { "siteID": id, "project_status.name": name },
-        {
-          $set: {
-            "project_status.$.step":
-              findData[0].project_status[targetProjectIndex].step,
-          },
-        }
-      );
-
-      if (updateResult.modifiedCount === 1) {
-        // if (checkList?.toLowerCase() === "yes") {
-        //   await CheckList.deleteMany({
-        //     checkListStep: name,
-        //     name: checkListName,
-        //     checkListNumber: point,
-        //   });
-        // }
-        await Task.deleteMany({
-          siteID: id,
-          title: content,
-          description: content,
-          category: "project",
-        });
-
-        // pull inspection from document
-        if (checkList?.toLowerCase() === "yes") {
-          await Project.updateOne(
-            { siteID: id }, // Replace with your actual document ID
-            {
-              $pull: {
-                inspections: {
-                  checkListStep: name,
-                  name: checkListName,
-                  checkListNumber: point, // Specify the condition to match the object you want to remove
-                },
-              },
-            }
-          );
-        }
-        const logData = {
-          log: `<span style="color: black;">${content}</span> ->> <em style="color: red;">Delete</em>`,
-          file: [],
-          date: date,
-          siteID: id,
-          member: {
-            name: userName,
-            Id: activeUser,
-          },
-        };
-        const logSave = new ProjectLog(logData);
-        await logSave.save();
-        return res.json({
-          status: 200,
-          message: "Point removed successfully",
-        });
-      } else {
-        res
-          .status(500)
-          .json({ message: "No changes were made to the project" });
-      }
-    } else {
-      return res
-        .status(404)
-        .json({ message: "Step or Project Status not found" });
+    if (!projectStatus) {
+      return res.status(404).json({ message: "Project Status not found" });
     }
+
+    const stepIndex = projectStatus.step.findIndex(
+      step => step.point === point
+    );
+
+    if (stepIndex === -1) {
+      return res.status(404).json({ message: "Step not found" });
+    }
+
+    const stepToRemove = projectStatus.step[stepIndex];
+
+    // MongoDB Update Payload
+    const updatePayload = {
+      $pull: {
+        "project_status.$[status].step": { point },
+        ...(stepToRemove.forceMajeure && {
+          forceMajeure: { reason: stepToRemove.content },
+        }),
+      },
+      $inc: { extension: -duration },
+    };
+
+    if (checkList?.toLowerCase() === "yes") {
+      updatePayload.$pull.inspections = {
+        checkListStep: name,
+        name: checkListName,
+        checkListNumber: point,
+      };
+    }
+
+    const updateResult = await Project.updateOne(
+      { "siteID": id, "project_status.name": name },
+      updatePayload,
+      { arrayFilters: [{ "status.name": name }] }
+    );
+
+    if (updateResult.modifiedCount === 0) {
+      return res
+        .status(500)
+        .json({ message: "No changes were made to the project" });
+    }
+
+    if (checkList?.toLowerCase() === "yes") {
+      await CheckList.deleteMany({
+        checkListStep: name,
+        name: checkListName,
+        checkListNumber: point,
+      });
+    }
+
+    await Task.deleteMany({
+      siteID: id,
+      title: content,
+      description: content,
+      category: "project",
+    });
+
+    res.json({ status: 200, message: "Point removed successfully" });
   } catch (error) {
-    console.error(error);
+    console.error("Error while removing point:", error.stack);
     res.status(500).json({
-      status: 500,
       message: "Error while removing point",
+      error: error.message,
     });
   }
 };
@@ -1993,7 +1989,6 @@ exports.TicketUpdateByMember = async (req, res) => {
         await ticket.updateOne({ $set: { status: type } });
         await ticket.updateOne({ $push: { comments: comments._id } });
       }
-      console.log(ticket);
       res.json({
         status: 200,
         message: "Ticket updated successfully",

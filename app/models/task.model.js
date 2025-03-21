@@ -77,10 +77,7 @@ const taskSchema = new Schema(
         type: String,
       },
     ],
-    reminder: {
-      type: Date,
-      default: Date.now,
-    },
+    reminder: [],
     status: {
       type: String,
       enum: ["Pending", "In Progress", "Complete"],

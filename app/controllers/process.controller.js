@@ -56,7 +56,6 @@ exports.addConstructionStep = async (req, res) => {
           Check.save();
         }
       }
-      console.log(arraySave);
       const createData = new Process({
         name: name,
         priority: priority,

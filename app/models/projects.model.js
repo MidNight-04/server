@@ -13,6 +13,11 @@ const projectModel = mongoose.model(
       cost: Number,
       date: String,
       duration: String,
+      extension: {
+        type: Number,
+        default: 0,
+      },
+      forceMajeure: [],
       project_admin: [],
       project_manager: [],
       sr_engineer: [],
@@ -34,6 +39,10 @@ const projectModel = mongoose.model(
               duration: Number,
               checkList: String,
               checkListName: String,
+              forceMajeure: {
+                type: Boolean,
+                default: false,
+              },
               checkListPoint: [],
               finalStatus: [{ status: String, image: [], date: String }],
               approvalTask: [],

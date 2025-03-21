@@ -298,10 +298,16 @@ exports.getTicketByTicketId = async (req, res) => {
         },
       },
     ]);
-    const ticket = await Ticket.findById(id).populate("assignMember").populate({
-      path: "comments",
-      model: "TaskComment",
-    });
+    const ticket = await Ticket.findById(id)
+      .populate("assignMember")
+      .populate({
+        path: "comments",
+        model: "TaskComment",
+      })
+      .populate({
+        path: "assignedBy",
+        model: "clients",
+      });
 
     if (!ticket) {
       return res.status(404).send({

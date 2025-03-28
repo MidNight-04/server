@@ -3,13 +3,13 @@ const multerS3 = require("multer-s3");
 const { S3Client } = require("@aws-sdk/client-s3");
 const { accessKeyId, secretAccessKey } = require("../config/auth.config");
 const path = require("path");
-// create s3 instance using S3Client
+
 const s3 = new S3Client({
   credentials: {
     accessKeyId,
     secretAccessKey,
   },
-  region: "us-east-1", // this is the region that you select in AWS account
+  region: "us-east-1",
 });
 
 const s3Storage = multerS3({
@@ -17,7 +17,6 @@ const s3Storage = multerS3({
   bucket: "thekedar-bucket", // change it as per your project requirement
   acl: "public-read", // storage access type
   metadata: (req, file, cb) => {
-    // console.log("upcoming----",file);
     cb(null, { fieldname: file.fieldname });
   },
   key: (req, file, cb) => {
@@ -26,22 +25,24 @@ const s3Storage = multerS3({
     cb(null, fileName);
   },
 });
-// function to sanitize files and send error for unsupported files
 function sanitizeFile(file, cb) {
-  // console.log("upcoming----",file);
-  // Define the allowed extension
   const fileExts = [
     ".png",
     ".jpg",
     ".jpeg",
     ".gif",
     ".pdf",
-    ".in",
     ".xlsx",
-    ".blob",
+    ".xls",
+    ".doc",
+    ".docx",
+    ".ppt",
+    ".pptx",
+    ".wav",
+    ".mp3",
+    ".ogg",
+    ".flac",
   ];
-  // console.log(file)
-  // Check allowed extensions
   const isAllowedExt = fileExts.includes(
     path.extname(file.originalname.toLowerCase())
   );
@@ -52,12 +53,10 @@ function sanitizeFile(file, cb) {
   ) {
     return cb(null, true); // no errors
   } else {
-    // pass error msg to callback, which can be displaye in frontend
     cb("Error: File type not allowed!");
   }
 }
 
-// our middleware
 const uploadImage = multer({
   storage: s3Storage,
   fileFilter: (req, file, callback) => {
@@ -68,5 +67,4 @@ const uploadImage = multer({
   },
 });
 
-// module.exports = uploadImage;
 exports.uploadImage = uploadImage;

@@ -6,6 +6,8 @@ const Project = db.projects;
 const mongoose = require("mongoose");
 const User = require("../models/user.model");
 const Ticket = require("../models/ticketModel");
+const Client = require("../models/client.model");
+const awsS3 = require("../middlewares/aws-s3");
 
 let today = new Date();
 let yyyy = today.getFullYear();
@@ -442,41 +444,66 @@ exports.searchTask = async (req, res) => {
 exports.taskAddComment = async (req, res) => {
   try {
     const { taskId, type, comment, userId } = req.body;
+    console.log(req.files);
+    const profileFiles =
+      req.files?.image?.map(file =>
+        typeof file === "string" ? file : file.location
+      ) || [];
+
     const task = await Task.findById(taskId);
-    let referenceModel;
-    const issueMember = await TeamMembers.findById(userId);
-    if (!issueMember) {
-      const user = await User.findById(userId);
-      if (user) {
-        referenceModel = "User";
-      }
-    } else {
-      referenceModel = "teammembers";
-    }
     if (!task) {
       return res.status(404).send({ message: "Task not found" });
     }
+
+    const referenceModel = await getReferenceModel(userId);
+    if (!referenceModel) {
+      return res.status(404).send({ message: "User not found" });
+    }
+
     if (type === "Complete" || type === "In Progress") {
       task.status = type;
     }
+
     const newComment = {
       comment,
       type,
       createdBy: userId,
       referenceModel,
       taskId,
+      images: profileFiles,
+      audio: req.files?.audio[0]?.location,
     };
+
     const data = await TaskComment.create(newComment);
     if (!data) {
       return res.status(404).send({ message: "Comment not created" });
     }
+
     task.comments.push(data._id);
     await task.save();
+
     res.status(200).send({ message: "Comment added successfully", data });
   } catch (error) {
     console.error(error);
     res.status(500).send({ message: "Error while adding comment" });
   }
+};
+
+const getReferenceModel = async userId => {
+  const models = [
+    { model: TeamMembers, referenceModel: "teammembers" },
+    { model: User, referenceModel: "User" },
+    { model: Client, referenceModel: "clients" },
+  ];
+
+  for (const { model, referenceModel } of models) {
+    const user = await model.findById(userId);
+    if (user) {
+      return referenceModel;
+    }
+  }
+
+  return null;
 };
 
 exports.editTask = async (req, res) => {
@@ -495,5 +522,49 @@ exports.editTask = async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).send({ message: "Error while updating task" });
+  }
+};
+
+exports.deleteTaskCommentImage = async (req, res) => {
+  try {
+    const { commentId, imageUrl } = req.body;
+
+    if (!commentId || !imageUrl) {
+      return res.status(400).send({ message: "Missing commentId or imageUrl" });
+    }
+
+    const comment = await TaskComment.findById(commentId);
+    if (!comment) {
+      return res.status(404).send({ message: "Comment not found" });
+    }
+
+    const imageUrlParts = imageUrl.split(".com/");
+    if (imageUrlParts.length < 2) {
+      return res.status(400).send({ message: "Invalid image URL format" });
+    }
+
+    // Delete the image from S3
+    const imagePath = imageUrlParts[1];
+    try {
+      await awsS3.deleteFile(imagePath);
+    } catch (s3Error) {
+      console.error("S3 deletion error:", s3Error);
+      return res
+        .status(500)
+        .send({ message: "Failed to delete image from S3" });
+    }
+
+    // Remove the image reference from the comment
+    const update = { $pull: { images: imageUrl } };
+    const result = await TaskComment.updateOne({ _id: commentId }, update);
+
+    if (result.modifiedCount === 0) {
+      return res.status(404).send({ message: "Image not found in comment" });
+    }
+
+    res.status(200).send({ message: "Comment image deleted successfully" });
+  } catch (error) {
+    console.error("Server error:", error);
+    res.status(500).send({ message: "Error while deleting comment image" });
   }
 };

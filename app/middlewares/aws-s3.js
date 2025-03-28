@@ -3,8 +3,8 @@ const fs = require("fs");
 const path = require("path");
 
 AWS.config.update({
-  accessKeyId: "AKIAWO4KTF2XQGO4IZRW",
-  secretAccessKey: "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",
+  accessKeyId: "AKIAWO4KTF2XXTGAJ4VY",
+  secretAccessKey: "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",
   region: "us-east-1",
 });
 

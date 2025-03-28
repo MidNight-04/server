@@ -59,6 +59,23 @@ module.exports = function (app) {
   // app.delete("/api/constructionstep/delete/:id", controller.deleteConstructionStepById);
   app.get("/api/task/gettaskbyid/:id", controller.getTaskByid);
   app.post("/api/task/search/:searchTerm", controller.searchTask);
-  app.post("/api/task/taskaddcomment", controller.taskAddComment);
+  app.post(
+    "/api/task/taskaddcomment",
+    uploadImage.fields([
+      {
+        name: "image",
+        maxCount: 20,
+      },
+      {
+        name: "audio",
+        maxCount: 1,
+      },
+    ]),
+    controller.taskAddComment
+  );
   app.post("/api/task/edittask", controller.editTask);
+  app.post(
+    "/api/task/deletetaskcommentimage",
+    controller.deleteTaskCommentImage
+  );
 };

@@ -87,51 +87,119 @@ exports.deleteStatusImage = async (req, res) => {
 };
 
 exports.addProject = async (req, res) => {
-  const { uploadData } = req.body;
-  const findproject = await Project.find({ siteID: uploadData.siteID });
-  if (findproject?.length > 0) {
-    res.status(200).send({ message: "Project already exist with siteID" });
-  } else {
-    const allStep = await Process.find();
-    const flr = uploadData?.floor?.split("+");
-    var projectArray = [];
-    for (let i = 0; i < allStep?.length; i++) {
-      if (allStep[i]?.priority === "2") {
-        for (let j = 0; j <= parseInt(flr[1]); j++) {
-          projectArray.push({
-            name:
-              j === 0
-                ? flr[0] === "S"
-                  ? "Stilt"
-                  : "Ground Floor"
-                : `Floor ${j}`,
-            priority: parseInt(allStep[i]?.priority) + j,
-            step: allStep[i]?.points,
-          });
-        }
-      } else if (allStep[i]?.priority === "1") {
-        projectArray.push({
-          name: allStep[i]?.name,
-          priority: 1,
-          step: allStep[i]?.points,
-        });
-      } else {
-        projectArray.push({
-          name: allStep[i]?.name,
-          priority: parseInt(flr[1]) + 3,
-          step: allStep[i]?.points,
-        });
-      }
+  try {
+    const { uploadData } = req.body;
+
+    const existingProject = await Project.findOne({
+      siteID: uploadData.siteID,
+    });
+    if (existingProject) {
+      return res
+        .status(200)
+        .send({ message: "Project already exists with siteID" });
     }
 
-    const dataAdd = {
+    const allSteps = await Process.find();
+    const [floorType, floorCountStr] = uploadData?.floor?.split("+");
+    const floorCount = parseInt(floorCountStr, 10);
+
+    const projectStepArray = allSteps.flatMap(step => {
+      if (step.priority === "2") {
+        return Array.from({ length: floorCount + 1 }, (_, j) => ({
+          name:
+            j === 0
+              ? floorType === "S"
+                ? "Stilt"
+                : "Ground Floor"
+              : `Floor ${j}`,
+          priority: parseInt(step.priority) + j,
+          step: step.points,
+        }));
+      }
+
+      return [
+        {
+          name: step.name,
+          priority: step.priority === "1" ? 1 : floorCount + 3,
+          step: step.points,
+        },
+      ];
+    });
+
+    const roleMap = {
+      "admin": "admin",
+      "site manager": "manager",
+      "architect": "architect",
+      "sr. engineer": "sr_engineer",
+      "sr. architect": "sr. architect",
+      "site engineer": "engineer",
+      "accountant": "accountant",
+      "operations": "operation",
+      "sales": "sales",
+      "client": "client",
+    };
+
+    const getIssueMemberAndModel = role => {
+      const roleKey = roleMap[role.toLowerCase()];
+
+      if (roleKey === "client") {
+        return {
+          issueMember: uploadData[roleKey],
+          referenceModel: "clients",
+        };
+      }
+      return roleKey
+        ? { issueMember: uploadData[roleKey], referenceModel: "teammembers" }
+        : { issueMember: uploadData[roleKey], referenceModel: "teammembers" };
+    };
+
+    const taskIds = [];
+
+    for (const step of projectStepArray) {
+      const tasks = {
+        name: step.name,
+        priority: step.priority,
+        step: [],
+      };
+      const tasksToSave = step.step.map(el => {
+        const { issueMember, referenceModel } = getIssueMemberAndModel(
+          el.issueMember[0]
+        );
+        return {
+          title: el.content,
+          description: el.content,
+          assignedBy: uploadData.assignedID,
+          duration: el.duration,
+          siteID: uploadData.siteID,
+          checkList: {
+            checkList: el.checkList,
+            checkListStatus: el.checkListStatus,
+          },
+          issueMember,
+          referenceModel,
+        };
+      });
+
+      const savedTask = await Task.insertMany(tasksToSave);
+
+      tasks.step.push(
+        ...savedTask.map(task => ({
+          taskId: task._id,
+          point: task.point,
+          duration: task.duration,
+        }))
+      );
+      taskIds.push(tasks);
+    }
+
+    const projectData = {
       project_name: uploadData.name,
       siteID: uploadData.siteID,
       project_location: uploadData.location,
       client: uploadData.client,
       floor: uploadData.floor,
       area: uploadData.area,
-      cost: parseInt(uploadData.cost),
+      cost: parseInt(uploadData.cost, 10),
       date: uploadData.date,
       duration: uploadData.duration,
       project_manager: uploadData.manager,
@@ -143,167 +211,111 @@ exports.addProject = async (req, res) => {
       project_admin: uploadData.admin,
       accountant: uploadData.accountant,
       openTicket: [],
-      project_status: projectArray,
+      project_status: taskIds,
       inspections: [],
     };
 
-    const findStage = await PaymentStages.find({ floor: uploadData.floor });
-    if (findStage?.length > 0) {
-      const stages = findStage[0]?.stages?.map(item => ({
-        ...item,
-        paymentStatus: "Not Due Yet",
-        paymentDueDate: "",
-        installments: [],
-      }));
-      const stageData = {
-        siteID: uploadData.siteID,
-        clientID: uploadData?.client?.id,
-        floor: findStage[0]?.floor,
-        stages: stages,
-      };
-      let payStage = new ProjectPaymentStages(stageData);
+    const paymentStages = await PaymentStages.findOne({
+      floor: uploadData.floor,
+    });
 
-      const uniqueRoleIds = await TeamMember.distinct("role");
-      const uniqueRoles = await ProjectRole.find({
-        _id: { $in: uniqueRoleIds },
-      }).then(response => {
-        const array = response.map(item => item.name);
-        return array;
+    if (!paymentStages) {
+      return res.status(204).json({
+        message: `First create payment stage for ${uploadData.floor} floor`,
       });
+    }
 
-      payStage.save((err, result) => {
-        if (err) {
-          console.log(err);
-          res.status(500).send({ message: "Could not create record" });
-          return;
-        } else {
-          projectArray.forEach(element => {
-            element.step?.forEach(async el => {
-              if (el.checkList === "yes") {
-                dataAdd["inspections"]?.push({
-                  checkListStep: element.name,
-                  name: el.checkListName,
-                  checkListNumber: el.point,
-                  checkList: [],
-                  passed: false,
-                });
-              }
+    const stages = paymentStages.stages.map(item => ({
+      ...item,
+      paymentStatus: "Not Due Yet",
+      paymentDueDate: "",
+      installments: [],
+    }));
 
-              let issueMember;
-              let referenceModel;
+    const paymentStageData = {
+      siteID: uploadData.siteID,
+      clientID: uploadData.client?.id,
+      floor: paymentStages.floor,
+      stages,
+    };
 
-              const task = {
-                title: el.content,
-                description: el.content,
-                assignedBy: uploadData.assignedID,
-                siteID: uploadData.siteID,
-                dueDate: changeTime(),
-                // reminder: JSON.parse(req.body.reminder),
-              };
-              for (i = 0; i < el.issueMember?.length; i++) {
-                if (el.issueMember[i]?.toLowerCase() === "admin") {
-                  issueMember = uploadData.assignedID;
-                }
-                const roleIndex = uniqueRoles.findIndex(
-                  role =>
-                    role.toLowerCase() === el.issueMember[i]?.toLowerCase()
-                );
-                if (roleIndex !== -1) {
-                  switch (uniqueRoles[roleIndex].toLowerCase()) {
-                    case "admin":
-                      issueMember = uploadData?.admin;
-                      referenceModel = "teammembers";
-                      break;
-                    case "manager":
-                      issueMember = uploadData?.manager;
-                      referenceModel = "teammembers";
-                      break;
-                    case "architect":
-                      issueMember = uploadData?.architect;
-                      referenceModel = "teammembers";
-                      break;
-                    case "sr. engineer":
-                      issueMember = uploadData?.sr_engineer;
-                      referenceModel = "teammembers";
-                      break;
-                    case "site engineer":
-                      issueMember = uploadData?.engineer;
-                      referenceModel = "teammembers";
-                      break;
-                    case "accountant":
-                      issueMember = uploadData?.accountant;
-                      referenceModel = "teammembers";
-                      break;
-                    case "operations":
-                      issueMember = uploadData?.operation;
-                      referenceModel = "teammembers";
-                      break;
-                    case "sales":
-                      issueMember = uploadData?.sales;
-                      referenceModel = "teammembers";
-                      break;
-                    default:
-                      break;
-                  }
-                } else if (el.issueMember[i]?.toLowerCase() === "client") {
-                  issueMember = uploadData?.client;
-                  referenceModel = "clients";
-                }
-              }
-              task["issueMember"] = issueMember;
-              task["referenceModel"] = referenceModel;
-              await Task.create(task);
-            });
-          });
-          let project = new Project(dataAdd);
-          project.save((err, result) => {
-            if (err) {
-              console.log(err);
-              res.status(500).send({ message: "Could not create record" });
-              return;
-            } else {
-              res
-                .status(201)
-                .send({ message: "Record created Successfuly", status: 201 });
-            }
-            return;
+    const payStage = new ProjectPaymentStages(paymentStageData);
+    await payStage.save();
+
+    projectStepArray.forEach(project => {
+      project.step.forEach(el => {
+        if (el.checkList === "yes") {
+          projectData.inspections.push({
+            checkListStep: project.name,
+            name: el.checkListName,
+            checkListNumber: el.point,
+            checkList: [],
+            passed: false,
           });
         }
       });
-    } else {
-      res.json({
-        message: `First create payment stage for G+${uploadData.floor} floor`,
-        status: 204,
-      });
-    }
+    });
+
+    const newProject = new Project(projectData);
+    await newProject.save();
+
+    res
+      .status(201)
+      .send({ message: "Record created successfully", status: 201 });
+  } catch (error) {
+    console.error("Error creating project:", error);
+    res.status(500).send({ message: "Internal Server Error" });
   }
 };
-// let result = await TeamMembers.findOne({ _id: objectId });
-
-//       if (!result) {
-//           result = await Client.findOne({ _id: objectId });
-//       }
 
 exports.getAllProject = (req, res) => {
-  Project.find({}).then((project, err) => {
-    if (err) {
-      res.status(500).send({
-        message: "There was a problem in getting the list of project",
-      });
-      return;
-    }
-    if (project) {
-      res.status(200).send({
-        message: "List of project fetched successfuly",
-        data: project,
-      });
-    }
-  });
+  mongoose.set("strictPopulate", false);
+  Project.find({})
+    .populate({
+      path: "project_status",
+      populate: {
+        path: "step",
+        populate: {
+          path: "taskId",
+          model: Task,
+          populate: [
+            {
+              path: "issueMember",
+              select: "_id name role",
+              populate: {
+                path: "role",
+              },
+            },
+            {
+              path: "assignedBy",
+              select: "-password -token -refreshToken -loginOtp",
+              populate: {
+                path: "roles",
+              },
+            },
+          ],
+        },
+      },
+    })
+    .then((project, err) => {
+      if (err) {
+        res.status(500).send({
+          message: "There was a problem in getting the list of project",
+        });
+        return;
+      }
+      if (project) {
+        res.status(200).send({
+          message: "List of project fetched successfuly",
+          data: project,
+        });
+      }
+    });
   return;
 };
 
 exports.getProjectByMember = (req, res) => {
-  // console.log(req.params.id)
+  mongoose.set("strictPopulate", false);
   Project.find({
     $or: [
       { "project_manager.employeeID": req.params.id },
@@ -315,39 +327,94 @@ exports.getProjectByMember = (req, res) => {
       { "sr_engineer.employeeID": req.params.id },
       { "sales.employeeID": req.params.id },
     ],
-  }).then((project, err) => {
-    if (err) {
-      res.status(500).send({
-        message: "There was a problem in getting the list of project",
-      });
-      return;
-    }
-    if (project) {
-      // console.log(project)
-      res.status(200).send({
-        message: "List of project fetched successfuly",
-        data: project,
-      });
-    }
-  });
+  })
+    .populate({
+      path: "project_status",
+      populate: {
+        path: "step",
+        populate: {
+          path: "taskId",
+          model: Task,
+          populate: [
+            {
+              path: "issueMember",
+              select: "_id name role",
+              populate: {
+                path: "role",
+              },
+            },
+            {
+              path: "assignedBy",
+              select: "-password -token -refreshToken -loginOtp",
+              populate: {
+                path: "roles",
+              },
+            },
+          ],
+        },
+      },
+    })
+    .then((project, err) => {
+      if (err) {
+        res.status(500).send({
+          message: "There was a problem in getting the list of project",
+        });
+        return;
+      }
+      if (project) {
+        // console.log(project)
+        res.status(200).send({
+          message: "List of project fetched successfuly",
+          data: project,
+        });
+      }
+    });
 };
 
 exports.getProjectByClientId = (req, res) => {
-  Project.find({ client: req.params.id }).then((project, err) => {
-    if (err) {
-      res.status(500).send({
-        message: "There was a problem in getting the list of project",
-      });
-      return;
-    }
-    if (project) {
-      // console.log(project)
-      res.status(200).send({
-        message: "List of project fetched successfuly",
-        data: project,
-      });
-    }
-  });
+  mongoose.set("strictPopulate", false);
+  Project.find({ client: req.params.id })
+    .populate({
+      path: "project_status",
+      populate: {
+        path: "step",
+        populate: {
+          path: "taskId",
+          model: Task,
+          populate: [
+            {
+              path: "issueMember",
+              select: "_id name role",
+              populate: {
+                path: "role",
+              },
+            },
+            {
+              path: "assignedBy",
+              select: "-password -token -refreshToken -loginOtp",
+              populate: {
+                path: "roles",
+              },
+            },
+          ],
+        },
+      },
+    })
+    .then((project, err) => {
+      if (err) {
+        res.status(500).send({
+          message: "There was a problem in getting the list of project",
+        });
+        return;
+      }
+      if (project) {
+        // console.log(project)
+        res.status(200).send({
+          message: "List of project fetched successfuly",
+          data: project,
+        });
+      }
+    });
 };
 
 exports.deleteProjectById = (req, res) => {
@@ -504,6 +571,7 @@ exports.deleteProjectMember = async (req, res) => {
 };
 exports.getProjectById = (req, res) => {
   const id = req.params.id;
+  mongoose.set("strictPopulate", false);
   Project.find({ siteID: id })
     .populate({
       path: "project_admin project_manager site_engineer accountant sr_engineer sales operation",
@@ -511,6 +579,32 @@ exports.getProjectById = (req, res) => {
       populate: {
         path: "role",
         model: "projectroles",
+      },
+    })
+    .populate({
+      path: "project_status",
+      populate: {
+        path: "step",
+        populate: {
+          path: "taskId",
+          model: Task,
+          populate: [
+            {
+              path: "issueMember",
+              select: "_id name role",
+              populate: {
+                path: "role",
+              },
+            },
+            {
+              path: "assignedBy",
+              select: "-password -token -refreshToken -loginOtp",
+              populate: {
+                path: "roles",
+              },
+            },
+          ],
+        },
       },
     })
     .then(data => {
@@ -918,6 +1012,9 @@ exports.deleteImage = async (req, res) => {
 
 const Ticket = require("../models/ticketModel");
 const TaskComment = require("../models/taskCommentModel");
+const { populate } = require("../models/user.model");
+const User = require("../models/user.model");
+const { default: mongoose } = require("mongoose");
 
 exports.clientQueryForProject = async (req, res) => {
   const {
@@ -1564,53 +1661,60 @@ exports.AddNewProjectPoint = async (req, res) => {
     forceMajeure,
     duration,
     issueMember,
-    prevContent,
     prevPoint,
-    userName,
     activeUser,
-    uploadData,
-    date,
   } = req.body;
 
-  const member =
-    issueMember.role.name === "Manager"
-      ? "Project Manager"
-      : issueMember.role.name;
+  console.log(forceMajeure);
 
   try {
     const findData = await Project.find({ siteID: id });
-    const newObj = {
-      point: parseInt(prevPoint) + 1,
-      content: pointName,
-      issueMember: member,
-      duration: duration,
-      checkList: checkList,
-      forceMajeure: forceMajeure.isForceMajeure,
-      checkListName: checkListName,
-      checkListPoint: [],
-      finalStatus: [{ status: "Pending", image: [], date: "" }],
-      approvalTask: [],
-      dailyTask: [],
-    };
-    var targetProjectIndex = findData[0]?.project_status.findIndex(
+
+    const targetProjectIndex = findData[0]?.project_status.findIndex(
       status => status.name === stepName
     );
 
     // Find the index of the step within the targeted project_status
-    var stepIndex =
+    const stepIndex =
       targetProjectIndex !== -1
         ? findData[0]?.project_status[targetProjectIndex]?.step?.findIndex(
-            obj => obj.point === parseInt(prevPoint)
+            obj => parseInt(obj.point) === parseInt(prevPoint)
           )
         : -1;
 
-    // If both indices are found, proceed to insert the new object into the step array
+    const t = {
+      title: pointName,
+      description: pointName,
+      assignedBy: activeUser,
+      duration: duration,
+      siteID: id,
+      forceMajeure: forceMajeure.isForceMajeure
+        ? forceMajeure.isForceMajeure
+        : false,
+      checkList: {
+        checkList: checkList === "yes" ? true : false,
+        checkListName: checkListName,
+        checkListPoint: [],
+      },
+      issueMember: issueMember._id,
+      referenceModel: "teammembers",
+    };
+
+    // If both index are found, proceed to insert the new object into the step array
     if (targetProjectIndex !== -1 && stepIndex !== -1) {
+      const newTask = await Task.create(t);
+
+      const obj = {
+        taskId: newTask._id,
+        point: parseInt(prevPoint) + 1,
+        duration: duration,
+      };
+
       // Insert newObj at stepIndex + 1 in the step array of the targeted project_status object
       findData[0]?.project_status[targetProjectIndex]?.step?.splice(
         stepIndex + 1,
         0,
-        newObj
+        obj
       );
       // Update 'point' numbers starting from the newly inserted object
       for (
@@ -1626,10 +1730,11 @@ exports.AddNewProjectPoint = async (req, res) => {
         .json({ message: "Step or Project Status not found" });
     }
 
-    // console.log(findData[0]?.project_status[targetProjectIndex]?.step);
+    let updateResult;
+    console.log(forceMajeure);
 
     if (forceMajeure.isForceMajeure) {
-      const updateResult = await Project.updateOne(
+      updateResult = await Project.updateOne(
         { "siteID": id, "project_status.name": stepName },
         {
           $set: {
@@ -1650,16 +1755,16 @@ exports.AddNewProjectPoint = async (req, res) => {
         }
       );
     } else {
-      const updateResult = await Project.updateOne(
+      updateResult = await Project.updateOne(
         { "siteID": id, "project_status.name": stepName },
         {
           $set: {
             "project_status.$.step":
               findData[0].project_status[targetProjectIndex].step,
           },
-          $inc: {
-            extension: duration,
-          },
+          // $inc: {
+          //   extension: duration,
+          // },
         }
       );
     }
@@ -1669,24 +1774,12 @@ exports.AddNewProjectPoint = async (req, res) => {
         const dataUpload = {
           checkListStep: stepName,
           name: checkListName,
-          checkListNumber: newObj.point,
+          checkListNumber: t.point,
           checkList: [],
         };
         let Check = new CheckList(dataUpload);
         Check.save();
       }
-      const task = {
-        title: pointName,
-        description: pointName,
-        assignedBy: activeUser,
-        referenceModel: "teammembers",
-        siteID: id,
-        priority: "High",
-        dueDate: changeTime(),
-      };
-
-      task["issueMember"] = member;
-      await Task.create(task);
 
       if (checkList?.toLowerCase() === "yes") {
         await Project.updateOne(
@@ -1696,7 +1789,7 @@ exports.AddNewProjectPoint = async (req, res) => {
               inspections: {
                 checkListStep: stepName,
                 name: checkListName,
-                checkListNumber: newObj.point,
+                checkListNumber: t.point,
                 checkList: [],
               },
             },
@@ -1711,6 +1804,7 @@ exports.AddNewProjectPoint = async (req, res) => {
       res.status(500).json({ message: "No changes were made to the project" });
     }
   } catch (error) {
+    console.log(error);
     res.json({
       status: 400,
       message: "Error while add new point",
@@ -1824,7 +1918,16 @@ exports.DeleteProjectPoint = async (req, res) => {
     req.body;
 
   try {
-    const project = await Project.findOne({ siteID: id });
+    const project = await Project.findOne({ siteID: id }).populate({
+      path: "project_status",
+      populate: {
+        path: "step",
+        populate: {
+          path: "taskId",
+          model: Task,
+        },
+      },
+    });
 
     if (!project) {
       return res.status(404).json({ message: "Project not found" });
@@ -1839,7 +1942,7 @@ exports.DeleteProjectPoint = async (req, res) => {
     }
 
     const stepIndex = projectStatus.step.findIndex(
-      step => step.point === point
+      step => parseInt(step.point) === parseInt(point)
     );
 
     if (stepIndex === -1) {
@@ -1848,18 +1951,19 @@ exports.DeleteProjectPoint = async (req, res) => {
 
     const stepToRemove = projectStatus.step[stepIndex];
 
-    // MongoDB Update Payload
     const updatePayload = {
       $pull: {
         "project_status.$[status].step": { point },
-        ...(stepToRemove.forceMajeure && {
-          forceMajeure: { reason: stepToRemove.content },
+        ...(stepToRemove.taskId.forceMajeure && {
+          forceMajeure: { reason: stepToRemove.taskId.title },
         }),
       },
       $inc: { extension: -duration },
     };
 
-    if (checkList?.toLowerCase() === "yes") {
+    console.log(stepToRemove.taskId);
+
+    if (checkList) {
       updatePayload.$pull.inspections = {
         checkListStep: name,
         name: checkListName,
@@ -1879,7 +1983,7 @@ exports.DeleteProjectPoint = async (req, res) => {
         .json({ message: "No changes were made to the project" });
     }
 
-    if (checkList?.toLowerCase() === "yes") {
+    if (checkList) {
       await CheckList.deleteMany({
         checkListStep: name,
         name: checkListName,

@@ -40,10 +40,6 @@ exports.addConstructionStep = async (req, res) => {
             : [],
           checkList: data[i].checkList ? data[i].checkList : "no",
           checkListName: data[i].checkListName ? data[i].checkListName : "",
-          checkListPoint: [],
-          finalStatus: [{ status: "Pending", image: [], date: "" }],
-          approvalTask: [],
-          dailyTask: [],
         });
         if (data[i].checkList?.toLowerCase() === "yes") {
           const dataUpload = {

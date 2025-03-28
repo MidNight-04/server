@@ -10,6 +10,11 @@ const taskSchema = new Schema(
       type: String,
       trim: true,
     },
+    duration: Number,
+    forceMajeure: {
+      type: Boolean,
+      default: false,
+    },
     issueMember: {
       type: Schema.Types.ObjectId,
       refPath: "referenceModel",
@@ -36,6 +41,19 @@ const taskSchema = new Schema(
       type: String,
       trim: true,
       default: "Project",
+    },
+    checkList: {
+      isCheckList: {
+        type: Boolean,
+        default: false,
+      },
+      checkListName: {
+        type: String,
+        trim: true,
+      },
+      checkListPoint: {
+        type: Array,
+      },
     },
     priority: {
       type: String,
@@ -83,6 +101,7 @@ const taskSchema = new Schema(
       enum: ["Pending", "In Progress", "Complete"],
       default: "Pending",
     },
+    updatedOn: "",
     comments: [
       {
         type: Schema.Types.ObjectId,

@@ -33,20 +33,12 @@ const projectModel = mongoose.model(
           priority: String,
           step: [
             {
-              point: Number,
-              content: String,
-              issueMember: [],
-              duration: Number,
-              checkList: String,
-              checkListName: String,
-              forceMajeure: {
-                type: Boolean,
-                default: false,
+              taskId: {
+                type: mongoose.Schema.Types.ObjectId,
+                ref: "Tasks",
               },
-              checkListPoint: [],
-              finalStatus: [{ status: String, image: [], date: String }],
-              approvalTask: [],
-              dailyTask: [],
+              point: Number,
+              duration: Number,
             },
           ],
         },

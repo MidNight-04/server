@@ -18,11 +18,13 @@ const taskCommentSchema = new Schema(
       required: true,
       trim: true,
     },
-    file: {
-      type: String,
-      default: null,
-    },
-    image: [
+    file: [
+      {
+        type: String,
+        default: null,
+      },
+    ],
+    images: [
       {
         type: String,
         default: null,
@@ -39,8 +41,21 @@ const taskCommentSchema = new Schema(
     },
     referenceModel: {
       type: String,
-      enum: ["teammembers", "User"],
+      enum: ["teammembers", "User", "clients"],
       default: "teammembers",
+    },
+    approved: {
+      isApproved: {
+        type: Boolean,
+        default: false,
+      },
+      approvedBy: {
+        type: Schema.Types.ObjectId,
+        ref: "referenceModel",
+      },
+      approvedOn: {
+        type: Date,
+      },
     },
     createdAt: {
       type: Date,

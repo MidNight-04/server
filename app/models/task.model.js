@@ -1,4 +1,4 @@
-const { Schema, model } = require("mongoose");
+const { Schema, model } = require('mongoose');
 
 const taskSchema = new Schema(
   {
@@ -17,20 +17,20 @@ const taskSchema = new Schema(
     },
     issueMember: {
       type: Schema.Types.ObjectId,
-      refPath: "referenceModel",
+      refPath: 'referenceModel',
     },
     referenceModel: {
       type: String,
-      enum: ["teammembers", "clients"],
+      enum: ['teammembers', 'clients'],
     },
     assignedBy: {
       type: Schema.Types.ObjectId,
-      ref: "User",
+      ref: 'User',
     },
     subscribedMembers: [
       {
         type: Schema.Types.ObjectId,
-        ref: "teammembers",
+        ref: 'teammembers',
       },
     ],
     siteID: {
@@ -40,7 +40,7 @@ const taskSchema = new Schema(
     category: {
       type: String,
       trim: true,
-      default: "Project",
+      default: 'Project',
     },
     checkList: {
       isCheckList: {
@@ -57,18 +57,18 @@ const taskSchema = new Schema(
     },
     priority: {
       type: String,
-      enum: ["Low", "Medium", "High"],
-      default: "Low",
+      enum: ['Low', 'Medium', 'High'],
+      default: 'Low',
     },
     repeat: {
       repeatType: {
         type: String,
-        enum: ["Once", "Hourly", "Daily", "Weekly", "Monthly"],
-        default: "Once",
+        enum: ['Once', 'Hourly', 'Daily', 'Weekly', 'Monthly'],
+        default: 'Once',
       },
       repeatValue: {
         type: String,
-        default: "00:00",
+        default: '00:00',
         validate: {
           validator: v => {
             return /^([01][0-9]|2[0-3]):[0-5][0-9]$/.test(v);
@@ -98,14 +98,17 @@ const taskSchema = new Schema(
     reminder: [],
     status: {
       type: String,
-      enum: ["Pending", "In Progress", "Complete"],
-      default: "Pending",
+      enum: ['Pending', 'In Progress', 'Complete'],
+      default: 'Pending',
     },
-    updatedOn: "",
+    updatedOn: {
+      type: String,
+      default: '',
+    },
     comments: [
       {
         type: Schema.Types.ObjectId,
-        ref: "TaskComment",
+        ref: 'TaskComment',
       },
     ],
   },
@@ -113,19 +116,19 @@ const taskSchema = new Schema(
 );
 
 taskSchema.index({
-  "title": "text",
-  "description": "text",
-  "siteID": "text",
-  "category": "text",
-  "priority": "text",
-  "assignedBy.name": "text",
-  "assignedBy.employeeID": "text",
-  "issueMember.name": "text",
-  "issueMember.employeeID": "text",
-  "repeat.repeatType": "text",
-  "status": "text",
+  'title': 'text',
+  'description': 'text',
+  'siteID': 'text',
+  'category': 'text',
+  'priority': 'text',
+  'assignedBy.name': 'text',
+  'assignedBy.employeeID': 'text',
+  'issueMember.name': 'text',
+  'issueMember.employeeID': 'text',
+  'repeat.repeatType': 'text',
+  'status': 'text',
 });
 
-const taskModel = model("Tasks", taskSchema);
+const taskModel = model('Tasks', taskSchema);
 
 module.exports = taskModel;

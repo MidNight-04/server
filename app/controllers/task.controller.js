@@ -1,21 +1,21 @@
-const db = require("../models");
+const db = require('../models');
 const Task = db.task;
-const TaskComment = require("../models/taskCommentModel");
-const TeamMembers = require("../models/teamMember.model");
+const TaskComment = require('../models/taskCommentModel');
+const TeamMembers = require('../models/teamMember.model');
 const Project = db.projects;
-const mongoose = require("mongoose");
-const User = require("../models/user.model");
-const Ticket = require("../models/ticketModel");
-const Client = require("../models/client.model");
-const awsS3 = require("../middlewares/aws-s3");
+const mongoose = require('mongoose');
+const User = require('../models/user.model');
+const Ticket = require('../models/ticketModel');
+const Client = require('../models/client.model');
+const awsS3 = require('../middlewares/aws-s3');
 
 let today = new Date();
 let yyyy = today.getFullYear();
 let mm = today.getMonth() + 1;
 let dd = today.getDate();
-if (dd < 10) dd = "0" + dd;
-if (mm < 10) mm = "0" + mm;
-let formatedtoday = yyyy + "-" + mm + "-" + dd;
+if (dd < 10) dd = '0' + dd;
+if (mm < 10) mm = '0' + mm;
+let formatedtoday = yyyy + '-' + mm + '-' + dd;
 
 const limit = 10;
 
@@ -51,12 +51,12 @@ exports.addTask = (req, res) => {
 
   Task.create(task).then((taskSave, err) => {
     if (err) {
-      res.status(500).send({ message: "There was problelm while create task" });
+      res.status(500).send({ message: 'There was problelm while create task' });
       return;
     } else {
       res.status(201).send({
         status: 201,
-        message: "Task created successfully",
+        message: 'Task created successfully',
         data: taskSave,
       });
     }
@@ -68,18 +68,18 @@ exports.getAllTask = (req, res) => {
     .limit(limit)
     .skip(limit * req.body.page)
     .sort({ createdAt: -1 })
-    .populate(["issueMember", "assignedBy"])
+    .populate(['issueMember', 'assignedBy'])
     .exec()
     .then((task, err) => {
       if (err) {
         res.status(500).send({
-          message: "There was a problem in getting the list of task",
+          message: 'There was a problem in getting the list of task',
         });
         return;
       }
       if (task) {
         res.status(200).send({
-          message: "List of tak fetched successfuly",
+          message: 'List of tak fetched successfuly',
           data: task,
         });
       }
@@ -96,23 +96,23 @@ exports.getTaskByEmployeeId = async (req, res) => {
       .limit(limit)
       .skip(limit * page)
       .sort({ createdAt: -1 })
-      .populate(["issueMember", "assignedBy"])
+      .populate(['issueMember', 'assignedBy'])
       .exec();
 
     if (!tasks) {
       return res.status(404).send({
-        message: "No tasks found for the given employee ID",
+        message: 'No tasks found for the given employee ID',
       });
     }
 
     res.status(200).send({
-      message: "List of tasks fetched successfully",
+      message: 'List of tasks fetched successfully',
       data: tasks,
     });
   } catch (error) {
     console.error(error);
     res.status(500).send({
-      message: "Error while getting tasks by employee ID",
+      message: 'Error while getting tasks by employee ID',
     });
   }
 };
@@ -130,9 +130,9 @@ exports.taskUpdateByMember = async (req, res) => {
     const filter = { _id: id };
     const update = {
       $set: {
-        "progress.status": status,
-        "progress.date": date,
-        "progress.image": updateFiles,
+        'progress.status': status,
+        'progress.date': date,
+        'progress.image': updateFiles,
       },
     };
     // console.log(filter,update)
@@ -142,20 +142,20 @@ exports.taskUpdateByMember = async (req, res) => {
       // console.log('No document found with the given filter.');
       res.json({
         status: 200,
-        message: "No document found with the given data.",
+        message: 'No document found with the given data.',
       });
     } else {
       // console.log('Document updated successfully.');
       res.json({
         status: 200,
-        message: "Task updated successfully by Employee.",
+        message: 'Task updated successfully by Employee.',
       });
     }
   } catch (error) {
     // console.log(error)
     res.json({
       status: 400,
-      message: "Error while update task status by Employee",
+      message: 'Error while update task status by Employee',
     });
   }
 };
@@ -167,11 +167,11 @@ exports.deleteTaskByAdmin = async (req, res) => {
     if (err) {
       res
         .status(500)
-        .send({ message: "The requested data could not be fetched" });
+        .send({ message: 'The requested data could not be fetched' });
       return;
     }
     res.status(200).send({
-      message: "Record delete successfully",
+      message: 'Record delete successfully',
       status: 200,
     });
     return;
@@ -191,9 +191,9 @@ exports.taskUpdateByAdmin = async (req, res) => {
     const filter = { _id: id };
     const update = {
       $set: {
-        "adminStatus.status": status,
-        "adminStatus.date": date,
-        "adminStatus.image": updateFiles,
+        'adminStatus.status': status,
+        'adminStatus.date': date,
+        'adminStatus.image': updateFiles,
       },
     };
     // console.log(filter,update)
@@ -203,20 +203,20 @@ exports.taskUpdateByAdmin = async (req, res) => {
       // console.log('No document found with the given filter.');
       res.json({
         status: 200,
-        message: "No document found with the given data.",
+        message: 'No document found with the given data.',
       });
     } else {
       // console.log('Document updated successfully.');
       res.json({
         status: 200,
-        message: "Task updated successfully by Admin.",
+        message: 'Task updated successfully by Admin.',
       });
     }
   } catch (error) {
     // console.log(error)
     res.json({
       status: 400,
-      message: "Error while update task status by Admin",
+      message: 'Error while update task status by Admin',
     });
   }
 };
@@ -225,12 +225,12 @@ exports.getAllProjectTaskByClient = async (req, res) => {
   try {
     await Project.find({ client: req.params.id })
       .populate({
-        path: "openTicket",
-        model: "Tickets",
+        path: 'openTicket',
+        model: 'Tickets',
         populate: {
-          path: "assignMember",
-          model: "teammembers",
-          select: "_id name employeeID",
+          path: 'assignMember',
+          model: 'teammembers',
+          select: '_id name employeeID',
         },
       })
       .select({
@@ -243,13 +243,13 @@ exports.getAllProjectTaskByClient = async (req, res) => {
       .then((ticket, err) => {
         if (err) {
           res.status(500).send({
-            message: "There was a problem in getting the list of task",
+            message: 'There was a problem in getting the list of task',
           });
           return;
         }
         if (ticket) {
           res.status(200).send({
-            message: "List of tak fetched successfuly",
+            message: 'List of tak fetched successfuly',
             data: ticket,
           });
         }
@@ -257,7 +257,7 @@ exports.getAllProjectTaskByClient = async (req, res) => {
   } catch (error) {
     res.json({
       status: 400,
-      message: "Error while get task of client",
+      message: 'Error while get task of client',
     });
   }
 };
@@ -265,10 +265,10 @@ exports.getAllProjectTaskByClient = async (req, res) => {
 exports.getAllProjectTickets = async (req, res) => {
   try {
     const ticket = await Project.find().populate({
-      path: "openTicket",
+      path: 'openTicket',
       populate: {
-        path: "assignMember",
-        model: "teammembers",
+        path: 'assignMember',
+        model: 'teammembers',
       },
     });
     if (ticket?.length > 0) {
@@ -279,13 +279,13 @@ exports.getAllProjectTickets = async (req, res) => {
     } else {
       res.json({
         status: 200,
-        message: "No ticket raised by client",
+        message: 'No ticket raised by client',
       });
     }
   } catch (error) {
     res.json({
       status: 400,
-      message: "Error while get ticket of client",
+      message: 'Error while get ticket of client',
     });
   }
 };
@@ -301,19 +301,19 @@ exports.getTicketByTicketId = async (req, res) => {
       },
     ]);
     const ticket = await Ticket.findById(id)
-      .populate("assignMember")
+      .populate('assignMember')
       .populate({
-        path: "comments",
-        model: "TaskComment",
+        path: 'comments',
+        model: 'TaskComment',
       })
       .populate({
-        path: "assignedBy",
-        model: "clients",
+        path: 'assignedBy',
+        model: 'clients',
       });
 
     if (!ticket) {
       return res.status(404).send({
-        message: "Ticket not found",
+        message: 'Ticket not found',
       });
     }
     // Check if we found any tickets
@@ -328,7 +328,7 @@ exports.getTicketByTicketId = async (req, res) => {
     } else {
       res.json({
         status: 200,
-        message: "No ticket found",
+        message: 'No ticket found',
         data: [],
       });
     }
@@ -336,7 +336,7 @@ exports.getTicketByTicketId = async (req, res) => {
     console.error(error); // Log the error for debugging
     res.status(400).json({
       status: 400,
-      message: "Error while getting ticket",
+      message: 'Error while getting ticket',
     });
   }
 };
@@ -345,7 +345,7 @@ exports.getAllProjectTaskByMember = async (req, res) => {
   try {
     // console.log(req.params.id)
     const ticket = await Project.find({
-      "openTicket.assignMember": { $elemMatch: { employeeID: req.params.id } },
+      'openTicket.assignMember': { $elemMatch: { employeeID: req.params.id } },
     });
     // console.log("find ticket---",ticket)
     if (ticket?.length > 0) {
@@ -356,13 +356,13 @@ exports.getAllProjectTaskByMember = async (req, res) => {
     } else {
       res.json({
         status: 200,
-        message: "No ticket raised by client",
+        message: 'No ticket raised by client',
       });
     }
   } catch (error) {
     res.json({
       status: 400,
-      message: "Error while get task of client",
+      message: 'Error while get task of client',
     });
   }
 };
@@ -372,19 +372,19 @@ exports.getTaskByid = async (req, res) => {
     const { id } = req.params;
     const task = await Task.findById(id)
       .populate([
-        "assignedBy",
-        "issueMember",
+        'assignedBy',
+        'issueMember',
         {
-          path: "comments",
+          path: 'comments',
           populate: {
-            path: "createdBy",
+            path: 'createdBy',
           },
         },
       ])
       .exec()
       .then(task => {
         if (!task) {
-          throw new Error("Task not found");
+          throw new Error('Task not found');
         }
         return task;
       })
@@ -393,17 +393,17 @@ exports.getTaskByid = async (req, res) => {
       });
     if (!task) {
       return res.status(404).send({
-        message: "Task not found",
+        message: 'Task not found',
       });
     }
     res.status(200).send({
-      message: "Task fetched successfully",
+      message: 'Task fetched successfully',
       data: task,
     });
   } catch (error) {
     console.error(error);
     res.status(500).send({
-      message: "Error while getting task by id",
+      message: 'Error while getting task by id',
     });
   }
 };
@@ -412,31 +412,31 @@ exports.searchTask = async (req, res) => {
   try {
     const { searchTerm } = req.params;
     const searchQuery = [
-      { title: { $regex: searchTerm, $options: "i" } },
-      { description: { $regex: searchTerm, $options: "i" } },
-      { category: { $regex: searchTerm, $options: "i" } },
-      { priority: { $regex: searchTerm, $options: "i" } },
-      { "assignedBy.name": { $regex: searchTerm, $options: "i" } },
-      { "issueMember.name": { $regex: searchTerm, $options: "i" } },
-      { "issueMember.employeeID": { $regex: searchTerm, $options: "i" } },
-      { "assignedBy.employeeID": { $regex: searchTerm, $options: "i" } },
-      { "repeat.repeatType": { $regex: searchTerm, $options: "i" } },
-      { "progress.status": { $regex: searchTerm, $options: "i" } },
+      { title: { $regex: searchTerm, $options: 'i' } },
+      { description: { $regex: searchTerm, $options: 'i' } },
+      { category: { $regex: searchTerm, $options: 'i' } },
+      { priority: { $regex: searchTerm, $options: 'i' } },
+      { 'assignedBy.name': { $regex: searchTerm, $options: 'i' } },
+      { 'issueMember.name': { $regex: searchTerm, $options: 'i' } },
+      { 'issueMember.employeeID': { $regex: searchTerm, $options: 'i' } },
+      { 'assignedBy.employeeID': { $regex: searchTerm, $options: 'i' } },
+      { 'repeat.repeatType': { $regex: searchTerm, $options: 'i' } },
+      { 'progress.status': { $regex: searchTerm, $options: 'i' } },
     ];
     const task = await Task.find({ $or: searchQuery });
     if (task.length === 0) {
       return res.status(404).send({
-        message: "Task not found",
+        message: 'Task not found',
       });
     }
     res.status(200).send({
-      message: "Task fetched successfully",
+      message: 'Task fetched successfully',
       data: task,
     });
   } catch (error) {
     console.error(error);
     res.status(500).send({
-      message: "Error while getting task",
+      message: 'Error while getting task',
     });
   }
 };
@@ -444,23 +444,22 @@ exports.searchTask = async (req, res) => {
 exports.taskAddComment = async (req, res) => {
   try {
     const { taskId, type, comment, userId } = req.body;
-    console.log(req.files);
     const profileFiles =
       req.files?.image?.map(file =>
-        typeof file === "string" ? file : file.location
+        typeof file === 'string' ? file : file.location
       ) || [];
 
     const task = await Task.findById(taskId);
     if (!task) {
-      return res.status(404).send({ message: "Task not found" });
+      return res.status(404).send({ message: 'Task not found' });
     }
 
     const referenceModel = await getReferenceModel(userId);
     if (!referenceModel) {
-      return res.status(404).send({ message: "User not found" });
+      return res.status(404).send({ message: 'User not found' });
     }
 
-    if (type === "Complete" || type === "In Progress") {
+    if (type === 'Complete' || type === 'In Progress') {
       task.status = type;
     }
 
@@ -476,24 +475,25 @@ exports.taskAddComment = async (req, res) => {
 
     const data = await TaskComment.create(newComment);
     if (!data) {
-      return res.status(404).send({ message: "Comment not created" });
+      return res.status(404).send({ message: 'Comment not created' });
     }
 
     task.comments.push(data._id);
+    task.updatedOn = new Date().toISOString();
     await task.save();
 
-    res.status(200).send({ message: "Comment added successfully", data });
+    res.status(200).send({ message: 'Comment added successfully', data });
   } catch (error) {
     console.error(error);
-    res.status(500).send({ message: "Error while adding comment" });
+    res.status(500).send({ message: 'Error while adding comment' });
   }
 };
 
 const getReferenceModel = async userId => {
   const models = [
-    { model: TeamMembers, referenceModel: "teammembers" },
-    { model: User, referenceModel: "User" },
-    { model: Client, referenceModel: "clients" },
+    { model: TeamMembers, referenceModel: 'teammembers' },
+    { model: User, referenceModel: 'User' },
+    { model: Client, referenceModel: 'clients' },
   ];
 
   for (const { model, referenceModel } of models) {
@@ -511,17 +511,17 @@ exports.editTask = async (req, res) => {
     const { id, title, description, issueMember, dueDate } = req.body;
     const task = await Task.findById(id);
     if (!task) {
-      return res.status(404).send({ message: "Task not found" });
+      return res.status(404).send({ message: 'Task not found' });
     }
     task.title = title;
     task.description = description;
     task.issueMember = issueMember;
     task.dueDate = dueDate;
     await task.save();
-    res.status(200).send({ message: "Task updated successfully" });
+    res.status(200).send({ message: 'Task updated successfully' });
   } catch (error) {
     console.error(error);
-    res.status(500).send({ message: "Error while updating task" });
+    res.status(500).send({ message: 'Error while updating task' });
   }
 };
 
@@ -530,17 +530,17 @@ exports.deleteTaskCommentImage = async (req, res) => {
     const { commentId, imageUrl } = req.body;
 
     if (!commentId || !imageUrl) {
-      return res.status(400).send({ message: "Missing commentId or imageUrl" });
+      return res.status(400).send({ message: 'Missing commentId or imageUrl' });
     }
 
     const comment = await TaskComment.findById(commentId);
     if (!comment) {
-      return res.status(404).send({ message: "Comment not found" });
+      return res.status(404).send({ message: 'Comment not found' });
     }
 
-    const imageUrlParts = imageUrl.split(".com/");
+    const imageUrlParts = imageUrl.split('.com/');
     if (imageUrlParts.length < 2) {
-      return res.status(400).send({ message: "Invalid image URL format" });
+      return res.status(400).send({ message: 'Invalid image URL format' });
     }
 
     // Delete the image from S3
@@ -548,10 +548,10 @@ exports.deleteTaskCommentImage = async (req, res) => {
     try {
       await awsS3.deleteFile(imagePath);
     } catch (s3Error) {
-      console.error("S3 deletion error:", s3Error);
+      console.error('S3 deletion error:', s3Error);
       return res
         .status(500)
-        .send({ message: "Failed to delete image from S3" });
+        .send({ message: 'Failed to delete image from S3' });
     }
 
     // Remove the image reference from the comment
@@ -559,12 +559,12 @@ exports.deleteTaskCommentImage = async (req, res) => {
     const result = await TaskComment.updateOne({ _id: commentId }, update);
 
     if (result.modifiedCount === 0) {
-      return res.status(404).send({ message: "Image not found in comment" });
+      return res.status(404).send({ message: 'Image not found in comment' });
     }
 
-    res.status(200).send({ message: "Comment image deleted successfully" });
+    res.status(200).send({ message: 'Comment image deleted successfully' });
   } catch (error) {
-    console.error("Server error:", error);
-    res.status(500).send({ message: "Error while deleting comment image" });
+    console.error('Server error:', error);
+    res.status(500).send({ message: 'Error while deleting comment image' });
   }
 };

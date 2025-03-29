@@ -318,14 +318,14 @@ exports.getProjectByMember = (req, res) => {
   mongoose.set("strictPopulate", false);
   Project.find({
     $or: [
-      { "project_manager.employeeID": req.params.id },
-      { "site_engineer.employeeID": req.params.id },
-      { "contractor.employeeID": req.params.id },
-      { "accountant.employeeID": req.params.id },
-      { "operation.employeeID": req.params.id },
-      { "project_admin.employeeID": req.params.id },
-      { "sr_engineer.employeeID": req.params.id },
-      { "sales.employeeID": req.params.id },
+      { project_manager: req.params.id },
+      { site_engineer: req.params.id },
+      { contractor: req.params.id },
+      { accountant: req.params.id },
+      { operation: req.params.id },
+      { project_admin: req.params.id },
+      { sr_engineer: req.params.id },
+      { sales: req.params.id },
     ],
   })
     .populate({

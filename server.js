@@ -52,7 +52,8 @@ const dbConfig = require('./app/config/db.config');
 db.mongoose
   .connect(
     // `mongodb+srv://${dbConfig.HOST}:${dbConfig.PORT}@${dbConfig.url}.mongodb.net/${dbConfig.DB}`,
-    `mongodb+srv://${process.env.MONGODB_HOST}:${process.env.MONGODB_PASSWORD}@${process.env.MONGODB_URL}.mongodb.net/${process.env.MONGODB_DB}`,
+    // `mongodb+srv://${process.env.MONGODB_HOST}:${process.env.MONGODB_PASSWORD}@${process.env.MONGODB_URL}.mongodb.net/${process.env.MONGODB_DB}`,
+        `mongodb+srv://vikasraghavthikedaar:Qaz_7410@cluster0.enllx.mongodb.net/bldox`,
     {
       useNewUrlParser: true,
       useUnifiedTopology: true,

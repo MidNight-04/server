@@ -79,6 +79,15 @@ const taskSchema = new Schema(
     },
     dueDate: {
       type: Date,
+      default: null,
+    },
+    isActive: {
+      type: Boolean,
+      default: false,
+    },
+    activatedOn: {
+      //activated on Date
+      type: Date,
     },
     image: [
       {
@@ -98,10 +107,11 @@ const taskSchema = new Schema(
     reminder: [],
     status: {
       type: String,
-      enum: ['Pending', 'In Progress', 'Complete'],
+      enum: ['Pending', 'In Progress', 'Complete', 'Overdue'],
       default: 'Pending',
     },
     updatedOn: {
+      //completed on Date
       type: String,
       default: '',
     },
@@ -111,6 +121,21 @@ const taskSchema = new Schema(
         ref: 'TaskComment',
       },
     ],
+    reassigned: {
+      isReassigned: {
+        type: Boolean,
+        default: false,
+      },
+      assignedTo: {
+        type: Schema.Types.ObjectId,
+      },
+      assignedBy: {
+        type: Schema.Types.ObjectId,
+      },
+      assignedOn: {
+        type: Date,
+      },
+    },
   },
   { timestamps: true }
 );

@@ -1,16 +1,17 @@
-const db = require("../models");
-const config = require("../config/auth.config");
+const db = require('../models');
+const config = require('../config/auth.config');
 const Member = db.teammembers;
-const axios = require("axios");
-const helperFunction = require("../middlewares/helper");
-const otpGenerator = require("otp-generator");
-const nodemailer = require("nodemailer");
-var jwt = require("jsonwebtoken");
-var bcrypt = require("bcryptjs");
+const axios = require('axios');
+const helperFunction = require('../middlewares/helper');
+const otpGenerator = require('otp-generator');
+const nodemailer = require('nodemailer');
+var jwt = require('jsonwebtoken');
+var bcrypt = require('bcryptjs');
+const { default: mongoose } = require('mongoose');
 
 exports.signinOtp = (req, res) => {
   if (!helperFunction.checkEmailPhone(req.body.username)) {
-    return res.status(500).send({ message: "Invalid Entry" });
+    return res.status(500).send({ message: 'Invalid Entry' });
   } else {
     // console.log(helperFunction.checkEmailPhone(req.body.username),req.body.username)
     Member.findOne({
@@ -20,15 +21,15 @@ exports.signinOtp = (req, res) => {
         res.status(500).send({ message: err });
         return;
       } else if (!user) {
-        return res.status(404).send({ message: "User Not found." });
+        return res.status(404).send({ message: 'User Not found.' });
       } else {
         const otp = otpGenerator.generate(6, {
           upperCaseAlphabets: false,
           specialChars: false,
           lowerCaseAlphabets: false,
         });
-        if (helperFunction.checkEmailPhone(req.body.username) === "phone") {
-          if (req.body.username === "1234567899") {
+        if (helperFunction.checkEmailPhone(req.body.username) === 'phone') {
+          if (req.body.username === '1234567899') {
             Member.updateOne(
               {
                 [helperFunction.checkEmailPhone(req.body.username)]:
@@ -36,7 +37,7 @@ exports.signinOtp = (req, res) => {
               },
               {
                 $set: {
-                  loginOtp: "123456",
+                  loginOtp: '123456',
                 },
               }
             ).then(async (updated, err) => {
@@ -46,7 +47,7 @@ exports.signinOtp = (req, res) => {
               } else {
                 // console.log("Send otp on phone functionality");
                 let config = {
-                  method: "get",
+                  method: 'get',
                   maxBodyLength: Infinity,
                   // url: `http://103.10.234.154/vendorsms/pushsms.aspx?user=thikedaar&password=Y4EMFT9E&msisdn=${`91${req.body.username}`}&sid=THIKDR&msg= Your one time password (OTP) is ${otp} Regard THIKEDAAR DOT COM PVT LTD&fl=0&gwid=2\n`,
                   url: `http://control.yourbulksms.com/api/sendhttp.php?authkey=3237646161617232303155&mobiles=${`91${req.body.username}`}&message=${`Your one time password (OTP) is ${123456} Regard THIKEDAAR DOT COM PVT LTD`}&sender=THIKDR&route=2&country=0&DLT_TE_ID=1207161666918773610`,
@@ -57,9 +58,9 @@ exports.signinOtp = (req, res) => {
                 const response = await axios.request(config);
                 // console.log(response)
                 res.status(200).send({
-                  message: "OTP send on your Phone",
+                  message: 'OTP send on your Phone',
                   status: 200,
-                  otp: "123456",
+                  otp: '123456',
                   username: req.body.username,
                 });
               }
@@ -83,7 +84,7 @@ exports.signinOtp = (req, res) => {
               } else {
                 // console.log("Send otp on phone functionality");
                 let config = {
-                  method: "get",
+                  method: 'get',
                   maxBodyLength: Infinity,
                   // url: `http://103.10.234.154/vendorsms/pushsms.aspx?user=thikedaar&password=Y4EMFT9E&msisdn=${`91${req.body.username}`}&sid=THIKDR&msg= Your one time password (OTP) is ${otp} Regard THIKEDAAR DOT COM PVT LTD&fl=0&gwid=2\n`,
                   url: `http://control.yourbulksms.com/api/sendhttp.php?authkey=3237646161617232303155&mobiles=${`91${req.body.username}`}&message=${`Your one time password (OTP) is ${otp} Regard THIKEDAAR DOT COM PVT LTD`}&sender=THIKDR&route=2&country=0&DLT_TE_ID=1207161666918773610`,
@@ -94,7 +95,7 @@ exports.signinOtp = (req, res) => {
                 const response = await axios.request(config);
                 // console.log(response)
                 res.status(200).send({
-                  message: "OTP send on your Phone",
+                  message: 'OTP send on your Phone',
                   status: 200,
                   otp: otp,
                   username: req.body.username,
@@ -106,18 +107,18 @@ exports.signinOtp = (req, res) => {
         } else {
           // define the transporter
           var transporter = nodemailer.createTransport({
-            service: "Gmail",
+            service: 'Gmail',
             auth: {
-              user: "ranjitkvns7@gmail.com",
-              pass: "rqezkbtfbfmdrwfn",
+              user: 'ranjitkvns7@gmail.com',
+              pass: 'rqezkbtfbfmdrwfn',
             },
           });
 
           // Define the email
           const mailOptions = email => ({
-            from: "Sender",
+            from: 'Sender',
             to: email,
-            subject: "OTP Verification for Login",
+            subject: 'OTP Verification for Login',
             html: `<div>
                          <p>Hello, ${user.name} Your OTP verification code for login in thikedaar.in - </p>
                          <span style="font-weight:bold,background-color:red,color:white">${otp}</span>
@@ -130,7 +131,7 @@ exports.signinOtp = (req, res) => {
               // console.log(error);
               res.status(500).send({ message: error.message });
             } else {
-              console.log("otp send on Email");
+              console.log('otp send on Email');
               Member.updateOne(
                 {
                   [helperFunction.checkEmailPhone(req.body.username)]:
@@ -147,7 +148,7 @@ exports.signinOtp = (req, res) => {
                   return;
                 } else {
                   res.status(200).send({
-                    message: "OTP send for login on your Email",
+                    message: 'OTP send for login on your Email',
                     status: 200,
                     otp: otp,
                     username: req.body.username,
@@ -165,19 +166,19 @@ exports.signinOtp = (req, res) => {
 
 exports.signin = (req, res) => {
   if (!helperFunction.checkEmailPhone(req.body.username)) {
-    return res.status(500).send({ message: "Invalid Entry" });
+    return res.status(500).send({ message: 'Invalid Entry' });
   } else {
     Member.findOne({
       [helperFunction.checkEmailPhone(req.body.username)]: req.body.username,
     })
-      .populate("role")
+      .populate('role')
       .exec((err, user) => {
         console.log(user);
         if (err) {
           res.status(500).send({ message: err });
           return;
         } else if (!user) {
-          return res.status(404).send({ message: "User Not found." });
+          return res.status(404).send({ message: 'User Not found.' });
         } else {
           if (user.loginOtp === req.body.otp) {
             let token = jwt.sign({ id: user.id }, config.secret, {
@@ -190,22 +191,22 @@ exports.signin = (req, res) => {
               if (err) {
                 res
                   .status(500)
-                  .send({ message: "Oops, Internal server error" });
+                  .send({ message: 'Oops, Internal server error' });
                 return;
               }
               if (success) {
                 res.status(200).send({
                   status: 200,
-                  message: "You have been logged in",
+                  message: 'You have been logged in',
                   id: user._id,
                   username: user.name,
                   employeeID: user.employeeID,
                   email: user.email,
                   phone: user.phone,
                   roles:
-                    user?.role?.name.toLowerCase() === "admin"
-                      ? "ROLE_" + "PROJECT " + user.role.name.toUpperCase()
-                      : "ROLE_" + user.role.name.toUpperCase(),
+                    user?.role?.name.toLowerCase() === 'admin'
+                      ? 'ROLE_' + 'PROJECT ' + user.role.name.toUpperCase()
+                      : 'ROLE_' + user.role.name.toUpperCase(),
                   token: token,
                 });
                 return;
@@ -213,7 +214,7 @@ exports.signin = (req, res) => {
             });
             return;
           } else {
-            return res.status(500).send({ message: "Invalid OTP" });
+            return res.status(500).send({ message: 'Invalid OTP' });
           }
         }
       });
@@ -240,59 +241,61 @@ exports.addMember = async (req, res) => {
       ],
     });
     if (existingMember) {
-      return res.status(200).send({ message: "Record already exists" });
+      return res.status(200).send({ message: 'Record already exists' });
     }
     const member = new Member(dataAdd);
     await member.save();
-    return res.status(201).send({ message: "Record created successfully" });
+    return res.status(201).send({ message: 'Record created successfully' });
   } catch (error) {
     console.log(error);
-    return res.status(500).send({ message: "Could not create member" });
+    return res.status(500).send({ message: 'Could not create member' });
   }
 };
 
 exports.getAllMember = (req, res) => {
   Member.find({})
-    .populate("role")
+    .populate('role')
     .sort({ employeeID: 1 })
     .then((member, err) => {
       if (err) {
         res.status(500).send({
-          message: "There was a problem in getting the list of role",
+          message: 'There was a problem in getting the list of role',
         });
         return;
       }
       if (member) {
         res.status(200).send({
-          message: "List of member fetched successfuly",
+          message: 'List of member fetched successfuly',
           data: member,
         });
       }
     });
   return;
 };
+
 exports.deleteMemberById = (req, res) => {
   const id = req.params.id;
   Member.deleteOne({ _id: id }, (err, dealer) => {
     if (err) {
       res
         .status(500)
-        .send({ message: "The requested data could not be fetched" });
+        .send({ message: 'The requested data could not be fetched' });
       return;
     }
     res.status(200).send({
-      message: "Record delete successfully",
+      message: 'Record delete successfully',
       status: 200,
     });
     return;
   });
 };
+
 exports.getMemberById = (req, res) => {
   const id = req.params.id;
   Member.findById(id, (err, data) => {
     if (err) {
       //   console.log(err);
-      res.status(500).send({ message: "Could not find id to get details" });
+      res.status(500).send({ message: 'Could not find id to get details' });
       return;
     }
     if (data) {
@@ -300,6 +303,7 @@ exports.getMemberById = (req, res) => {
     }
   });
 };
+
 exports.updateMemberProfileById = async (req, res) => {
   // console.log("Upcoming data-", req.body);
 
@@ -320,7 +324,7 @@ exports.updateMemberProfileById = async (req, res) => {
     };
 
     if (profileFiles.length > 0) {
-      query["profileImage"] = profileFiles;
+      query['profileImage'] = profileFiles;
     }
     // console.log(query)
     const updateProfile = await Member.updateOne(
@@ -331,12 +335,12 @@ exports.updateMemberProfileById = async (req, res) => {
     if (updateProfile.modifiedCount === 1) {
       res.json({
         status: 200,
-        message: "Profile Updated Successfuly",
+        message: 'Profile Updated Successfuly',
       });
     }
   } else {
     res.status(200).send({
-      message: "User does not exist",
+      message: 'User does not exist',
     });
   }
 };
@@ -356,11 +360,31 @@ exports.updateMemberById = (req, res) => {
   Member.updateOne({ _id: id }, data, (err, updated) => {
     if (err) {
       //   console.log(err);
-      res.status(500).send({ message: "Could not find id to update details" });
+      res.status(500).send({ message: 'Could not find id to update details' });
       return;
     }
     if (updated) {
-      res.status(200).send({ message: "Updated Successfuly" });
+      res.status(200).send({ message: 'Updated Successfuly' });
     }
   });
+};
+
+exports.getTeammemberByRole = async (req, res) => {
+  try {
+    const { role } = req.body;
+    const teammembers = await Member.find({
+      role: mongoose.Types.ObjectId(role),
+    });
+    if (!teammembers || teammembers.length === 0) {
+      return res
+        .status(404)
+        .send({ message: 'No team members found with the given role' });
+    }
+    res.status(200).send({ data: teammembers, status: 200 });
+  } catch (err) {
+    console.log(err);
+    res
+      .status(500)
+      .send({ message: 'Something went wrong while getting the team members' });
+  }
 };

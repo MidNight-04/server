@@ -1,7 +1,7 @@
-const mongoose = require("mongoose");
+const mongoose = require('mongoose');
 
 const projectModel = mongoose.model(
-  "projects",
+  'projects',
   new mongoose.Schema(
     {
       project_name: String,
@@ -22,6 +22,8 @@ const projectModel = mongoose.model(
       project_manager: [],
       sr_engineer: [],
       site_engineer: [],
+      architect: [],
+      // sr_architect: [],
       accountant: [],
       operation: [],
       sales: [],
@@ -35,7 +37,7 @@ const projectModel = mongoose.model(
             {
               taskId: {
                 type: mongoose.Schema.Types.ObjectId,
-                ref: "Tasks",
+                ref: 'Tasks',
               },
               point: Number,
               duration: Number,

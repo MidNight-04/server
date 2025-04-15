@@ -1,16 +1,23 @@
-const { Schema, model } = require("mongoose");
+const { Schema, model } = require('mongoose');
 
 const taskCommentSchema = new Schema(
   {
     taskId: {
       type: Schema.Types.ObjectId,
-      ref: "Tasks",
+      ref: 'Tasks',
       required: true,
       index: true,
     },
     type: {
       type: String,
-      enum: ["In Progress", "Complete", "Comment", "Closed", "Reopened"],
+      enum: [
+        'In Progress',
+        'Complete',
+        'Comment',
+        'Closed',
+        'Reopened',
+        'Task Updated',
+      ],
       required: true,
     },
     comment: {
@@ -36,13 +43,13 @@ const taskCommentSchema = new Schema(
     },
     createdBy: {
       type: Schema.Types.ObjectId,
-      refPath: "referenceModel",
+      refPath: 'referenceModel',
       required: true,
     },
     referenceModel: {
       type: String,
-      enum: ["teammembers", "User", "clients"],
-      default: "teammembers",
+      enum: ['teammembers', 'User', 'clients'],
+      default: 'teammembers',
     },
     approved: {
       isApproved: {
@@ -51,7 +58,12 @@ const taskCommentSchema = new Schema(
       },
       approvedBy: {
         type: Schema.Types.ObjectId,
-        ref: "referenceModel",
+        refPath: 'approveRef',
+      },
+      approveRef: {
+        type: String,
+        enum: ['teammembers', 'User'],
+        default: 'teammembers',
       },
       approvedOn: {
         type: Date,
@@ -67,6 +79,6 @@ const taskCommentSchema = new Schema(
   }
 );
 
-const TaskComment = model("TaskComment", taskCommentSchema);
+const TaskComment = model('TaskComment', taskCommentSchema);
 
 module.exports = TaskComment;

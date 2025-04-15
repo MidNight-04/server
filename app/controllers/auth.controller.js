@@ -1,32 +1,32 @@
-const config = require("../config/auth.config");
-const db = require("../models");
-const helperFunction = require("../middlewares/helper");
+const config = require('../config/auth.config');
+const db = require('../models');
+const helperFunction = require('../middlewares/helper');
 const User = db.user;
 const Role = db.role;
 const Country = db.countries;
 const State = db.states;
 const City = db.cities;
 const Designs = db.designs;
-const profileData = require("../helper/profileData.json");
-const mongoose = require("mongoose");
-const PaytmChecksum = require("../helper/PaytmChecksum");
+const profileData = require('../helper/profileData.json');
+const mongoose = require('mongoose');
+const PaytmChecksum = require('../helper/PaytmChecksum');
 const EnquiryForm = db.enquiryForm;
 const Address = db.address;
 const RaiseRequest = db.raiserequest;
 const NextStatus = db.nextStatus;
 const ProductRating = db.productRating;
 const Order = db.order;
-const axios = require("axios");
-const nodemailer = require("nodemailer");
-const otpGenerator = require("otp-generator");
+const axios = require('axios');
+const nodemailer = require('nodemailer');
+const otpGenerator = require('otp-generator');
 
-var jwt = require("jsonwebtoken");
-var bcrypt = require("bcryptjs");
-const Brands = require("../models/brands.model");
+var jwt = require('jsonwebtoken');
+var bcrypt = require('bcryptjs');
+const Brands = require('../models/brands.model');
 
 exports.signup = (req, res) => {
   if (!helperFunction.checkEmailPhone(req.body.email)) {
-    res.status(500).send({ message: "Invaild Entry" });
+    res.status(500).send({ message: 'Invaild Entry' });
   } else {
     let query = {
       name: req.body.username,
@@ -51,13 +51,13 @@ exports.signup = (req, res) => {
             res.status(500).send({ message: err });
             return;
           }
-          query["roles"] = roles.map(role => role._id);
-          if (helperFunction.checkEmailPhone(req.body.email) === "phone") {
-            query["email"] = "";
+          query['roles'] = roles.map(role => role._id);
+          if (helperFunction.checkEmailPhone(req.body.email) === 'phone') {
+            query['email'] = '';
           } else if (
-            helperFunction.checkEmailPhone(req.body.email) === "email"
+            helperFunction.checkEmailPhone(req.body.email) === 'email'
           ) {
-            query["phone"] = "";
+            query['phone'] = '';
           }
           const user = new User(query);
           user.save((err, userSaved) => {
@@ -67,7 +67,7 @@ exports.signup = (req, res) => {
             }
             if (userSaved) {
               res.send({
-                message: "User was registered successfully!",
+                message: 'User was registered successfully!',
                 status: 201,
               });
             }
@@ -77,17 +77,17 @@ exports.signup = (req, res) => {
       );
     } else {
       // console.log("INSIDE THE ELSE CONDITION");
-      Role.findOne({ name: "user" }, (err, role) => {
+      Role.findOne({ name: 'user' }, (err, role) => {
         if (err) {
           res.status(500).send({ message: err });
           return;
         }
 
-        query["roles"] = [role._id];
-        if (helperFunction.checkEmailPhone(req.body.email) === "phone") {
-          query["email"] = "";
-        } else if (helperFunction.checkEmailPhone(req.body.email) === "email") {
-          query["phone"] = "";
+        query['roles'] = [role._id];
+        if (helperFunction.checkEmailPhone(req.body.email) === 'phone') {
+          query['email'] = '';
+        } else if (helperFunction.checkEmailPhone(req.body.email) === 'email') {
+          query['phone'] = '';
         }
         const user = new User(query);
         user.save((err, userSaved) => {
@@ -97,7 +97,7 @@ exports.signup = (req, res) => {
           }
           if (userSaved) {
             res.send({
-              message: "User was registered successfully!",
+              message: 'User was registered successfully!',
               status: 201,
             });
           }
@@ -108,7 +108,7 @@ exports.signup = (req, res) => {
   }
 };
 exports.updateProfile = async (req, res) => {
-  console.log("Upcoming data-", req.body);
+  console.log('Upcoming data-', req.body);
 
   let profileFiles = [];
 
@@ -132,51 +132,51 @@ exports.updateProfile = async (req, res) => {
     };
 
     if (profileFiles.length > 0) {
-      query["profileImage"] = profileFiles;
+      query['profileImage'] = profileFiles;
     }
 
     User.findByIdAndUpdate(req.body.id, query, (err, updated) => {
       if (err) {
         res.status(500).send({
           message:
-            "Could not update the status, please try again after sometime",
+            'Could not update the status, please try again after sometime',
           reason: err,
         });
         return;
       } else {
-        res.status(200).send({ message: "Updated Successfuly", data: updated });
+        res.status(200).send({ message: 'Updated Successfuly', data: updated });
       }
       return;
     });
   } else {
     res.status(200).send({
-      message: "User does not exist",
+      message: 'User does not exist',
     });
   }
 };
 
 exports.signinOtp = (req, res) => {
   if (!helperFunction.checkEmailPhone(req.body.username)) {
-    return res.status(500).send({ message: "Invalid Entry" });
+    return res.status(500).send({ message: 'Invalid Entry' });
   } else {
     User.findOne({
       [helperFunction.checkEmailPhone(req.body.username)]: req.body.username,
     })
-      .populate("roles", "-__v")
+      .populate('roles', '-__v')
       .exec((err, user) => {
         if (err) {
           res.status(500).send({ message: err });
           return;
         } else if (!user) {
-          return res.status(404).send({ message: "User Not found." });
+          return res.status(404).send({ message: 'User Not found.' });
         } else {
           const otp = otpGenerator.generate(6, {
             upperCaseAlphabets: false,
             specialChars: false,
             lowerCaseAlphabets: false,
           });
-          if (helperFunction.checkEmailPhone(req.body.username) === "phone") {
-            if (req.body.username === "1234567899") {
+          if (helperFunction.checkEmailPhone(req.body.username) === 'phone') {
+            if (req.body.username === '1234567899') {
               User.updateOne(
                 {
                   [helperFunction.checkEmailPhone(req.body.username)]:
@@ -184,7 +184,7 @@ exports.signinOtp = (req, res) => {
                 },
                 {
                   $set: {
-                    loginOtp: "123456",
+                    loginOtp: '123456',
                   },
                 }
               ).then(async (updated, err) => {
@@ -194,7 +194,7 @@ exports.signinOtp = (req, res) => {
                 } else {
                   // console.log("Send otp on phone functionality");
                   let config = {
-                    method: "get",
+                    method: 'get',
                     maxBodyLength: Infinity,
                     // url: `http://103.10.234.154/vendorsms/pushsms.aspx?user=thikedaar&password=Y4EMFT9E&msisdn=${`91${req.body.username}`}&sid=THIKDR&msg= Your one time password (OTP) is ${otp} Regard THIKEDAAR DOT COM PVT LTD&fl=0&gwid=2\n`,
                     url: `http://control.yourbulksms.com/api/sendhttp.php?authkey=3237646161617232303155&mobiles=${`91${req.body.username}`}&message=${`Your one time password (OTP) is ${123456} Regard THIKEDAAR DOT COM PVT LTD`}&sender=THIKDR&route=2&country=0&DLT_TE_ID=1207161666918773610`,
@@ -205,9 +205,9 @@ exports.signinOtp = (req, res) => {
                   const response = await axios.request(config);
                   // console.log(response)
                   res.status(200).send({
-                    message: "OTP send on your Phone",
+                    message: 'OTP send on your Phone',
                     status: 200,
-                    otp: "123456",
+                    otp: '123456',
                     username: req.body.username,
                   });
                 }
@@ -231,7 +231,7 @@ exports.signinOtp = (req, res) => {
                 } else {
                   // console.log("Send otp on phone functionality");
                   let config = {
-                    method: "get",
+                    method: 'get',
                     maxBodyLength: Infinity,
                     // url: `http://103.10.234.154/vendorsms/pushsms.aspx?user=thikedaar&password=Y4EMFT9E&msisdn=${`91${req.body.username}`}&sid=THIKDR&msg= Your one time password (OTP) is ${otp} Regard THIKEDAAR DOT COM PVT LTD&fl=0&gwid=2\n`,
                     url: `http://control.yourbulksms.com/api/sendhttp.php?authkey=3237646161617232303155&mobiles=${`91${req.body.username}`}&message=${`Your one time password (OTP) is ${otp} Regard THIKEDAAR DOT COM PVT LTD`}&sender=THIKDR&route=2&country=0&DLT_TE_ID=1207161666918773610`,
@@ -242,7 +242,7 @@ exports.signinOtp = (req, res) => {
                   const response = await axios.request(config);
                   // console.log(response)
                   res.status(200).send({
-                    message: "OTP send on your Phone",
+                    message: 'OTP send on your Phone',
                     status: 200,
                     otp: otp,
                     username: req.body.username,
@@ -255,18 +255,18 @@ exports.signinOtp = (req, res) => {
             console.log(req.body.username);
             // define the transporter
             var transporter = nodemailer.createTransport({
-              service: "Gmail",
+              service: 'Gmail',
               auth: {
-                user: "ranjitkvns7@gmail.com",
-                pass: "rqezkbtfbfmdrwfn",
+                user: 'ranjitkvns7@gmail.com',
+                pass: 'rqezkbtfbfmdrwfn',
               },
             });
 
             // Define the email
             const mailOptions = email => ({
-              from: "Sender",
+              from: 'Sender',
               to: email,
-              subject: "OTP Verification for Login",
+              subject: 'OTP Verification for Login',
               html: `<div>
                          <p>Hello, ${user.username} Your OTP verification code for login in thikedaar.in - </p>
                          <span style="font-weight:bold,background-color:red,color:white">${otp}</span>
@@ -281,7 +281,7 @@ exports.signinOtp = (req, res) => {
                   // console.log(error);
                   res.status(500).send({ message: error.message });
                 } else {
-                  console.log("otp send on Email");
+                  console.log('otp send on Email');
                   User.updateOne(
                     {
                       [helperFunction.checkEmailPhone(req.body.username)]:
@@ -298,7 +298,7 @@ exports.signinOtp = (req, res) => {
                       return;
                     } else {
                       res.status(200).send({
-                        message: "OTP send for login on your Email",
+                        message: 'OTP send for login on your Email',
                         status: 200,
                         otp: otp,
                         username: req.body.username,
@@ -317,18 +317,18 @@ exports.signinOtp = (req, res) => {
 
 exports.signin = (req, res) => {
   if (!helperFunction.checkEmailPhone(req.body.username)) {
-    return res.status(500).send({ message: "Invalid Entry" });
+    return res.status(500).send({ message: 'Invalid Entry' });
   } else {
     User.findOne({
       [helperFunction.checkEmailPhone(req.body.username)]: req.body.username,
     })
-      .populate("roles", "-__v")
+      .populate('roles', '-__v')
       .exec((err, user) => {
         if (err) {
           res.status(500).send({ message: err });
           return;
         } else if (!user) {
-          return res.status(404).send({ message: "User Not found." });
+          return res.status(404).send({ message: 'User Not found.' });
         } else {
           if (user.loginOtp === req.body.otp) {
             let token = jwt.sign({ id: user.id }, config.secret, {
@@ -339,7 +339,7 @@ exports.signin = (req, res) => {
             console.log(user);
 
             for (let i = 0; i < user.roles.length; i++) {
-              authorities.push("ROLE_" + user.roles[i].name.toUpperCase());
+              authorities.push('ROLE_' + user.roles[i].name.toUpperCase());
             }
 
             req.session.token = token;
@@ -349,13 +349,13 @@ exports.signin = (req, res) => {
               if (err) {
                 res
                   .status(500)
-                  .send({ message: "Oops, Internal server error" });
+                  .send({ message: 'Oops, Internal server error' });
                 return;
               }
               if (success) {
                 res.status(200).send({
                   status: 200,
-                  message: "You have been logged in",
+                  message: 'You have been logged in',
                   id: user._id,
                   username: user.username,
                   email: user.email,
@@ -371,7 +371,7 @@ exports.signin = (req, res) => {
             });
             return;
           } else {
-            return res.status(500).send({ message: "Invalid OTP" });
+            return res.status(500).send({ message: 'Invalid OTP' });
           }
         }
       });
@@ -397,20 +397,20 @@ exports.forgotPassword = function (req, res) {
     if (user) {
       // define the transporter
       var transporter = nodemailer.createTransport({
-        service: "Gmail",
+        service: 'Gmail',
         auth: {
-          user: "divyanshusingh4755@gmail.com",
-          pass: "hvxtnrhhsreawglx",
+          user: 'divyanshusingh4755@gmail.com',
+          pass: 'hvxtnrhhsreawglx',
         },
       });
 
-      let random = "pass_" + new Date().getTime();
+      let random = 'pass_' + new Date().getTime();
 
       // Define the email
       const mailOptions = email => ({
-        from: "Sender",
+        from: 'Sender',
         to: email,
-        subject: "Subject",
+        subject: 'Subject',
         // text: `http://localhost:3000/forgot-password/${random}`,
         text: `http://thikedaar.in/forgot-password/${random}`,
       });
@@ -421,7 +421,7 @@ exports.forgotPassword = function (req, res) {
           // console.log(error);
           res.status(500).send({ message: error.message });
         } else {
-          console.log("Email sent");
+          console.log('Email sent');
           User.updateOne(
             { email },
             {
@@ -436,13 +436,13 @@ exports.forgotPassword = function (req, res) {
             } else {
               res
                 .status(200)
-                .send({ message: "Email send for password", status: 200 });
+                .send({ message: 'Email send for password', status: 200 });
             }
           });
         }
       });
     } else {
-      res.status(200).send({ message: "Unable to find user" });
+      res.status(200).send({ message: 'Unable to find user' });
       return;
     }
   });
@@ -450,7 +450,7 @@ exports.forgotPassword = function (req, res) {
 
 exports.changePassword = function (req, res) {
   const { refreshToken, password } = req.body;
-  console.log("password reset body---", req.body);
+  console.log('password reset body---', req.body);
   User.updateOne(
     { refreshToken },
     {
@@ -473,7 +473,7 @@ exports.getallusers = async (req, res) => {
     if (err) {
       res
         .status(500)
-        .send({ message: "There was a problem in getting the list of users" });
+        .send({ message: 'There was a problem in getting the list of users' });
       return;
     }
     let userData = [];
@@ -496,7 +496,7 @@ exports.singleProfile = (req, res) => {
         });
       } else {
         res.status(404).send({
-          message: "No user found",
+          message: 'No user found',
         });
       }
     }
@@ -510,7 +510,7 @@ exports.getUsersDetails = (req, res) => {
       if (err) {
         res
           .status(500)
-          .send({ message: "The requested data could not be fetched" });
+          .send({ message: 'The requested data could not be fetched' });
         return;
       } else if (user) {
         const modifiedResponse = {
@@ -532,14 +532,14 @@ exports.getUsersDetails = (req, res) => {
         };
 
         res.status(200).send({
-          message: "Details feched successfully",
+          message: 'Details feched successfully',
           data: modifiedResponse,
         });
         return;
       } else {
         res
           .status(500)
-          .send({ message: "The requested data could not be fetched" });
+          .send({ message: 'The requested data could not be fetched' });
         return;
       }
     });
@@ -548,18 +548,18 @@ exports.getUsersDetails = (req, res) => {
       if (err) {
         res
           .status(500)
-          .send({ message: "The requested data could not be fetched" });
+          .send({ message: 'The requested data could not be fetched' });
         return;
       } else if (user) {
         res.status(200).send({
-          message: "Details feched successfully",
+          message: 'Details feched successfully',
           data: user,
         });
         return;
       } else {
         res
           .status(500)
-          .send({ message: "The requested data could not be fetched" });
+          .send({ message: 'The requested data could not be fetched' });
         return;
       }
     });
@@ -577,12 +577,12 @@ exports.login = (req, res) => {
       return;
     } else if (!user) {
       //CREATE NEW USER
-      let role = await Role.find({ name: "user" });
+      let role = await Role.find({ name: 'user' });
       role = role.filter(el => {
         return el._id;
       });
       User.create(
-        { phone: req.body.phone, roles: role._id, status: "ACTIVE" },
+        { phone: req.body.phone, roles: role._id, status: 'ACTIVE' },
         (err, result) => {
           if (err) {
             res.status(500).send({ message: err });
@@ -605,7 +605,7 @@ exports.login = (req, res) => {
       let token = jwt.sign({ id: user._id }, config.secret, {
         expiresIn: 86400, // 24 hours
       });
-      let role = await Role.find({ name: "user" });
+      let role = await Role.find({ name: 'user' });
       role = role.filter(el => {
         return el._id;
       });
@@ -638,7 +638,7 @@ exports.getStates = async (req, res) => {
         states,
       });
     } else {
-      const states = await State.find({ country_name: "India" });
+      const states = await State.find({ country_name: 'India' });
       return res.status(200).send({
         states,
       });
@@ -706,7 +706,7 @@ exports.completeProfile = (req, res) => {
       res.status(500).send({ message: err });
       return;
     } else if (user) {
-      res.send({ message: "Complete profile successfully!" });
+      res.send({ message: 'Complete profile successfully!' });
     }
     return;
   });
@@ -730,7 +730,7 @@ exports.getProfile = (req, res) => {
       res.status(500).send({ message: err });
       return;
     } else if (user) {
-      res.send({ message: "Profile details", result: user });
+      res.send({ message: 'Profile details', result: user });
     }
     return;
   });
@@ -738,19 +738,19 @@ exports.getProfile = (req, res) => {
 
 // getprofileData
 exports.getprofileData = (req, res) => {
-  res.send({ message: "Profile details", result: profileData });
+  res.send({ message: 'Profile details', result: profileData });
 };
 
 // get 2d and 3d images
 exports.getProfileDetail = (req, res) => {
   // console.log(req.query);
   switch (req.query.id) {
-    case "2":
+    case '2':
       let query = { twoDImage: { $ne: null }, threeDImage: { $ne: null } };
       Designs.find(query, { twoDImage: 1, threeDImage: 1 }, (err, designs) => {
         if (err) {
           res.status(500).send({
-            message: "Sorry! Something went wrong please try again later",
+            message: 'Sorry! Something went wrong please try again later',
             data: err,
           });
           return;
@@ -795,7 +795,7 @@ exports.addWishList = (req, res) => {
       res.status(500).send({ message: err });
       return;
     } else if (result) {
-      res.send({ message: "add successfully" });
+      res.send({ message: 'add successfully' });
     }
     return;
   });
@@ -811,7 +811,7 @@ exports.getWishlist = (req, res) => {
       res.status(500).send({ message: err });
       return;
     } else {
-      res.status(200).send({ message: "add successfully", data: result });
+      res.status(200).send({ message: 'add successfully', data: result });
     }
     return;
   });
@@ -842,7 +842,7 @@ exports.addProductWishList = (req, res) => {
       res.status(500).send({ message: err });
       return;
     } else if (result) {
-      res.send({ message: "add successfully" });
+      res.send({ message: 'add successfully' });
     }
     return;
   });
@@ -858,7 +858,7 @@ exports.getProductWishlist = (req, res) => {
       res.status(500).send({ message: err });
       return;
     } else {
-      res.status(200).send({ message: "add successfully", data: result });
+      res.status(200).send({ message: 'add successfully', data: result });
     }
     return;
   });
@@ -866,7 +866,7 @@ exports.getProductWishlist = (req, res) => {
 
 // address api
 exports.addAddress = (req, res) => {
-  console.log("request", req.body);
+  console.log('request', req.body);
   let query = {
     uploadingUser: req.body.uploadingUser,
     address: req.body.address,
@@ -882,13 +882,13 @@ exports.addAddress = (req, res) => {
 
   saveAddress.save((err, address) => {
     if (err) {
-      console.log("err", err);
+      console.log('err', err);
       res.status(500).send({ message: err });
       return;
     } else {
       res
         .status(200)
-        .send({ message: "address saved successfully", data: address });
+        .send({ message: 'address saved successfully', data: address });
     }
     return;
   });
@@ -928,7 +928,7 @@ exports.updateAddress = (req, res) => {
     } else {
       res
         .status(200)
-        .send({ message: "address updated successfully", data: address });
+        .send({ message: 'address updated successfully', data: address });
     }
     return;
   });
@@ -944,7 +944,7 @@ exports.deleteAddress = (req, res) => {
     } else {
       res
         .status(200)
-        .send({ message: "address deleted successfully", data: address });
+        .send({ message: 'address deleted successfully', data: address });
     }
     return;
   });
@@ -1012,7 +1012,7 @@ exports.addLikeList = (req, res) => {
       res.status(500).send({ message: err });
       return;
     } else if (result) {
-      res.send({ message: "add successfully" });
+      res.send({ message: 'add successfully' });
     }
     return;
   });
@@ -1030,7 +1030,7 @@ exports.getRequest = (req, res) => {
       } else {
         res
           .status(200)
-          .send({ message: "fetched successfully", data: request });
+          .send({ message: 'fetched successfully', data: request });
       }
       return;
     });
@@ -1042,7 +1042,7 @@ exports.getRequest = (req, res) => {
       } else {
         res
           .status(200)
-          .send({ message: "fetched successfully", data: request });
+          .send({ message: 'fetched successfully', data: request });
       }
       return;
     });
@@ -1075,7 +1075,7 @@ exports.requestPhoneNumber = (req, res) => {
         } else {
           res
             .status(200)
-            .send({ message: "request updated successfully", data: request });
+            .send({ message: 'request updated successfully', data: request });
         }
         return;
       });
@@ -1089,7 +1089,7 @@ exports.requestPhoneNumber = (req, res) => {
         } else {
           res
             .status(200)
-            .send({ message: "request created successfully", data: request });
+            .send({ message: 'request created successfully', data: request });
         }
         return;
       });
@@ -1120,14 +1120,14 @@ exports.requestUpdatePhoneNumber = (req, res) => {
     } else {
       res
         .status(200)
-        .send({ message: "request updated successfully", data: request });
+        .send({ message: 'request updated successfully', data: request });
     }
     return;
   });
 };
 
 exports.getNextStatus = (req, res) => {
-  console.log("calling-");
+  console.log('calling-');
   let array = [];
   const cleanData = Object.entries(req.body)
     .filter(([key, value]) => value !== undefined)
@@ -1144,7 +1144,7 @@ exports.getNextStatus = (req, res) => {
   NextStatus.find(query, (err, status) => {
     if (err) {
       res.status(500).send({
-        message: "Sorry! Something went wrong please try again later",
+        message: 'Sorry! Something went wrong please try again later',
         data: err,
       });
       return;
@@ -1174,7 +1174,7 @@ exports.createNextStatus = (req, res) => {
     } else {
       res
         .status(200)
-        .send({ message: "data created successfully", data: data });
+        .send({ message: 'data created successfully', data: data });
     }
   });
 };
@@ -1200,7 +1200,7 @@ exports.updateNextStatus = (req, res) => {
     } else {
       res
         .status(200)
-        .send({ message: "data updated successfully", data: data });
+        .send({ message: 'data updated successfully', data: data });
     }
     return;
   });
@@ -1211,14 +1211,14 @@ exports.initiatePayment = (req, res) => {
   const { orderId, amount, callbackUrl, currency, userId } = req.body;
 
   // Sandbox Credentials
-  let mid = "WBJIwm08119302462954"; // Merchant ID
-  let mkey = "Ipb3#Bx%3RdHmr#M"; // Merchant Key
+  let mid = 'WBJIwm08119302462954'; // Merchant ID
+  let mkey = 'Ipb3#Bx%3RdHmr#M'; // Merchant Key
   var paytmParams = {};
 
   paytmParams.body = {
-    requestType: "Payment",
+    requestType: 'Payment',
     mid: mid,
-    websiteName: "DEFAULT",
+    websiteName: 'DEFAULT',
     orderId: orderId,
     callbackUrl: callbackUrl,
     txnAmount: {
@@ -1248,11 +1248,11 @@ exports.initiatePayment = (req, res) => {
       // console.log(data)
 
       let config = {
-        method: "post",
+        method: 'post',
         maxBodyLength: Infinity,
         url: `https://securegw.paytm.in/theia/api/v1/initiateTransaction?mid=${mid}&orderId=${orderId}`,
         headers: {
-          "Content-Type": "application/json",
+          'Content-Type': 'application/json',
         },
         data: data,
       };
@@ -1286,8 +1286,8 @@ exports.verifyPayment = (req, res) => {
   } = req.body;
   // console.log(req.body);
   // Sandbox Credentials
-  let mid = "WBJIwm08119302462954"; // Merchant ID
-  let mkey = "Ipb3#Bx%3RdHmr#M"; // Merchant Key
+  let mid = 'WBJIwm08119302462954'; // Merchant ID
+  let mkey = 'Ipb3#Bx%3RdHmr#M'; // Merchant Key
 
   /* initialize an object */
   var paytmParams = {};
@@ -1319,11 +1319,11 @@ exports.verifyPayment = (req, res) => {
       let data = post_data;
 
       let config = {
-        method: "post",
+        method: 'post',
         maxBodyLength: Infinity,
         url: `https://securegw.paytm.in/v3/order/status`,
         headers: {
-          "Content-Type": "application/json",
+          'Content-Type': 'application/json',
         },
         data: data,
       };
@@ -1342,19 +1342,19 @@ exports.verifyPayment = (req, res) => {
             paymentType,
             paymentInformation: response.data,
             approvalStatus:
-              response.data.body.resultInfo.resultStatus == "TXN_FAILURE" ||
-              contactType == "Design Modify"
-                ? "Pending"
-                : contactType == "Image Download"
-                ? "Delivered"
-                : "Order Confirmed",
+              response.data.body.resultInfo.resultStatus == 'TXN_FAILURE' ||
+              contactType == 'Design Modify'
+                ? 'Pending'
+                : contactType == 'Image Download'
+                ? 'Delivered'
+                : 'Order Confirmed',
             productDetail,
             otp: Math.floor(Math.random() * 100000) + 1,
           };
 
           if (
-            contactType == "Image Download" ||
-            contactType == "Material Purchase"
+            contactType == 'Image Download' ||
+            contactType == 'Material Purchase'
           ) {
             const saveOrder = new Order(query);
             saveOrder.save((err, orderSaved) => {
@@ -1365,7 +1365,7 @@ exports.verifyPayment = (req, res) => {
               }
               if (orderSaved) {
                 res.send({
-                  message: "Payment Done Successfully",
+                  message: 'Payment Done Successfully',
                   data: orderSaved,
                 });
               }
@@ -1382,7 +1382,7 @@ exports.verifyPayment = (req, res) => {
               if (enquirySaved) {
                 res.status(200).send({
                   message:
-                    "Order sent successfully! You will be contacted soon",
+                    'Order sent successfully! You will be contacted soon',
                   data: enquirySaved,
                 });
               }
@@ -1420,12 +1420,12 @@ exports.verifyPaymentCOD = (req, res) => {
     contactType,
     paymentType,
     paymentInformation: paymentInformation,
-    approvalStatus: "Order Confirmed",
+    approvalStatus: 'Order Confirmed',
     productDetail,
     otp: Math.floor(Math.random() * 100000) + 1,
   };
 
-  if (contactType == "Image Download" || contactType == "Material Purchase") {
+  if (contactType == 'Image Download' || contactType == 'Material Purchase') {
     const saveOrder = new Order(query);
     saveOrder.save((err, orderSaved) => {
       console.log(err, orderSaved);
@@ -1435,7 +1435,7 @@ exports.verifyPaymentCOD = (req, res) => {
       }
       if (orderSaved) {
         res.send({
-          message: "Order sent successfully! You will be contacted soon",
+          message: 'Order sent successfully! You will be contacted soon',
           data: orderSaved,
         });
       }
@@ -1451,7 +1451,7 @@ exports.verifyPaymentCOD = (req, res) => {
       }
       if (enquirySaved) {
         res.status(200).send({
-          message: "Order sent successfully! You will be contacted soon",
+          message: 'Order sent successfully! You will be contacted soon',
           data: enquirySaved,
         });
       }
@@ -1478,7 +1478,7 @@ exports.orderDetails = (req, res) => {
   Order.find(query, (err, orders) => {
     if (err) {
       res.status(500).send({
-        message: "Sorry! Something went wrong please try again later",
+        message: 'Sorry! Something went wrong please try again later',
         data: err,
       });
       return;
@@ -1493,11 +1493,11 @@ exports.orderDetailsByData = (req, res) => {
   const { vendor, product } = req.body;
   if (vendor && product) {
     Order.find(
-      { "architectId": vendor, "productDetail._id": product },
+      { 'architectId': vendor, 'productDetail._id': product },
       (err, orders) => {
         if (err) {
           res.status(500).send({
-            message: "Sorry! Something went wrong please try again later",
+            message: 'Sorry! Something went wrong please try again later',
             data: err,
           });
           return;
@@ -1510,10 +1510,10 @@ exports.orderDetailsByData = (req, res) => {
       }
     );
   } else if (!vendor && product) {
-    Order.find({ "productDetail._id": product }, (err, orders) => {
+    Order.find({ 'productDetail._id': product }, (err, orders) => {
       if (err) {
         res.status(500).send({
-          message: "Sorry! Something went wrong please try again later",
+          message: 'Sorry! Something went wrong please try again later',
           data: err,
         });
         return;
@@ -1528,7 +1528,7 @@ exports.orderDetailsByData = (req, res) => {
     Order.find({ architectId: vendor }, (err, orders) => {
       if (err) {
         res.status(500).send({
-          message: "Sorry! Something went wrong please try again later",
+          message: 'Sorry! Something went wrong please try again later',
           data: err,
         });
         return;
@@ -1543,7 +1543,7 @@ exports.orderDetailsByData = (req, res) => {
     Order.find({}, (err, orders) => {
       if (err) {
         res.status(500).send({
-          message: "Sorry! Something went wrong please try again later",
+          message: 'Sorry! Something went wrong please try again later',
           data: err,
         });
         return;
@@ -1570,10 +1570,10 @@ exports.updateOrderStatus = (req, res) => {
       files.push(req.files.invoicefiles[i].location);
     }
 
-    query["invoiceImage"] = files;
+    query['invoiceImage'] = files;
   }
   if (req.body.CodPaymentStatus) {
-    query["CodPaymentStatus"] = req.body.CodPaymentStatus;
+    query['CodPaymentStatus'] = req.body.CodPaymentStatus;
   }
 
   Order.updateOne(
@@ -1584,7 +1584,7 @@ exports.updateOrderStatus = (req, res) => {
     (err, orders) => {
       if (err) {
         res.status(500).send({
-          message: "Sorry! Something went wrong please try again later",
+          message: 'Sorry! Something went wrong please try again later',
           data: err,
         });
         return;
@@ -1609,7 +1609,7 @@ exports.sendDeliveryOtp = async (req, res) => {
       _id: findOrder?.addressId,
     });
     let config = {
-      method: "get",
+      method: 'get',
       maxBodyLength: Infinity,
       // url: `http://103.10.234.154/vendorsms/pushsms.aspx?user=thikedaar&password=Y4EMFT9E&msisdn=${`91${findPhoneNumber?.phoneNumber}`}&sid=THIKDR&msg= Your one time password (OTP) is ${otp} Regard THIKEDAAR DOT COM PVT LTD&fl=0&gwid=2\n`,
       url: `http://control.yourbulksms.com/api/sendhttp.php?authkey=3237646161617232303155&mobiles=${`91${findPhoneNumber?.phoneNumber}`}&message=${`Your one time password (OTP) is ${otp} Regard THIKEDAAR DOT COM PVT LTD`}&sender=THIKDR&route=2&country=0&DLT_TE_ID=1207161666918773610`,
@@ -1627,7 +1627,7 @@ exports.sendDeliveryOtp = async (req, res) => {
       (err, orders) => {
         if (err) {
           res.status(500).send({
-            message: "Sorry! Something went wrong please try again later",
+            message: 'Sorry! Something went wrong please try again later',
             data: err,
           });
           return;
@@ -1641,7 +1641,7 @@ exports.sendDeliveryOtp = async (req, res) => {
     );
   } else {
     res.status(500).send({
-      message: "Sorry! Please add phone number in delivery address",
+      message: 'Sorry! Please add phone number in delivery address',
       data: err,
     });
     return;
@@ -1666,7 +1666,7 @@ exports.enquiryDetails = (req, res) => {
   EnquiryForm.find(query, (err, enquiries) => {
     if (err) {
       res.status(500).send({
-        message: "Sorry! Something went wrong please try again later",
+        message: 'Sorry! Something went wrong please try again later',
         data: err,
       });
       return;
@@ -1684,12 +1684,12 @@ exports.getDesign = (req, res) => {
     {
       $project: {
         _id: 1,
-        design: "$$ROOT",
+        design: '$$ROOT',
       },
     },
     {
       $replaceRoot: {
-        newRoot: { $mergeObjects: [{ count: "$count" }, "$design"] },
+        newRoot: { $mergeObjects: [{ count: '$count' }, '$design'] },
       },
     },
     {
@@ -1697,10 +1697,10 @@ exports.getDesign = (req, res) => {
         likeUser: {
           $cond: {
             if: {
-              $ne: [{ $type: "$likeUser" }, "array"],
+              $ne: [{ $type: '$likeUser' }, 'array'],
             },
             then: [],
-            else: "$likeUser",
+            else: '$likeUser',
           },
         },
       },
@@ -1710,10 +1710,10 @@ exports.getDesign = (req, res) => {
         wishUser: {
           $cond: {
             if: {
-              $ne: [{ $type: "$wishUser" }, "array"],
+              $ne: [{ $type: '$wishUser' }, 'array'],
             },
             then: [],
-            else: "$wishUser",
+            else: '$wishUser',
           },
         },
       },
@@ -1721,14 +1721,14 @@ exports.getDesign = (req, res) => {
     {
       $addFields: {
         liked: {
-          $in: [mongoose.Types.ObjectId(req.query.userId), "$likeUser"],
+          $in: [mongoose.Types.ObjectId(req.query.userId), '$likeUser'],
         },
       },
     },
     {
       $addFields: {
         wished: {
-          $in: [mongoose.Types.ObjectId(req.query.userId), "$wishUser"],
+          $in: [mongoose.Types.ObjectId(req.query.userId), '$wishUser'],
         },
       },
     },
@@ -1739,7 +1739,7 @@ exports.getDesign = (req, res) => {
       res.status(500).send({ message: err });
       return;
     } else {
-      res.send({ message: "List fetched", data: result });
+      res.send({ message: 'List fetched', data: result });
     }
     return;
   });
@@ -1752,11 +1752,11 @@ exports.deleteUserById = (req, res) => {
     if (err) {
       res
         .status(500)
-        .send({ message: "The requested data could not be fetched" });
+        .send({ message: 'The requested data could not be fetched' });
       return;
     }
     res.status(200).send({
-      message: "User deleted successfully",
+      message: 'User deleted successfully',
       status: 200,
     });
     return;
@@ -1769,11 +1769,11 @@ exports.deleteProductRating = (req, res) => {
     if (err) {
       res
         .status(500)
-        .send({ message: "The requested data could not be fetched" });
+        .send({ message: 'The requested data could not be fetched' });
       return;
     }
     res.status(200).send({
-      message: "Product Rating deleted successfully",
+      message: 'Product Rating deleted successfully',
       status: 200,
     });
     return;
@@ -1787,7 +1787,7 @@ exports.getProductRatingById = (req, res) => {
     if (err) {
       res
         .status(500)
-        .send({ message: "The requested data could not be fetched" });
+        .send({ message: 'The requested data could not be fetched' });
       return;
     }
     res.status(200).send({
@@ -1804,7 +1804,7 @@ exports.getRatingByProductId = (req, res) => {
     if (err) {
       res
         .status(500)
-        .send({ message: "The requested data could not be fetched" });
+        .send({ message: 'The requested data could not be fetched' });
       return;
     }
     res.status(200).send({
@@ -1834,7 +1834,7 @@ exports.postProductRating = (req, res) => {
       if (err) {
         res
           .status(500)
-          .send({ message: "The requested data could not be fetched" });
+          .send({ message: 'The requested data could not be fetched' });
         return;
       } else {
         if (productRating?.length > 0) {
@@ -1858,12 +1858,12 @@ exports.postProductRating = (req, res) => {
               if (err) {
                 res
                   .status(500)
-                  .send({ message: "Could not find id to update details" });
+                  .send({ message: 'Could not find id to update details' });
                 return;
               }
               if (updated) {
                 res.status(200).send({
-                  message: "Product review updated Successfuly",
+                  message: 'Product review updated Successfuly',
                   data: updated,
                 });
               }
@@ -1876,11 +1876,11 @@ exports.postProductRating = (req, res) => {
             if (err) {
               res
                 .status(500)
-                .send({ message: "Error while saving the details" });
+                .send({ message: 'Error while saving the details' });
               return;
             }
             res.status(200).send({
-              message: "Product review posted successfuly",
+              message: 'Product review posted successfuly',
               data: rating,
             });
             return;
@@ -1913,11 +1913,11 @@ exports.updateProductRating = (req, res) => {
       if (err) {
         res
           .status(500)
-          .send({ message: "Could not find id to update details" });
+          .send({ message: 'Could not find id to update details' });
         return;
       }
       if (updated) {
-        res.status(200).send({ message: "Updated Successfuly", data: updated });
+        res.status(200).send({ message: 'Updated Successfuly', data: updated });
       }
       return;
     }
@@ -1929,16 +1929,16 @@ exports.getProductRating = (req, res) => {
     if (err) {
       res
         .status(500)
-        .send({ message: "The requested data could not be fetched" });
+        .send({ message: 'The requested data could not be fetched' });
       return;
     } else if (data) {
       res.status(200).send({
-        message: "Product Rating feched successfully",
+        message: 'Product Rating feched successfully',
         data: data,
       });
     } else {
       res.status(404).send({
-        message: "Application details not found",
+        message: 'Application details not found',
       });
     }
 

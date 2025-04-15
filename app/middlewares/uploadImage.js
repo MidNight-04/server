@@ -68,30 +68,4 @@ const uploadImage = multer({
   },
 });
 
-// const uploadImage = (req, res, next) => {
-//   const multerUpload = multer({
-//     storage: s3Storage,
-//     fileFilter: (req, file, callback) => {
-//       sanitizeFile(file, callback);
-//     },
-//     limits: {
-//       fileSize: 1024 * 1024 * 30, // 30MB file size limit
-//     },
-//   });
-
-//   multerUpload(req, res, err => {
-//     if (err instanceof multer.MulterError) {
-//       return res.status(400).send({ error: err.message });
-//     } else if (err) {
-//       return res.status(400).send({ error: err });
-//     }
-
-//     if (!req.file) {
-//       return next();
-//     }
-
-//     next();
-//   });
-// };
-
 exports.uploadImage = uploadImage;

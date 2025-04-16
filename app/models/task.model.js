@@ -63,8 +63,8 @@ const taskSchema = new Schema(
     repeat: {
       repeatType: {
         type: String,
-        enum: ['Once', 'Hourly', 'Daily', 'Weekly', 'Monthly'],
-        default: 'Once',
+        enum: ['norepeat', 'Hourly', 'Daily', 'Weekly', 'Monthly'],
+        default: 'norepeat',
       },
       repeatValue: {
         type: String,

@@ -46,9 +46,6 @@ app.use(
 const db = require('./app/models');
 const dbConfig = require('./app/config/db.config');
 
-// mongodb+srv://thikedaar:thikedaarapptest@cluster0-thikedaar.mapykyh.mongodb.net/test
-// mongodb+srv://${dbConfig.HOST}:${dbConfig.PORT}@talesgram.wtiwt.mongodb.net/test
-// console.log(`mongodb+srv://${dbConfig.HOST}:${dbConfig.PORT}@${dbConfig.url}.mongodb.net/${dbConfig.DB}`);
 db.mongoose
   .connect(
     // `mongodb+srv://${dbConfig.HOST}:${dbConfig.PORT}@${dbConfig.url}.mongodb.net/${dbConfig.DB}`,
@@ -66,14 +63,16 @@ db.mongoose
     process.exit();
   });
 
-// cron.schedule('0 9 * * *', async () => {
-//   try {
-//     console.log('⏳ Running Cron Job...');
-//     await sendWhatsAppMessage();
-//   } catch (error) {
-//     console.error('Error running cron job:', error);
-//   }
-// });
+cron.schedule('0 9 * * *', async () => {
+  try {
+    console.log('⏳ Running Cron Job...');
+    await sendWhatsAppMessage();
+  } catch (error) {
+    console.error('Error running cron job:', error);
+  }
+});
+
+// setup a new crone scheduler to update the task status to overdue based on the due date
 
 cron.schedule('*/30 * * * *', async () => {
   try {

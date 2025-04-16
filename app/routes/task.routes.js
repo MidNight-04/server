@@ -87,6 +87,7 @@ module.exports = function (app) {
   app.post('/api/task/getthismonthtaskbyid', controller.thisMonthTaskById);
   app.post('/api/task/getnextmonthtaskbyid', controller.getNextMonthTaskById);
   app.post('/api/task/customfilters', controller.customFilters);
+  app.get('/api/task/getalltaskcount', controller.getAllTaskCount);
 };
 // app.get('/api/task/gettodaytask', controller.getTodayTask);
 // app.get('/api/task/getyesterdaytask', controller.getYesterdayTask);

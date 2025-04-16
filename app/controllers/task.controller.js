@@ -40,6 +40,8 @@ exports.addTask = (req, res) => {
     assignedBy: req.body.assignedID,
     category: req.body.category,
     priority: req.body.priority,
+    isActive: true,
+    activatedOn: new Date(),
     repeat: {
       repeatType: req.body.repeatType,
       repeatTime: req.body.repeatTime,
@@ -48,6 +50,7 @@ exports.addTask = (req, res) => {
     file: files,
     audio: audios,
     reminder: JSON.parse(req.body.reminder),
+    referenceModel: 'teammembers',
   };
 
   Task.create(task).then((taskSave, err) => {
@@ -872,6 +875,12 @@ exports.getTodayTaskById = async (req, res) => {
   if (assignedBy) {
     query.assignedBy = assignedBy;
   }
+
+  const assignedTo = req.body?.assignedTo;
+  if (assignedTo) {
+    query.issueMember = assignedTo;
+  }
+
   await fetchTasks(res, query, 'No tasks found for today', page);
 };
 
@@ -891,6 +900,12 @@ exports.getYesterdayTaskById = async (req, res) => {
   if (assignedBy) {
     query.assignedBy = assignedBy;
   }
+
+  const assignedTo = req.body?.assignedTo;
+  if (assignedTo) {
+    query.issueMember = assignedTo;
+  }
+
   await fetchTasks(res, query, 'No tasks found for yesterday', page);
 };
 
@@ -910,6 +925,12 @@ exports.getTomorrowTaskById = async (req, res) => {
   if (assignedBy) {
     query.assignedBy = assignedBy;
   }
+
+  const assignedTo = req.body?.assignedTo;
+  if (assignedTo) {
+    query.issueMember = assignedTo;
+  }
+
   await fetchTasks(res, query, 'No tasks found for tomorrow', page);
 };
 
@@ -929,6 +950,12 @@ exports.getThisWeekTaskById = async (req, res) => {
   if (assignedBy) {
     query.assignedBy = assignedBy;
   }
+
+  const assignedTo = req.body?.assignedTo;
+  if (assignedTo) {
+    query.issueMember = assignedTo;
+  }
+
   await fetchTasks(res, query, 'No tasks found for this week', page);
 };
 
@@ -948,6 +975,12 @@ exports.nextWeekTaskById = async (req, res) => {
   if (assignedBy) {
     query.assignedBy = assignedBy;
   }
+
+  const assignedTo = req.body?.assignedTo;
+  if (assignedTo) {
+    query.issueMember = assignedTo;
+  }
+
   await fetchTasks(res, query, 'No tasks found for next week', page);
 };
 
@@ -967,6 +1000,12 @@ exports.thisMonthTaskById = async (req, res) => {
   if (assignedBy) {
     query.assignedBy = assignedBy;
   }
+
+  const assignedTo = req.body?.assignedTo;
+  if (assignedTo) {
+    query.issueMember = assignedTo;
+  }
+
   await fetchTasks(res, query, 'No tasks found for this month', page);
 };
 
@@ -986,6 +1025,12 @@ exports.getLastMonthTaskById = async (req, res) => {
   if (assignedBy) {
     query.assignedBy = assignedBy;
   }
+
+  const assignedTo = req.body?.assignedTo;
+  if (assignedTo) {
+    query.issueMember = assignedTo;
+  }
+
   await fetchTasks(res, query, 'No tasks found for last month', page);
 };
 
@@ -1005,6 +1050,12 @@ exports.getNextMonthTaskById = async (req, res) => {
   if (assignedBy) {
     query.assignedBy = assignedBy;
   }
+
+  const assignedTo = req.body?.assignedTo;
+  if (assignedTo) {
+    query.issueMember = assignedTo;
+  }
+
   await fetchTasks(res, query, 'No tasks found for next month', page);
 };
 
@@ -1084,494 +1135,132 @@ exports.customFilters = async (req, res) => {
   await fetchTasks(res, query, 'No tasks found for the given date range', page);
 };
 
-// exports.getTodayTaskById = async (req, res) => {
-//   try {
-//     const userId = req.user._id;
-//     const today = new Date();
-//     const tasks = await Task.find({
-//       $and: [
-//         { issueMember: userId },
-//         { isActive: true },
-//         { dueDate: { $lte: today } },
-//       ],
-//       sort: { dueDate: 1 },
-//     });
-//     if (tasks.length === 0) {
-//       res.status(404).send({ message: 'No tasks found for today' });
-//     } else {
-//       res.status(200).send(tasks);
-//     }
-//   } catch (error) {
-//     console.error('Server error:', error);
-//     res.status(500).send({ message: 'Error while fetching tasks' });
-//   }
-// };
+exports.getAllTaskCount = async (req, res) => {
+  try {
+    const result = await Task.aggregate([
+      { $match: { isActive: true } },
 
-// exports.getYesterdayTaskById = async (req, res) => {
-//   try {
-//     const userId = req.user._id;
-//     const yesterday = new Date();
-//     yesterday.setDate(yesterday.getDate() - 1);
-//     const tasks = await Task.find({
-//       $and: [
-//         { issueMember: userId },
-//         { isActive: true },
-//         { dueDate: { $gte: yesterday, $lt: today } },
-//       ],
-//       sort: { dueDate: 1 },
-//     });
-//     if (tasks.length === 0) {
-//       res.status(404).send({ message: 'No tasks found for yesterday' });
-//     } else {
-//       res.status(200).send(tasks);
-//     }
-//   } catch (error) {
-//     console.error('Server error:', error);
-//     res.status(500).send({ message: 'Error while fetching tasks' });
-//   }
-// };
+      // Add on-time and delayed classification
+      {
+        $addFields: {
+          completedOnTime: {
+            $cond: [
+              {
+                $and: [
+                  { $eq: ['$status', 'Complete'] },
+                  { $lte: ['$updatedOn', '$dueDate'] },
+                ],
+              },
+              true,
+              false,
+            ],
+          },
+          completedDelayed: {
+            $cond: [
+              {
+                $and: [
+                  { $eq: ['$status', 'Complete'] },
+                  { $gt: ['$updatedOn', '$dueDate'] },
+                ],
+              },
+              true,
+              false,
+            ],
+          },
+        },
+      },
 
-// exports.getTomorrowTaskById = async (req, res) => {
-//   try {
-//     const userId = req.user._id;
-//     const tomorrow = new Date();
-//     tomorrow.setDate(tomorrow.getDate() + 1);
-//     const tasks = await Task.find({
-//       $and: [
-//         { issueMember: userId },
-//         { 'reassigned.isReassigned': false },
-//         { isActive: true },
-//         { dueDate: { $gte: tomorrow, $lt: today } },
-//       ],
-//       sort: { dueDate: 1 },
-//     });
-//     if (tasks.length === 0) {
-//       res.status(404).send({ message: 'No tasks found for tomorrow' });
-//     } else {
-//       res.status(200).send(tasks);
-//     }
-//   } catch (error) {
-//     console.error('Server error:', error);
-//     res.status(500).send({ message: 'Error while fetching tasks' });
-//   }
-// };
+      // Lookup assignedBy user and their roles
+      {
+        $lookup: {
+          from: 'users',
+          localField: 'assignedBy',
+          foreignField: '_id',
+          as: 'assignedByUser',
+        },
+      },
+      {
+        $unwind: { path: '$assignedByUser', preserveNullAndEmptyArrays: true },
+      },
+      {
+        $lookup: {
+          from: 'roles',
+          localField: 'assignedByUser.roles',
+          foreignField: '_id',
+          as: 'assignedByUser.rolesDetails',
+        },
+      },
+      {
+        $addFields: {
+          assignedBy: {
+            $mergeObjects: [
+              '$assignedByUser',
+              { roles: '$assignedByUser.rolesDetails' },
+            ],
+          },
+        },
+      },
 
-// exports.getThisWeekTaskById = async (req, res) => {
-//   try {
-//     const userId = req.user._id;
-//     const today = new Date();
-//     const startOfWeek = new Date(
-//       today.setDate(today.getDate() - today.getDay())
-//     );
-//     const endOfWeek = new Date(
-//       today.setDate(today.getDate() + 6 - today.getDay())
-//     );
-//     const tasks = await Task.find({
-//       $and: [
-//         { issueMember: userId },
-//         { 'reassigned.isReassigned': false },
-//         { isActive: true },
-//         { dueDate: { $gte: startOfWeek, $lt: endOfWeek } },
-//       ],
-//       sort: { dueDate: 1 },
-//     });
-//     if (tasks.length === 0) {
-//       res.status(404).send({ message: 'No tasks found for this week' });
-//     } else {
-//       res.status(200).send(tasks);
-//     }
-//   } catch (error) {
-//     console.error('Server error:', error);
-//     res.status(500).send({ message: 'Error while fetching tasks' });
-//   }
-// };
+      // Lookup issueMember user and their roles
+      {
+        $lookup: {
+          from: 'teammembers',
+          localField: 'issueMember',
+          foreignField: '_id',
+          as: 'issueMemberUser',
+        },
+      },
+      {
+        $unwind: { path: '$issueMemberUser', preserveNullAndEmptyArrays: true },
+      },
+      {
+        $lookup: {
+          from: 'roles',
+          localField: 'issueMemberUser.roles',
+          foreignField: '_id',
+          as: 'issueMemberUser.rolesDetails',
+        },
+      },
+      {
+        $addFields: {
+          issueMember: {
+            $mergeObjects: [
+              '$issueMemberUser',
+              { roles: '$issueMemberUser.rolesDetails' },
+            ],
+          },
+        },
+      },
 
-// exports.thisMonthTaskById = async (req, res) => {
-//   try {
-//     const userId = req.user._id;
-//     const today = new Date();
-//     const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-//     const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-//     const tasks = await Task.find({
-//       $and: [
-//         { issueMember: userId },
-//         { 'reassigned.isReassigned': false },
-//         { isActive: true },
-//         { dueDate: { $gte: startOfMonth, $lt: endOfMonth } },
-//       ],
-//       sort: { dueDate: 1 },
-//     });
-//     if (tasks.length === 0) {
-//       res.status(404).send({ message: 'No tasks found for this month' });
-//     } else {
-//       res.status(200).send(tasks);
-//     }
-//   } catch (error) {
-//     console.error('Server error:', error);
-//     res.status(500).send({ message: 'Error while fetching tasks' });
-//   }
-// };
+      // Now group by status using $facet
+      {
+        $facet: {
+          totalTasks: [{ $match: {} }],
+          overDueTasks: [{ $match: { status: 'Overdue' } }],
+          pendingTasks: [{ $match: { status: 'Pending' } }],
+          inProgressTasks: [{ $match: { status: 'In Progress' } }],
+          completeTasks: [{ $match: { status: 'Complete' } }],
+          completedOnTimeTasks: [{ $match: { completedOnTime: true } }],
+          completedDelayedTasks: [{ $match: { completedDelayed: true } }],
+        },
+      },
+    ]);
 
-// exports.getLastMonthTaskById = async (req, res) => {
-//   try {
-//     const userId = req.user._id;
-//     const today = new Date();
-//     const startOfLastMonth = new Date(
-//       today.getFullYear(),
-//       today.getMonth() - 1,
-//       1
-//     );
-//     const endOfLastMonth = new Date(today.getFullYear(), today.getMonth(), 0);
-//     const tasks = await Task.find({
-//       $and: [
-//         { issueMember: userId },
-//         { isActive: true },
-//         { dueDate: { $gte: startOfLastMonth, $lt: endOfLastMonth } },
-//       ],
-//       sort: { dueDate: 1 },
-//     });
-//     if (tasks.length === 0) {
-//       res.status(404).send({ message: 'No tasks found for last month' });
-//     } else {
-//       res.status(200).send(tasks);
-//     }
-//   } catch (error) {
-//     console.error('Server error:', error);
-//     res.status(500).send({ message: 'Error while fetching tasks' });
-//   }
-// };
+    const data = result[0];
 
-// exports.nextWeekTaskById = async (req, res) => {
-//   try {
-//     const userId = req.user._id;
-//     const today = new Date();
-//     const startOfNextWeek = new Date(
-//       today.setDate(today.getDate() + 7 - today.getDay())
-//     );
-//     const endOfNextWeek = new Date(
-//       today.setDate(today.getDate() + 13 - today.getDay())
-//     );
-//     const tasks = await Task.find({
-//       $and: [
-//         { issueMember: userId },
-//         { isActive: true },
-//         { dueDate: { $gte: startOfNextWeek, $lt: endOfNextWeek } },
-//       ],
-//       sort: { dueDate: 1 },
-//     });
-//     if (tasks.length === 0) {
-//       res.status(404).send({ message: 'No tasks found for next week' });
-//     } else {
-//       res.status(200).send(tasks);
-//     }
-//   } catch (error) {
-//     console.error('Server error:', error);
-//     res.status(500).send({ message: 'Error while fetching tasks' });
-//   }
-// };
+    const taskGroups = {
+      totalTasks: data.totalTasks,
+      overDueTasks: data.overDueTasks,
+      pendingTasks: data.pendingTasks,
+      inProgressTasks: data.inProgressTasks,
+      completeTasks: data.completeTasks,
+      completedOnTimeTasks: data.completedOnTimeTasks,
+      completedDelayedTasks: data.completedDelayedTasks,
+    };
 
-// exports.getNextMonthTaskById = async (req, res) => {
-//   try {
-//     const userId = req.user._id;
-//     const today = new Date();
-//     const startOfNextMonth = new Date(
-//       today.getFullYear(),
-//       today.getMonth() + 1,
-//       1
-//     );
-//     const endOfNextMonth = new Date(
-//       today.getFullYear(),
-//       today.getMonth() + 2,
-//       0
-//     );
-//     const tasks = await Task.find({
-//       $and: [
-//         { issueMember: userId },
-//         { isActive: true },
-//         { dueDate: { $gte: startOfNextMonth, $lt: endOfNextMonth } },
-//       ],
-//       sort: { dueDate: 1 },
-//     });
-//     if (tasks.length === 0) {
-//       res.status(404).send({ message: 'No tasks found for next month' });
-//     } else {
-//       res.status(200).send(tasks);
-//     }
-//   } catch (error) {
-//     console.error('Server error:', error);
-//     res.status(500).send({ message: 'Error while fetching tasks' });
-//   }
-// };
-
-// exports.getTaskByDateById = async (req, res) => {
-//   try {
-//     const { date } = req.params;
-//     const userId = req.user._id;
-//     const tasks = await Task.find({
-//       $and: [{ issueMember: userId }, { isActive: true }, { dueDate: date }],
-//     });
-//     if (tasks.length === 0) {
-//       res.status(404).send({ message: 'No tasks found for the given date' });
-//     } else {
-//       res.status(200).send(tasks);
-//     }
-//   } catch (error) {
-//     console.error('Server error:', error);
-//     res.status(500).send({ message: 'Error while fetching tasks' });
-//   }
-// };
-
-// exports.getTaskByDateRangeById = async (req, res) => {
-//   try {
-//     const { startDate, endDate } = req.params;
-//     const userId = req.user._id;
-//     const tasks = await Task.find({
-//       $and: [
-//         { issueMember: userId },
-//         { isActive: true },
-//         { dueDate: { $gte: startDate, $lte: endDate } },
-//       ],
-//     });
-//     if (tasks.length === 0) {
-//       res
-//         .status(404)
-//         .send({ message: 'No tasks found for the given date range' });
-//     } else {
-//       res.status(200).send(tasks);
-//     }
-//   } catch (error) {
-//     console.error('Server error:', error);
-//     res.status(500).send({ message: 'Error while fetching tasks' });
-//   }
-// };
-
-// exports.getTodayTask = async (req, res) => {
-//   try {
-//     const today = new Date();
-//     const tasks = await Task.find({
-//       $and: [{ isActive: true }, { dueDate: { $lte: today } }],
-//       sort: { dueDate: 1 },
-//     });
-//     if (tasks.length === 0) {
-//       res.status(404).send({ message: 'No tasks found for today' });
-//     } else {
-//       res.status(200).send(tasks);
-//     }
-//   } catch (error) {
-//     console.error('Server error:', error);
-//     res.status(500).send({ message: 'Error while fetching tasks' });
-//   }
-// };
-
-// exports.getYesterdayTask = async (req, res) => {
-//   try {
-//     const yesterday = new Date();
-//     yesterday.setDate(yesterday.getDate() - 1);
-//     const tasks = await Task.find({
-//       $and: [{ isActive: true }, { dueDate: { $gte: yesterday, $lt: today } }],
-//       sort: { dueDate: 1 },
-//     });
-//     if (tasks.length === 0) {
-//       res.status(404).send({ message: 'No tasks found for yesterday' });
-//     } else {
-//       res.status(200).send(tasks);
-//     }
-//   } catch (error) {
-//     console.error('Server error:', error);
-//     res.status(500).send({ message: 'Error while fetching tasks' });
-//   }
-// };
-
-// exports.getTomorrowTask = async (req, res) => {
-//   try {
-//     const tomorrow = new Date();
-//     tomorrow.setDate(tomorrow.getDate() + 1);
-//     const tasks = await Task.find({
-//       $and: [{ isActive: true }, { dueDate: { $gte: tomorrow, $lt: today } }],
-//       sort: { dueDate: 1 },
-//     });
-//     if (tasks.length === 0) {
-//       res.status(404).send({ message: 'No tasks found for tomorrow' });
-//     } else {
-//       res.status(200).send(tasks);
-//     }
-//   } catch (error) {
-//     console.error('Server error:', error);
-//     res.status(500).send({ message: 'Error while fetching tasks' });
-//   }
-// };
-
-// exports.getThisWeekTask = async (req, res) => {
-//   try {
-//     const today = new Date();
-//     const startOfWeek = new Date(
-//       today.setDate(today.getDate() - today.getDay())
-//     );
-//     const endOfWeek = new Date(
-//       today.setDate(today.getDate() + 6 - today.getDay())
-//     );
-//     const tasks = await Task.find({
-//       $and: [
-//         { isActive: true },
-//         { dueDate: { $gte: startOfWeek, $lt: endOfWeek } },
-//       ],
-//       sort: { dueDate: 1 },
-//     });
-//     if (tasks.length === 0) {
-//       res.status(404).send({ message: 'No tasks found for this week' });
-//     } else {
-//       res.status(200).send(tasks);
-//     }
-//   } catch (error) {
-//     console.error('Server error:', error);
-//     res.status(500).send({ message: 'Error while fetching tasks' });
-//   }
-// };
-
-// exports.thisMonthTask = async (req, res) => {
-//   try {
-//     const today = new Date();
-//     const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-//     const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-//     const tasks = await Task.find({
-//       $and: [
-//         { isActive: true },
-//         { dueDate: { $gte: startOfMonth, $lt: endOfMonth } },
-//       ],
-//       sort: { dueDate: 1 },
-//     });
-//     if (tasks.length === 0) {
-//       res.status(404).send({ message: 'No tasks found for this month' });
-//     } else {
-//       res.status(200).send(tasks);
-//     }
-//   } catch (error) {
-//     console.error('Server error:', error);
-//     res.status(500).send({ message: 'Error while fetching tasks' });
-//   }
-// };
-
-// exports.getLastMonthTask = async (req, res) => {
-//   try {
-//     const today = new Date();
-//     const startOfLastMonth = new Date(
-//       today.getFullYear(),
-//       today.getMonth() - 1,
-//       1
-//     );
-//     const endOfLastMonth = new Date(today.getFullYear(), today.getMonth(), 0);
-//     const tasks = await Task.find({
-//       $and: [
-//         { isActive: true },
-//         { dueDate: { $gte: startOfLastMonth, $lt: endOfLastMonth } },
-//       ],
-//       sort: { dueDate: 1 },
-//     });
-//     if (tasks.length === 0) {
-//       res.status(404).send({ message: 'No tasks found for last month' });
-//     } else {
-//       res.status(200).send(tasks);
-//     }
-//   } catch (error) {
-//     console.error('Server error:', error);
-//     res.status(500).send({ message: 'Error while fetching tasks' });
-//   }
-// };
-
-// exports.nextWeekTask = async (req, res) => {
-//   try {
-//     const today = new Date();
-//     const startOfNextWeek = new Date(
-//       today.setDate(today.getDate() + 7 - today.getDay())
-//     );
-//     const endOfNextWeek = new Date(
-//       today.setDate(today.getDate() + 13 - today.getDay())
-//     );
-//     const tasks = await Task.find({
-//       $and: [
-//         { issueMember: userId },
-//         { isActive: true },
-//         { dueDate: { $gte: startOfNextWeek, $lt: endOfNextWeek } },
-//       ],
-//       sort: { dueDate: 1 },
-//     });
-//     if (tasks.length === 0) {
-//       res.status(404).send({ message: 'No tasks found for next week' });
-//     } else {
-//       res.status(200).send(tasks);
-//     }
-//   } catch (error) {
-//     console.error('Server error:', error);
-//     res.status(500).send({ message: 'Error while fetching tasks' });
-//   }
-// };
-
-// exports.getNextMonthTask = async (req, res) => {
-//   try {
-//     const today = new Date();
-//     const startOfNextMonth = new Date(
-//       today.getFullYear(),
-//       today.getMonth() + 1,
-//       1
-//     );
-//     const endOfNextMonth = new Date(
-//       today.getFullYear(),
-//       today.getMonth() + 2,
-//       0
-//     );
-//     const tasks = await Task.find({
-//       $and: [
-//         { isActive: true },
-//         { dueDate: { $gte: startOfNextMonth, $lt: endOfNextMonth } },
-//       ],
-//       sort: { dueDate: 1 },
-//     });
-//     if (tasks.length === 0) {
-//       res.status(404).send({ message: 'No tasks found for next month' });
-//     } else {
-//       res.status(200).send(tasks);
-//     }
-//   } catch (error) {
-//     console.error('Server error:', error);
-//     res.status(500).send({ message: 'Error while fetching tasks' });
-//   }
-// };
-
-// exports.getTaskByDate = async (req, res) => {
-//   try {
-//     const { date } = req.params;
-//     const tasks = await Task.find({
-//       $and: [{ isActive: true }, { dueDate: date }],
-//     });
-//     if (tasks.length === 0) {
-//       res.status(404).send({ message: 'No tasks found for the given date' });
-//     } else {
-//       res.status(200).send(tasks);
-//     }
-//   } catch (error) {
-//     console.error('Server error:', error);
-//     res.status(500).send({ message: 'Error while fetching tasks' });
-//   }
-// };
-
-// exports.getTaskByDateRange = async (req, res) => {
-//   try {
-//     const { startDate, endDate } = req.params;
-//     const tasks = await Task.find({
-//       $and: [
-//         { isActive: true },
-//         { dueDate: { $gte: startDate, $lte: endDate } },
-//       ],
-//     });
-//     if (tasks.length === 0) {
-//       res
-//         .status(404)
-//         .send({ message: 'No tasks found for the given date range' });
-//     } else {
-//       res.status(200).send(tasks);
-//     }
-//   } catch (error) {
-//     console.error('Server error:', error);
-//     res.status(500).send({ message: 'Error while fetching tasks' });
-//   }
-// };
+    res.status(200).send({ taskGroups });
+  } catch (error) {
+    console.error('Server error:', error);
+    res.status(500).send({ message: 'Error while fetching tasks' });
+  }
+};

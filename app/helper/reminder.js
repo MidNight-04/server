@@ -52,7 +52,7 @@ const sendWhatsAppMessage = async () => {
 
         if (member.phone) {
           const promise = axios.post(
-            `${WATI_API_URL}?whatsappNumber=${'918383072217'}`,
+            `${WATI_API_URL}?whatsappNumber=${member.phone}`,
 
             {
               template_name: 'morning_reminder',

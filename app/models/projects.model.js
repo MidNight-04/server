@@ -28,7 +28,12 @@ const projectModel = mongoose.model(
       operation: [],
       sales: [],
       contractor: [],
-      openTicket: [],
+      openTicket: [
+        {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: 'Tickets',
+        },
+      ],
       project_status: [
         {
           name: String,

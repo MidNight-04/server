@@ -347,11 +347,18 @@ exports.getTicketByTicketId = async (req, res) => {
 
 exports.getAllProjectTaskByMember = async (req, res) => {
   try {
-    // console.log(req.params.id)
-    const ticket = await Project.find({
-      'openTicket.assignMember': { $elemMatch: { employeeID: req.params.id } },
-    });
-    // console.log("find ticket---",ticket)
+    const ticket = await Ticket.find({
+      assignMember: mongoose.Types.ObjectId(req.params.id),
+    }).populate([
+      {
+        path: 'assignMember',
+        model: 'teammembers',
+      },
+      {
+        path: 'assignedBy',
+        model: 'clients',
+      },
+    ]);
     if (ticket?.length > 0) {
       res.json({
         status: 200,
@@ -791,74 +798,6 @@ exports.reassignTask = async (req, res) => {
   }
 };
 
-const fetchTasks = async (res, filters, notFoundMessage, page) => {
-  try {
-    const tasks = await Task.find(filters)
-      .sort({ dueDate: 1 })
-      // .limit(limit)
-      // .skip(limit * page)
-      .populate(['issueMember', 'assignedBy'])
-      .exec();
-    if (tasks.length === 0) {
-      // return res.status(404).send({ message: notFoundMessage });
-      return res.status(200).send(tasks);
-    }
-    res.status(200).send(tasks);
-  } catch (error) {
-    console.error('Server error:', error);
-    res.status(500).send({ message: 'Error while fetching tasks' });
-  }
-};
-
-// Helper functions for date calculations
-const getTodayRange = () => {
-  const start = new Date();
-  start.setHours(0, 0, 0, 0);
-  const end = new Date();
-  end.setHours(23, 59, 59, 999);
-  return { start, end };
-};
-
-const getYesterdayRange = () => {
-  const yesterday = new Date();
-  yesterday.setDate(yesterday.getDate() - 1);
-  yesterday.setHours(0, 0, 0, 0);
-  const end = new Date(yesterday);
-  end.setHours(23, 59, 59, 999);
-  return { start: yesterday, end };
-};
-
-const getTomorrowRange = () => {
-  const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  tomorrow.setHours(0, 0, 0, 0);
-  const end = new Date(tomorrow);
-  end.setHours(23, 59, 59, 999);
-  return { start: tomorrow, end };
-};
-
-const getWeekRange = (offset = 0) => {
-  const today = new Date();
-  today.setDate(today.getDate() + offset);
-  const start = new Date(today);
-  start.setDate(start.getDate() - start.getDay());
-  start.setHours(0, 0, 0, 0);
-
-  const end = new Date(start);
-  end.setDate(end.getDate() + 6);
-  end.setHours(23, 59, 59, 999);
-
-  return { start, end };
-};
-
-const getMonthRange = (offset = 0) => {
-  const today = new Date();
-  const start = new Date(today.getFullYear(), today.getMonth() + offset, 1);
-  const end = new Date(today.getFullYear(), today.getMonth() + offset + 1, 0);
-  end.setHours(23, 59, 59, 999);
-  return { start, end };
-};
-
 exports.getTodayTaskById = async (req, res) => {
   const { start, end } = getTodayRange();
   const userId = req.body?.userId;
@@ -1259,6 +1198,95 @@ exports.getAllTaskCount = async (req, res) => {
     };
 
     res.status(200).send({ taskGroups });
+  } catch (error) {
+    console.error('Server error:', error);
+    res.status(500).send({ message: 'Error while fetching tasks' });
+  }
+};
+
+const getTodayRange = () => {
+  const start = new Date();
+  start.setHours(0, 0, 0, 0);
+  const end = new Date();
+  end.setHours(23, 59, 59, 999);
+  return { start, end };
+};
+
+const getYesterdayRange = () => {
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  yesterday.setHours(0, 0, 0, 0);
+  const end = new Date(yesterday);
+  end.setHours(23, 59, 59, 999);
+  return { start: yesterday, end };
+};
+
+const getTomorrowRange = () => {
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  tomorrow.setHours(0, 0, 0, 0);
+  const end = new Date(tomorrow);
+  end.setHours(23, 59, 59, 999);
+  return { start: tomorrow, end };
+};
+
+const getWeekRange = (offset = 0) => {
+  const today = new Date();
+  const currentDay = today.getDay();
+  const start = new Date(today);
+  start.setDate(today.getDate() - currentDay + offset * 7);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(start);
+  end.setDate(start.getDate() + 6);
+  end.setHours(23, 59, 59, 999);
+  return { start, end };
+};
+
+const getMonthRange = (offset = 0) => {
+  const today = new Date();
+  const start = new Date(today.getFullYear(), today.getMonth() + offset, 1);
+  const end = new Date(today.getFullYear(), today.getMonth() + offset + 1, 0);
+  end.setHours(23, 59, 59, 999);
+  return { start, end };
+};
+
+const getThisYearRange = () => {
+  const now = new Date();
+  const start = new Date(now.getFullYear(), 0, 1);
+  const end = new Date(now.getFullYear(), 11, 31, 23, 59, 59, 999);
+  return { start, end };
+};
+
+const fetchTasks = async (
+  res,
+  filters,
+  notFoundMessage,
+  page = 0,
+  limit = 10
+) => {
+  try {
+    const tasks = await Task.find(filters)
+      .sort({ dueDate: 1 })
+      // .limit(limit)
+      // .skip(limit * page)
+      .populate(['issueMember', 'assignedBy'])
+      .exec();
+
+    // // If no tasks are found, send a response with 200 status and an empty array.
+    // if (tasks.length === 0) {
+    //   return res.status(200).send(tasks);
+    // }
+
+    res.status(200).send(tasks);
+  } catch (error) {
+    console.error('Server error:', error);
+    res.status(500).send({ message: 'Error while fetching tasks' });
+  }
+};
+
+exports.taskCountfilters = async (req, res) => {
+  try {
+    const { type } = req.body;
   } catch (error) {
     console.error('Server error:', error);
     res.status(500).send({ message: 'Error while fetching tasks' });

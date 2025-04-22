@@ -10,7 +10,10 @@ const taskSchema = new Schema(
       type: String,
       trim: true,
     },
-    duration: Number,
+    duration: { type: Number, default: 1 },
+    point: {
+      type: Number,
+    },
     forceMajeure: {
       type: Boolean,
       default: false,
@@ -113,7 +116,7 @@ const taskSchema = new Schema(
     updatedOn: {
       //completed on Date
       type: String,
-      default: '',
+      default: null,
     },
     comments: [
       {

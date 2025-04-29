@@ -82,10 +82,13 @@ module.exports = function (app) {
   app.post('/api/task/getyesterdaytaskbyid', controller.getYesterdayTaskById);
   app.post('/api/task/gettomorrowtaskbyid', controller.getTomorrowTaskById);
   app.post('/api/task/getthisweektaskbyid', controller.getThisWeekTaskById);
+  app.post('/api/task/getlastweektaskbyid', controller.getLastWeekTaskById);
   app.post('/api/task/getnextweektaskbyid', controller.nextWeekTaskById);
   app.post('/api/task/getlastmonthtaskbyid', controller.getLastMonthTaskById);
   app.post('/api/task/getthismonthtaskbyid', controller.thisMonthTaskById);
   app.post('/api/task/getnextmonthtaskbyid', controller.getNextMonthTaskById);
+  app.post('/api/task/getlastyeartaskbyid', controller.getLastYearTaskById);
+  app.post('/api/task/getthisyeartaskbyid', controller.getThisYearTaskById);
   app.post('/api/task/customfilters', controller.customFilters);
   app.get('/api/task/getalltaskcount', controller.getAllTaskCount);
   app.post('/api/task/taskcountfilters', controller.taskCountfilters);

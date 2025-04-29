@@ -802,6 +802,7 @@ exports.getTodayTaskById = async (req, res) => {
   const { start, end } = getTodayRange();
   const userId = req.body?.userId;
   const assignedBy = req.body?.assignedId;
+
   const page = req.body?.page;
 
   const query = {
@@ -818,6 +819,16 @@ exports.getTodayTaskById = async (req, res) => {
   const assignedTo = req.body?.assignedTo;
   if (assignedTo) {
     query.issueMember = assignedTo;
+  }
+
+  const category = req.body?.category;
+  if (category) {
+    query.category = category;
+  }
+
+  const repeatType = req.body?.repeat;
+  if (repeatType) {
+    query['repeat.repeatType'] = repeatType;
   }
 
   await fetchTasks(res, query, 'No tasks found for today', page);
@@ -845,6 +856,16 @@ exports.getYesterdayTaskById = async (req, res) => {
     query.issueMember = assignedTo;
   }
 
+  const category = req.body?.category;
+  if (category) {
+    query.category = category;
+  }
+
+  const repeatType = req.body?.repeat;
+  if (repeatType) {
+    query['repeat.repeatType'] = repeatType;
+  }
+
   await fetchTasks(res, query, 'No tasks found for yesterday', page);
 };
 
@@ -868,6 +889,16 @@ exports.getTomorrowTaskById = async (req, res) => {
   const assignedTo = req.body?.assignedTo;
   if (assignedTo) {
     query.issueMember = assignedTo;
+  }
+
+  const category = req.body?.category;
+  if (category) {
+    query.category = category;
+  }
+
+  const repeatType = req.body?.repeat;
+  if (repeatType) {
+    query['repeat.repeatType'] = repeatType;
   }
 
   await fetchTasks(res, query, 'No tasks found for tomorrow', page);
@@ -895,7 +926,53 @@ exports.getThisWeekTaskById = async (req, res) => {
     query.issueMember = assignedTo;
   }
 
+  const category = req.body?.category;
+  if (category) {
+    query.category = category;
+  }
+
+  const repeatType = req.body?.repeat;
+  if (repeatType) {
+    query['repeat.repeatType'] = repeatType;
+  }
+
   await fetchTasks(res, query, 'No tasks found for this week', page);
+};
+
+exports.getLastWeekTaskById = async (req, res) => {
+  const { start, end } = getWeekRange(-7);
+  const userId = req.body?.userId;
+  const assignedBy = req.body?.assignedId;
+  const page = req.body?.page;
+  const query = {
+    isActive: true,
+    dueDate: { $gte: start, $lte: end },
+  };
+
+  if (userId) {
+    query.issueMember = userId;
+  }
+
+  if (assignedBy) {
+    query.assignedBy = assignedBy;
+  }
+
+  const assignedTo = req.body?.assignedTo;
+  if (assignedTo) {
+    query.issueMember = assignedTo;
+  }
+
+  const category = req.body?.category;
+  if (category) {
+    query.category = category;
+  }
+
+  const repeatType = req.body?.repeat;
+  if (repeatType) {
+    query['repeat.repeatType'] = repeatType;
+  }
+
+  await fetchTasks(res, query, 'No tasks found for last week', page);
 };
 
 exports.nextWeekTaskById = async (req, res) => {
@@ -918,6 +995,16 @@ exports.nextWeekTaskById = async (req, res) => {
   const assignedTo = req.body?.assignedTo;
   if (assignedTo) {
     query.issueMember = assignedTo;
+  }
+
+  const category = req.body?.category;
+  if (category) {
+    query.category = category;
+  }
+
+  const repeatType = req.body?.repeat;
+  if (repeatType) {
+    query['repeat.repeatType'] = repeatType;
   }
 
   await fetchTasks(res, query, 'No tasks found for next week', page);
@@ -945,6 +1032,16 @@ exports.thisMonthTaskById = async (req, res) => {
     query.issueMember = assignedTo;
   }
 
+  const category = req.body?.category;
+  if (category) {
+    query.category = category;
+  }
+
+  const repeatType = req.body?.repeat;
+  if (repeatType) {
+    query['repeat.repeatType'] = repeatType;
+  }
+
   await fetchTasks(res, query, 'No tasks found for this month', page);
 };
 
@@ -968,6 +1065,16 @@ exports.getLastMonthTaskById = async (req, res) => {
   const assignedTo = req.body?.assignedTo;
   if (assignedTo) {
     query.issueMember = assignedTo;
+  }
+
+  const category = req.body?.category;
+  if (category) {
+    query.category = category;
+  }
+
+  const repeatType = req.body?.repeat;
+  if (repeatType) {
+    query['repeat.repeatType'] = repeatType;
   }
 
   await fetchTasks(res, query, 'No tasks found for last month', page);
@@ -995,7 +1102,83 @@ exports.getNextMonthTaskById = async (req, res) => {
     query.issueMember = assignedTo;
   }
 
+  const category = req.body?.category;
+  if (category) {
+    query.category = category;
+  }
+
+  const repeatType = req.body?.repeat;
+  if (repeatType) {
+    query['repeat.repeatType'] = repeatType;
+  }
+
   await fetchTasks(res, query, 'No tasks found for next month', page);
+};
+
+exports.getThisYearTaskById = async (req, res) => {
+  const { start, end } = getYearRange();
+  const userId = req.body?.userId;
+  const assignedBy = req.body?.assignedId;
+  const page = req.body?.page;
+  const query = {
+    isActive: true,
+    dueDate: { $gte: start, $lte: end },
+  };
+  if (userId) {
+    query.issueMember = userId;
+  }
+  if (assignedBy) {
+    query.assignedBy = assignedBy;
+  }
+  const assignedTo = req.body?.assignedTo;
+  if (assignedTo) {
+    query.issueMember = assignedTo;
+  }
+
+  const category = req.body?.category;
+  if (category) {
+    query.category = category;
+  }
+
+  const repeatType = req.body?.repeat;
+  if (repeatType) {
+    query['repeat.repeatType'] = repeatType;
+  }
+
+  await fetchTasks(res, query, 'No tasks found for this year', page);
+};
+
+exports.getLastYearTaskById = async (req, res) => {
+  const { start, end } = getYearRange(-1);
+  const userId = req.body?.userId;
+  const assignedBy = req.body?.assignedId;
+  const page = req.body?.page;
+  const query = {
+    isActive: true,
+    dueDate: { $gte: start, $lte: end },
+  };
+  if (userId) {
+    query.issueMember = userId;
+  }
+  if (assignedBy) {
+    query.assignedBy = assignedBy;
+  }
+  const assignedTo = req.body?.assignedTo;
+  if (assignedTo) {
+    query.issueMember = assignedTo;
+  }
+
+  const category = req.body?.category;
+  if (category) {
+    query.category = category;
+  }
+
+  const repeatType = req.body?.repeat;
+  if (repeatType) {
+    query['repeat.repeatType'] = repeatType;
+  }
+
+  await fetchTasks(res, query, 'No tasks found for last year', page);
 };
 
 exports.getTaskByDateById = async (req, res) => {
@@ -1072,6 +1255,59 @@ exports.customFilters = async (req, res) => {
   }
 
   await fetchTasks(res, query, 'No tasks found for the given date range', page);
+};
+
+const getTodayRange = () => {
+  const start = new Date();
+  start.setHours(0, 0, 0, 0);
+  const end = new Date();
+  end.setHours(23, 59, 59, 999);
+  return { start, end };
+};
+
+const getYesterdayRange = () => {
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  yesterday.setHours(0, 0, 0, 0);
+  const end = new Date(yesterday);
+  end.setHours(23, 59, 59, 999);
+  return { start: yesterday, end };
+};
+
+const getTomorrowRange = () => {
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  tomorrow.setHours(0, 0, 0, 0);
+  const end = new Date(tomorrow);
+  end.setHours(23, 59, 59, 999);
+  return { start: tomorrow, end };
+};
+
+const getWeekRange = (offset = 0) => {
+  const today = new Date();
+  const currentDay = today.getDay();
+  const start = new Date(today);
+  start.setDate(today.getDate() - currentDay + offset * 7);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(start);
+  end.setDate(start.getDate() + 6);
+  end.setHours(23, 59, 59, 999);
+  return { start, end };
+};
+
+const getMonthRange = (offset = 0) => {
+  const today = new Date();
+  const start = new Date(today.getFullYear(), today.getMonth() + offset, 1);
+  const end = new Date(today.getFullYear(), today.getMonth() + offset + 1, 0);
+  end.setHours(23, 59, 59, 999);
+  return { start, end };
+};
+
+const getYearRange = (offset = 0) => {
+  const now = new Date();
+  const start = new Date(now.getFullYear() + offset, 0, 1, 0, 0, 0, 0);
+  const end = new Date(now.getFullYear() + offset, 11, 31, 23, 59, 59, 999);
+  return { start, end };
 };
 
 exports.getAllTaskCount = async (req, res) => {
@@ -1202,59 +1438,6 @@ exports.getAllTaskCount = async (req, res) => {
     console.error('Server error:', error);
     res.status(500).send({ message: 'Error while fetching tasks' });
   }
-};
-
-const getTodayRange = () => {
-  const start = new Date();
-  start.setHours(0, 0, 0, 0);
-  const end = new Date();
-  end.setHours(23, 59, 59, 999);
-  return { start, end };
-};
-
-const getYesterdayRange = () => {
-  const yesterday = new Date();
-  yesterday.setDate(yesterday.getDate() - 1);
-  yesterday.setHours(0, 0, 0, 0);
-  const end = new Date(yesterday);
-  end.setHours(23, 59, 59, 999);
-  return { start: yesterday, end };
-};
-
-const getTomorrowRange = () => {
-  const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  tomorrow.setHours(0, 0, 0, 0);
-  const end = new Date(tomorrow);
-  end.setHours(23, 59, 59, 999);
-  return { start: tomorrow, end };
-};
-
-const getWeekRange = (offset = 0) => {
-  const today = new Date();
-  const currentDay = today.getDay();
-  const start = new Date(today);
-  start.setDate(today.getDate() - currentDay + offset * 7);
-  start.setHours(0, 0, 0, 0);
-  const end = new Date(start);
-  end.setDate(start.getDate() + 6);
-  end.setHours(23, 59, 59, 999);
-  return { start, end };
-};
-
-const getMonthRange = (offset = 0) => {
-  const today = new Date();
-  const start = new Date(today.getFullYear(), today.getMonth() + offset, 1);
-  const end = new Date(today.getFullYear(), today.getMonth() + offset + 1, 0);
-  end.setHours(23, 59, 59, 999);
-  return { start, end };
-};
-
-const getThisYearRange = () => {
-  const now = new Date();
-  const start = new Date(now.getFullYear(), 0, 1);
-  const end = new Date(now.getFullYear(), 11, 31, 23, 59, 59, 999);
-  return { start, end };
 };
 
 const fetchTasks = async (

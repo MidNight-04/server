@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express = require('express');
 const multer = require('multer');
 const AWS = require('aws-sdk');
@@ -9,8 +10,8 @@ const upload = multer({ dest: 'app/helper/' });
 
 // Configure AWS with your credentials
 AWS.config.update({
-  accessKeyId,
-  secretAccessKey,
+  accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+  secretAccessKey: process.env.AWS_SECRETACCESS_KEY,
   region: "us-east-1",
 });
 // Create an S3 instance

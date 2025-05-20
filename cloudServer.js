@@ -4,7 +4,7 @@ const multer = require('multer');
 const AWS = require('aws-sdk');
 const Jimp = require('jimp');
 const fs = require('fs');
-const { accessKeyId, secretAccessKey } = require('./app/config/auth.config');
+// const { accessKeyId, secretAccessKey } = require('./app/config/auth.config');
 const app = express();
 const upload = multer({ dest: 'app/helper/' });
 

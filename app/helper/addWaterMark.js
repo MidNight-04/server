@@ -1,3 +1,4 @@
+require('dotenv').config();
 const watermark = require("jimp-watermark");
 const PDFWatermark = require("pdf-watermark");
 const fs = require("fs");
@@ -5,8 +6,8 @@ var AWS = require("aws-sdk");
 const { accessKeyId, secretAccessKey } = require("../config/auth.config");
 
 AWS.config.update({
-  accessKeyId,
-  secretAccessKey,
+  accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+  secretAccessKey: process.env.AWS_SECRETACCESS_KEY,
 });
 
 var s3 = new AWS.S3();

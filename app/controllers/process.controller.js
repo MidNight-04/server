@@ -3,7 +3,6 @@ const db = require("../models");
 const Process = db.constructionsteps;
 const CheckList = db.checkList;
 const xlsx = require("xlsx");
-const axios = require("axios");
 
 exports.addConstructionStep = async (req, res) => {
   const { name, priority } = req.body;
@@ -14,21 +13,14 @@ exports.addConstructionStep = async (req, res) => {
       message: "Priority already exist",
     });
   } else {
-    //   console.log(req.files);
-    const response = await axios.get(req.files.points[0]?.location, {
-      responseType: "arraybuffer",
-    });
-    // Parse Excel file
-    const workbook = xlsx.read(response.data, { type: "buffer" });
-    // Access first sheet
+    const workbook = xlsx.readFile(req.files[0].path, { type: "buffer" });
     const sheetName = workbook.SheetNames[0];
     const sheet = workbook.Sheets[sheetName];
-
+    
     // Convert sheet to JSON array
     const data = xlsx.utils.sheet_to_json(sheet);
-
-    //   console.log("Excel Data:", data);
-    var arraySave = [];
+    
+    const arraySave = [];
     if (data.length > 0) {
       for (let i = 0; i < data?.length; i++) {
         arraySave.push({

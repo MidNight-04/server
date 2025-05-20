@@ -90,6 +90,9 @@ module.exports = function (app) {
   app.post('/api/task/getlastyeartaskbyid', controller.getLastYearTaskById);
   app.post('/api/task/getthisyeartaskbyid', controller.getThisYearTaskById);
   app.post('/api/task/customfilters', controller.customFilters);
-  app.get('/api/task/getalltaskcount', controller.getAllTaskCount);
-  app.post('/api/task/taskcountfilters', controller.taskCountfilters);
+  app.get('/api/task/getTask', controller.getTask);
+  app.post('/api/task/customdashboardfilters', controller.customDashboardFilters);
+  app.post('/api/task/addchecklist', controller.addChecklist);
+  app.post('/api/task/updatechecklistpoint', controller.updateChecklistPoint);
+  app.post('/api/task/deletechecklist', controller.deleteChecklist);
 };

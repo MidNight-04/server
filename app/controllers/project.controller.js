@@ -4,7 +4,10 @@ const Process = db.constructionsteps;
 const PaymentStages = db.paymentStages;
 const ProjectPaymentStages = db.projectPaymentStages;
 const ProjectPaymentDetails = db.projectPaymentDetails;
-const ProjectRole = db.projectroles;
+const Ticket = require('../models/ticketModel');
+const TaskComment = require('../models/taskCommentModel');
+const User = require('../models/user.model');
+const { default: mongoose } = require('mongoose');
 const axios = require('axios');
 const PaytmChecksum = require('../helper/PaytmChecksum');
 const PayProjects = db.projectPay;
@@ -12,13 +15,10 @@ const Task = db.task;
 const CheckList = db.checkList;
 const TeamMember = db.teammembers;
 const ProjectLog = db.projectlogs;
-const { ObjectId } = require('mongoose').Types;
 const uploadImage = require('../middlewares/uploadImage');
 const awsS3 = require('../middlewares/aws-s3');
-const { response } = require('express');
 const dayjs = require('dayjs');
 const { updateTaskAndReschedule } = require('../helper/schedule');
-// Make sure to import ObjectId
 
 let today = new Date();
 let yyyy = today.getFullYear();
@@ -156,10 +156,12 @@ exports.addProject = async (req, res) => {
         : { issueMember: uploadData[roleKey], referenceModel: 'teammembers' };
     };
 
+    const allChecklist = await CheckList.find();
+
     const taskIds = [];
 
-    // for (const step of projectStepArray) {
     for (let i = 0; i < projectStepArray.length; i++) {
+      console.log(projectStepArray[i].name);
       const tasks = {
         name: projectStepArray[i].name,
         priority: projectStepArray[i].priority,
@@ -170,20 +172,46 @@ exports.addProject = async (req, res) => {
           el.issueMember[0]
         );
 
+        let checklistDetails = {};
+        if (el.checkList === 'Yes') {
+          const check = allChecklist.find(checklist =>
+            checklist.name === el.checkListName
+            );
+
+          if (check) {
+          const checklistItems = check.checkList.map((item) => ({
+            heading: item.heading,
+            points: item.points.map((point) => ({
+              ...point,
+              isChecked: null,
+              image: '',
+            })),
+          }));
+
+          checklistDetails = {
+            id: check._id,
+            step: check.checkListStep,
+            name: check.name,
+            number: check.checkListNumber,
+            items: checklistItems,
+          };
+          }
+        };
+
         return {
           title: el.content,
+          branch: uploadData.branch,
           description: el.content,
+          stepName: projectStepArray[i].name,
           assignedBy: uploadData.assignedID,
-          duration: el.duration,
+          duration: el.duration !== '' ? el.duration : 0,
+          point:idx,
           dueDate:
             i === 0 && idx === 0 ? dayjs().add(el.duration, 'day') : null,
           siteID: uploadData.siteID,
           isActive: i === 0 && idx === 0,
-          activatedOn: i === 0 && idx === 0 ? new Date() : null,
-          checkList: {
-            checkList: el.checkList,
-            checkListStatus: el.checkListStatus,
-          },
+          assignedOn: i === 0 && idx === 0 ? new Date() : null,
+          checkList: checklistDetails,
           issueMember,
           referenceModel,
         };
@@ -205,30 +233,20 @@ exports.addProject = async (req, res) => {
       } catch (error) {
         console.error('Error inserting tasks:', error);
       }
-
-      // const savedTask = await Task.insertMany(tasksToSave);
-
-      // tasks.step.push(
-      //   ...savedTask.map(task => ({
-      //     taskId: task._id,
-      //     point: task.point,
-      //     duration: task.duration,
-      //   }))
-      // );
-      // taskIds.push(tasks);
     }
 
     const projectData = {
       project_name: uploadData.name,
       siteID: uploadData.siteID,
       project_location: uploadData.location,
+      branch: uploadData.branch,
       client: uploadData.client,
       floor: uploadData.floor,
       area: uploadData.area,
       cost: parseInt(uploadData.cost, 10),
       date: uploadData.date,
       duration: uploadData.duration,
-      project_manager: uploadData.manager,
+      // project_manager: uploadData.manager,
       sr_engineer: uploadData.sr_engineer,
       site_engineer: uploadData.engineer,
       contractor: uploadData.contractor,
@@ -250,7 +268,7 @@ exports.addProject = async (req, res) => {
       return res.status(204).json({
         message: `First create payment stage for ${uploadData.floor} floor`,
       });
-    }
+    };
 
     const stages = paymentStages.stages.map(item => ({
       ...item,
@@ -345,7 +363,7 @@ exports.getProjectByMember = (req, res) => {
   mongoose.set('strictPopulate', false);
   Project.find({
     $or: [
-      { project_manager: req.params.id },
+      // { project_manager: req.params.id },
       { site_engineer: req.params.id },
       { contractor: req.params.id },
       { accountant: req.params.id },
@@ -445,33 +463,38 @@ exports.getProjectByClientId = (req, res) => {
     });
 };
 
-exports.deleteProjectById = (req, res) => {
-  const id = req.params.id;
-  Project.deleteOne({ siteID: id }, async (err, dealer) => {
-    if (err) {
-      res
-        .status(500)
-        .send({ message: 'The requested data could not be fetched' });
-      return;
+exports.deleteProjectById = async (req, res) => {
+  try {
+    const id = req.params.id;
+    const project = await Project.findOne({ siteID: id });
+    if (!project) {
+      return res.status(404).send({ message: 'Project not found' });
     }
-    await ProjectPaymentStages.deleteMany({ siteID: id });
-    await Task.deleteMany({ siteID: id });
-    await ProjectPaymentDetails.deleteMany({ siteID: id });
-    await ProjectLog.deleteMany({ siteID: id });
+    const deleteOperations = [
+      Project.deleteOne({ siteID: id }),
+      ProjectPaymentStages.deleteMany({ siteID: id }),
+      Task.deleteMany({ siteID: id }),
+      ProjectPaymentDetails.deleteMany({ siteID: id }),
+      Ticket.deleteMany({ siteID: id }),
+      ProjectLog.deleteMany({ siteID: id }),
+    ];
+    await Promise.all(deleteOperations);
     res.status(200).send({
-      message: 'Record delete successfully',
+      message: 'Record deleted successfully',
       status: 200,
     });
-    return;
-  });
+  } catch (err) {
+    console.error(err);
+    res.status(500).send({ message: 'Error while deleting project' });
+  }
 };
+
 exports.addProjectMember = async (req, res) => {
   try {
     const { data } = req.body;
-    // console.log(data);
     const newData = {
       project_admin: data.project_admin,
-      project_manager: data.project_manager,
+      // project_manager: data.project_manager,
       site_engineer: data.site_engineer,
       sr_engineer: data.sr_engineer,
       accountant: data.accountant,
@@ -602,7 +625,8 @@ exports.getProjectById = (req, res) => {
   mongoose.set('strictPopulate', false);
   Project.find({ siteID: id })
     .populate({
-      path: 'project_admin project_manager site_engineer accountant sr_engineer sales operation architect',
+      // path: 'project_admin project_manager site_engineer accountant sr_engineer sales operation architect',
+      path: 'project_admin site_engineer accountant sr_engineer sales operation architect',
       model: 'teammembers',
       populate: {
         path: 'role',
@@ -1037,12 +1061,6 @@ exports.deleteImage = async (req, res) => {
   console.log(url);
   uploadImage.deleteFile(url).then(res => console.log(res));
 };
-
-const Ticket = require('../models/ticketModel');
-const TaskComment = require('../models/taskCommentModel');
-const { populate } = require('../models/user.model');
-const User = require('../models/user.model');
-const { default: mongoose } = require('mongoose');
 
 exports.clientQueryForProject = async (req, res) => {
   const {
@@ -1693,8 +1711,6 @@ exports.AddNewProjectPoint = async (req, res) => {
     activeUser,
   } = req.body;
 
-  console.log(forceMajeure);
-
   try {
     const findData = await Project.find({ siteID: id });
 
@@ -1942,8 +1958,7 @@ exports.AddNewProjectPoint = async (req, res) => {
 // };
 
 exports.DeleteProjectPoint = async (req, res) => {
-  const { id, name, point, content, checkList, checkListName, duration } =
-    req.body;
+  const { id, name, point, content, checkList, checkListName, duration } = req.body;
 
   try {
     const project = await Project.findOne({ siteID: id }).populate({
@@ -1960,7 +1975,7 @@ exports.DeleteProjectPoint = async (req, res) => {
     if (!project) {
       return res.status(404).json({ message: 'Project not found' });
     }
-
+    
     const projectStatus = project.project_status.find(
       status => status.name === name
     );
@@ -1988,8 +2003,9 @@ exports.DeleteProjectPoint = async (req, res) => {
       },
       $inc: { extension: -duration },
     };
+    console.log('updatePayload', name,point);
 
-    console.log(stepToRemove.taskId);
+    // console.log(stepToRemove.taskId);
 
     if (checkList) {
       updatePayload.$pull.inspections = {
@@ -2223,3 +2239,46 @@ exports.changeIssueMember = async (req, res) => {
     });
   }
 };
+
+exports.getAllSiteIds = async (req, res) => {
+  try {
+    const project = await Project.find({}).select(['siteID',"date"])
+    res.status(200).json({ status: 200, message: 'All site IDs fetched successfully', data: project })
+  } catch (error) {
+    console.error(error)
+    res.status(500).json({ status: 500, message: 'Error while getting all site IDs' })
+  }
+};
+
+// exports.addDailyUpdate = async (req, res) => {
+//   try {
+//     const {
+//       siteId,
+//       taskId = '67efe26e01b3fff2df3d0843',
+//       IssueMemberId,
+//       isWorking,
+//       workers,
+//       groupUpdate,
+//       materialAvailable,
+//     } = req.body;
+
+//  const project = await Project.findOne({ siteID: siteId });
+
+//  if(project){
+//   for (const step of project.project_status) {
+//     for(const stp of step.step){
+//       if(stp.taskId.toString() ===  taskId.toString()){
+//         console.log(stp)
+//       }
+//     }
+//   }
+// }
+
+//   } catch (error) {
+//     console.error(error);
+//     res.status(500).json({
+//       status: 500,
+//       message: 'Error while adding Daily Update',
+//     });
+//   }
+// };

@@ -10,7 +10,7 @@ module.exports = function (app) {
         next();
     });
 
-    // app.post("/api/project/checklist/add", controller.addCheckList);
+    app.post("/api/project/checklist/add", controller.addCheckList);
     app.get("/api/project/checklist/all", controller.getAllCheckList);
     app.put("/api/project/checklist/addpoint", controller.addNewPointById);
     app.put("/api/project/checklist/addextrapoint", controller.addNewExtraPointById);

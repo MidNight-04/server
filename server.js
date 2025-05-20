@@ -48,9 +48,7 @@ const dbConfig = require('./app/config/db.config');
 
 db.mongoose
   .connect(
-    // `mongodb+srv://${dbConfig.HOST}:${dbConfig.PORT}@${dbConfig.url}.mongodb.net/${dbConfig.DB}`,
-    // `mongodb+srv://${process.env.MONGODB_HOST}:${process.env.MONGODB_PASSWORD}@${process.env.MONGODB_URL}.mongodb.net/${process.env.MONGODB_DB}`,
-    `mongodb+srv://vikasraghavthikedaar:Qaz_7410@cluster0.enllx.mongodb.net/bldox`,
+    `mongodb+srv://${process.env.MONGODB_HOST}:${process.env.MONGODB_PASSWORD}@${process.env.MONGODB_URL}.mongodb.net/${process.env.MONGODB_DB}`,
     {
       useNewUrlParser: true,
       useUnifiedTopology: true,
@@ -77,11 +75,11 @@ cron.schedule('0 9 * * *', async () => {
 
 cron.schedule('*/30 * * * *', async () => {
   try {
-    const filter = {
-      isActive: true,
-      dueDate: { $lt: new Date() },
-      status: { $ne: 'Overdue' },
-    };
+  const filter = {
+    isActive: true,
+    dueDate: { $lt: new Date() },
+    status: { $nin: ['Overdue', 'Complete'] },
+  };
     const update = { $set: { status: 'Overdue' } };
     const options = { new: true };
     const tasks = await Task.updateMany(filter, update, options);

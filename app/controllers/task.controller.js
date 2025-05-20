@@ -2,6 +2,7 @@ const db = require('../models');
 const Task = db.task;
 const TaskComment = require('../models/taskCommentModel');
 const TeamMembers = require('../models/teamMember.model');
+const Checklist = require('../models/projectCheckList.model');
 const Project = db.projects;
 const mongoose = require('mongoose');
 const User = require('../models/user.model');
@@ -41,7 +42,7 @@ exports.addTask = (req, res) => {
     category: req.body.category,
     priority: req.body.priority,
     isActive: true,
-    activatedOn: new Date(),
+    assignedOn: new Date(),
     repeat: {
       repeatType: req.body.repeatType,
       repeatTime: req.body.repeatTime,
@@ -394,13 +395,13 @@ exports.getTaskByid = async (req, res) => {
         },
       ])
       .exec()
-      .then(task => {
+      .then((task) => {
         if (!task) {
           throw new Error('Task not found');
         }
         return task;
       })
-      .catch(error => {
+      .catch((error) => {
         throw error;
       });
     if (!task) {
@@ -455,9 +456,10 @@ exports.searchTask = async (req, res) => {
 
 exports.taskAddComment = async (req, res) => {
   try {
-    const { taskId, type, comment, userId } = req.body;
+    const { taskId, type, comment, userId, isWorking, material, workers } =
+      req.body;
     const profileFiles =
-      req.files?.image?.map(file =>
+      req.files?.image?.map((file) =>
         typeof file === 'string' ? file : file.location
       ) || [];
     const audioFile = req.files?.audio?.[0]?.location;
@@ -467,49 +469,10 @@ exports.taskAddComment = async (req, res) => {
       return res.status(404).send({ message: 'Task not found' });
     }
 
-    // if (type === 'Complete') {
-    //   const project = await Project.findOne({ siteID: task.siteID });
-    //   for (let i = 0; i < project.project_status.length; i++) {
-    //     const projectStatus = project.project_status[i];
-    //     for (let j = 0; j < projectStatus.step.length; j++) {
-    //       const step = projectStatus.step[j];
-    //       if (step.taskId.toString() === task._id.toString()) {
-    //         const nextStep = projectStatus.step[j + 1];
-    //         const nextNextStep = projectStatus.step[j + 2];
-    //         const today = new Date();
-    //         const tomorrow = new Date(today);
-    //         if (nextStep) {
-    //           const nt = await Task.findById(nextStep.taskId);
-    //           await Task.findByIdAndUpdate(
-    //             nextStep.taskId,
-    //             {
-    //               $set: {
-    //                 isActive: true,
-    //                 activatedOn: new Date(),
-    //                 dueDate: tomorrow.setDate(today.getDate() + nt.duration),
-    //               },
-    //             },
-    //             { new: true }
-    //           );
-    //         }
-    //         if (nextNextStep) {
-    //           const nnt = await Task.findById(nextNextStep.taskId);
-    //           await Task.findByIdAndUpdate(
-    //             nextNextStep.taskId,
-    //             {
-    //               $set: {
-    //                 isActive: true,
-    //                 activatedOn: new Date(),
-    //                 dueDate: tomorrow.setDate(today.getDate() + nnt.duration),
-    //               },
-    //             },
-    //             { new: true }
-    //           );
-    //         }
-    //       }
-    //     }
-    //   }
-    // }
+    const referenceModel = await getReferenceModel(userId);
+    if (!referenceModel) {
+      return res.status(404).send({ message: 'User not found' });
+    }
 
     if (type === 'Complete') {
       const project = await Project.findOne({ siteID: task.siteID });
@@ -525,7 +488,7 @@ exports.taskAddComment = async (req, res) => {
             if (step.taskId.toString() === task._id.toString()) {
               const today = new Date();
 
-              const activateTask = async taskId => {
+              const activateTask = async (taskId) => {
                 const taskToActivate = await Task.findById(taskId);
                 if (taskToActivate) {
                   const dueDate = new Date(today);
@@ -536,7 +499,7 @@ exports.taskAddComment = async (req, res) => {
                     {
                       $set: {
                         isActive: true,
-                        activatedOn: today,
+                        assignedOn: today,
                         dueDate: dueDate,
                       },
                     },
@@ -582,12 +545,10 @@ exports.taskAddComment = async (req, res) => {
       }
     }
 
-    const referenceModel = await getReferenceModel(userId);
-    if (!referenceModel) {
-      return res.status(404).send({ message: 'User not found' });
-    }
-
-    if (type === 'Complete' || type === 'In Progress') {
+    if (
+      type === 'Complete' ||
+      (task.status !== 'Overdue' && type === 'In Progress')
+    ) {
       task.status = type;
     }
 
@@ -600,6 +561,14 @@ exports.taskAddComment = async (req, res) => {
       images: profileFiles,
       audio: audioFile,
     };
+
+    if (type === 'In Progress') {
+      newComment.siteDetails = {
+        isWorking: isWorking === 'yes' ? true : false,
+        materialAvailable: material === 'yes' ? true : false,
+        workers,
+      };
+    }
 
     const data = await TaskComment.create(newComment);
     if (!data) {
@@ -617,7 +586,7 @@ exports.taskAddComment = async (req, res) => {
   }
 };
 
-const getReferenceModel = async userId => {
+const getReferenceModel = async (userId) => {
   const models = [
     { model: TeamMembers, referenceModel: 'teammembers' },
     { model: User, referenceModel: 'User' },
@@ -779,8 +748,8 @@ exports.reassignTask = async (req, res) => {
       { _id: taskId },
       {
         $set: {
-          'issueMember': newAssigneeId,
-          'referenceModel': 'teammembers',
+          issueMember: newAssigneeId,
+          referenceModel: 'teammembers',
           'reassigned.isReassigned': true,
           'reassigned.assignedTo': newAssigneeId,
           'reassigned.assignedBy': userId,
@@ -1221,7 +1190,7 @@ exports.getTaskByDateRangeById = async (req, res) => {
   }
   await fetchTasks(res, query, 'No tasks found for the given date range', page);
 };
-
+//add branch in task model and while creating task
 exports.customFilters = async (req, res) => {
   const userId = req.body?.userId;
   const page = req.body?.page;
@@ -1230,9 +1199,51 @@ exports.customFilters = async (req, res) => {
   const assignedTo = req.body?.assignedTo;
   const frequency = req.body?.frequency;
   const priority = req.body?.priority;
+  const filter = req.body?.filter;
+  const siteId = req.body?.siteId;
+  const withComments = req.body?.withComments;
+  const branch = req.body?.branch;
+
+  let start;
+  let end;
+
+  switch (filter) {
+    case 'Today':
+      ({ start, end } = getTodayRange());
+      break;
+    case 'Yesterday':
+      ({ start, end } = getYesterdayRange());
+      break;
+    case 'Tomorrow':
+      ({ start, end } = getTomorrowRange());
+      break;
+    case 'This Week':
+      ({ start, end } = getWeekRange());
+      break;
+    case 'Last Week':
+      ({ start, end } = getWeekRange(-7));
+      break;
+    case 'Next Week':
+      ({ start, end } = getWeekRange(7));
+      break;
+    case 'This Month':
+      ({ start, end } = getMonthRange());
+      break;
+    case 'Last Month':
+      ({ start, end } = getMonthRange(-1));
+      break;
+    case 'Next Month':
+      ({ start, end } = getMonthRange(1));
+      break;
+    case 'This Year':
+      ({ start, end } = getYearRange());
+    // default:
+    //   ({ start, end } = getWeekRange());
+  }
 
   const query = {
     isActive: true,
+    dueDate: { $gte: start, $lte: end },
   };
 
   if (userId) {
@@ -1248,13 +1259,22 @@ exports.customFilters = async (req, res) => {
     query.issueMember = assignedTo;
   }
   if (frequency) {
-    query.frequency = frequency;
+    query['repeat.repeatType'] = frequency;
   }
   if (priority) {
     query.priority = priority;
   }
+  if (withComments) {
+    query.comments = { $exists: true, $not: { $size: 0 } };
+  }
+  if (siteId) {
+    query.siteID = siteId;
+  }
+  if (branch) {
+    query.branch = branch;
+  }
 
-  await fetchTasks(res, query, 'No tasks found for the given date range', page);
+  await fetchTasks(res, query, page);
 };
 
 const getTodayRange = () => {
@@ -1305,160 +1325,34 @@ const getMonthRange = (offset = 0) => {
 
 const getYearRange = (offset = 0) => {
   const now = new Date();
-  const start = new Date(now.getFullYear() + offset, 0, 1, 0, 0, 0, 0);
-  const end = new Date(now.getFullYear() + offset, 11, 31, 23, 59, 59, 999);
+  const year = now.getFullYear() + offset;
+  const start = new Date(year, 3, 1, 0, 0, 0, 0); // April 1 of current year
+  const end = new Date(year + 1, 2, 31, 23, 59, 59, 999); // March 31 of next year
   return { start, end };
 };
 
-exports.getAllTaskCount = async (req, res) => {
+const fetchTasks = async (res, filters, page = 0, limit = 10) => {
   try {
-    const result = await Task.aggregate([
-      { $match: { isActive: true } },
-
-      // Add on-time and delayed classification
-      {
-        $addFields: {
-          completedOnTime: {
-            $cond: [
-              {
-                $and: [
-                  { $eq: ['$status', 'Complete'] },
-                  { $lte: ['$updatedOn', '$dueDate'] },
-                ],
-              },
-              true,
-              false,
-            ],
-          },
-          completedDelayed: {
-            $cond: [
-              {
-                $and: [
-                  { $eq: ['$status', 'Complete'] },
-                  { $gt: ['$updatedOn', '$dueDate'] },
-                ],
-              },
-              true,
-              false,
-            ],
-          },
-        },
-      },
-
-      // Lookup assignedBy user and their roles
-      {
-        $lookup: {
-          from: 'users',
-          localField: 'assignedBy',
-          foreignField: '_id',
-          as: 'assignedByUser',
-        },
-      },
-      {
-        $unwind: { path: '$assignedByUser', preserveNullAndEmptyArrays: true },
-      },
-      {
-        $lookup: {
-          from: 'roles',
-          localField: 'assignedByUser.roles',
-          foreignField: '_id',
-          as: 'assignedByUser.rolesDetails',
-        },
-      },
-      {
-        $addFields: {
-          assignedBy: {
-            $mergeObjects: [
-              '$assignedByUser',
-              { roles: '$assignedByUser.rolesDetails' },
-            ],
-          },
-        },
-      },
-
-      // Lookup issueMember user and their roles
-      {
-        $lookup: {
-          from: 'teammembers',
-          localField: 'issueMember',
-          foreignField: '_id',
-          as: 'issueMemberUser',
-        },
-      },
-      {
-        $unwind: { path: '$issueMemberUser', preserveNullAndEmptyArrays: true },
-      },
-      {
-        $lookup: {
-          from: 'roles',
-          localField: 'issueMemberUser.roles',
-          foreignField: '_id',
-          as: 'issueMemberUser.rolesDetails',
-        },
-      },
-      {
-        $addFields: {
-          issueMember: {
-            $mergeObjects: [
-              '$issueMemberUser',
-              { roles: '$issueMemberUser.rolesDetails' },
-            ],
-          },
-        },
-      },
-
-      // Now group by status using $facet
-      {
-        $facet: {
-          totalTasks: [{ $match: {} }],
-          overDueTasks: [{ $match: { status: 'Overdue' } }],
-          pendingTasks: [{ $match: { status: 'Pending' } }],
-          inProgressTasks: [{ $match: { status: 'In Progress' } }],
-          completeTasks: [{ $match: { status: 'Complete' } }],
-          completedOnTimeTasks: [{ $match: { completedOnTime: true } }],
-          completedDelayedTasks: [{ $match: { completedDelayed: true } }],
-        },
-      },
-    ]);
-
-    const data = result[0];
-
-    const taskGroups = {
-      totalTasks: data.totalTasks,
-      overDueTasks: data.overDueTasks,
-      pendingTasks: data.pendingTasks,
-      inProgressTasks: data.inProgressTasks,
-      completeTasks: data.completeTasks,
-      completedOnTimeTasks: data.completedOnTimeTasks,
-      completedDelayedTasks: data.completedDelayedTasks,
-    };
-
-    res.status(200).send({ taskGroups });
-  } catch (error) {
-    console.error('Server error:', error);
-    res.status(500).send({ message: 'Error while fetching tasks' });
-  }
-};
-
-const fetchTasks = async (
-  res,
-  filters,
-  notFoundMessage,
-  page = 0,
-  limit = 10
-) => {
-  try {
+    // const tasks = await Task.find(filters)
+    //   .sort({ dueDate: 1 })
+    //   .limit(limit)
+    //   .skip(limit * page)
+    //   .populate(['issueMember', 'assignedBy'])
+    //   .exec();
     const tasks = await Task.find(filters)
       .sort({ dueDate: 1 })
-      // .limit(limit)
-      // .skip(limit * page)
-      .populate(['issueMember', 'assignedBy'])
+      .populate([
+        'issueMember',
+        'assignedBy',
+        'comments',
+        {
+          path: 'comments',
+          populate: {
+            path: 'createdBy',
+          },
+        },
+      ])
       .exec();
-
-    // // If no tasks are found, send a response with 200 status and an empty array.
-    // if (tasks.length === 0) {
-    //   return res.status(200).send(tasks);
-    // }
 
     res.status(200).send(tasks);
   } catch (error) {
@@ -1467,11 +1361,207 @@ const fetchTasks = async (
   }
 };
 
-exports.taskCountfilters = async (req, res) => {
+exports.getTask = async (req, res) => {
+  const task = await Task.find({
+    isActive: true,
+    comments: { $exists: true, $not: { $size: 0 } },
+  }).populate([
+    'issueMember',
+    'assignedBy',
+    'comments',
+    {
+      path: 'comments',
+      populate: {
+        path: 'createdBy',
+      },
+    },
+  ]);
+  res.status(200).send(task);
+};
+
+exports.customDashboardFilters = async (req, res) => {
   try {
-    const { type } = req.body;
+    const userId = req.body?.userId;
+    const page = req.body?.page;
+    const selectedCategory = req.body?.selectedCategory;
+    const assignedBy = req.body?.assignedBy;
+    const assignedTo = req.body?.assignedTo;
+    const frequency = req.body?.frequency;
+    const priority = req.body?.priority;
+    const filter = req.body?.filter;
+    const siteId = req.body?.siteId;
+    const branch = req.body?.branch;
+
+    let start;
+    let end;
+
+    switch (filter) {
+      case 'Today':
+        ({ start, end } = getTodayRange());
+        break;
+      case 'Yesterday':
+        ({ start, end } = getYesterdayRange());
+        break;
+      case 'Tomorrow':
+        ({ start, end } = getTomorrowRange());
+        break;
+      case 'This Week':
+        ({ start, end } = getWeekRange());
+        break;
+      case 'Last Week':
+        ({ start, end } = getWeekRange(-7));
+        break;
+      case 'Next Week':
+        ({ start, end } = getWeekRange(7));
+        break;
+      case 'This Month':
+        ({ start, end } = getMonthRange());
+        break;
+      case 'Last Month':
+        ({ start, end } = getMonthRange(-1));
+        break;
+      case 'Next Month':
+        ({ start, end } = getMonthRange(1));
+        break;
+      case 'This Year':
+        ({ start, end } = getYearRange());
+      default:
+        ({ start, end } = getWeekRange());
+    }
+
+    const query = {
+      isActive: true,
+      // status:"In Progress",
+      dueDate: { $gte: start, $lte: end },
+    };
+
+    if (userId) {
+      query.issueMember = userId;
+    }
+    if (selectedCategory) {
+      query.category = selectedCategory;
+    }
+    if (assignedBy) {
+      query.assignedBy = assignedBy;
+    }
+    if (assignedTo) {
+      query.issueMember = assignedTo;
+    }
+    if (frequency) {
+      query['repeat.repeatType'] = frequency;
+    }
+    if (priority) {
+      query.priority = priority;
+    }
+    // if (withComments) {
+    //   query.comments = { $exists: true, $not: { $size: 0 } };
+    // }
+    if (siteId) {
+      query.siteID = siteId;
+    }
+
+      if (branch) {
+    query.branch = branch;
+  }
+
+    await fetchTasks(res, query, page);
   } catch (error) {
     console.error('Server error:', error);
     res.status(500).send({ message: 'Error while fetching tasks' });
+  }
+};
+
+exports.addChecklist = async (req, res) => {
+  try {
+    const { taskId, checklistId } = req.body;
+    const checklist = await Checklist.findById(checklistId);
+    if (!checklist) {
+      return res.status(404).send({ message: 'Checklist not found' });
+    }
+    const task = await Task.findById(taskId);
+    if (!task) {
+      return res.status(404).send({ message: 'Task not found' });
+    }
+
+    const checklistItems = checklist.checkList.map((item) => ({
+      heading: item.heading,
+      points: item.points.map((point) => ({
+        ...point,
+        isChecked: null,
+        image: '',
+      })),
+    }));
+
+    const checklistDetails = {
+      id: checklist._id,
+      step: checklist.checkListStep,
+      name: checklist.name,
+      number: checklist.checkListNumber,
+      items: checklistItems,
+    };
+
+    if (task.checkList.id === checklist._id) {
+      return res
+        .status(400)
+        .send({ message: 'Checklist already assigned to task' });
+    }
+    if (task.checkList.id !== checklist._id) {
+      await Task.updateOne(
+        { _id: taskId },
+        {
+          $set: {
+            checkList: checklistDetails,
+          },
+        }
+      );
+      res.send({ message: 'Checklist Added successfully' });
+    }
+  } catch (error) {
+    console.error('Error adding checklist:', error);
+    res.status(500).send({ message: 'Error adding checklist' });
+  }
+};
+
+exports.updateChecklistPoint = async (req, res) => {
+  try {
+    const { taskId, updatedChecklist } = req.body;
+    const task = await Task.findById(taskId);
+    if (!task) {
+      return res.status(404).send({ message: 'Task not found' });
+    }
+    await Task.updateOne(
+      { _id: taskId },
+      {
+        $set: {
+          checkList: updatedChecklist,
+        },
+      }
+    );
+    res.send({ message: 'Checklist updated successfully' });
+  } catch (error) {
+    console.error('Error updating checklist:', error);
+    res.status(500).send({ message: 'Error updating checklist' });
+  }
+};
+
+exports.deleteChecklist = async (req, res) => {
+  try {
+    const { taskId } = req.body;
+    const task = await Task.findById(taskId);
+    if (!task) {
+      return res.status(404).send({ message: 'Task not found' });
+    }
+    await Task.updateOne(
+      { _id: taskId },
+      {
+        $set: {
+          checkList: {},
+        },
+      }
+    );
+    res.send({ message: 'Checklist deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting checklist:', error);
+    res.status(500).send({ message: 'Error deleting checklist' });
   }
 };

@@ -6,9 +6,16 @@ const taskSchema = new Schema(
       type: String,
       trim: true,
     },
+    branch:{
+      type: String,
+      trim: true,
+    },
     description: {
       type: String,
       trim: true,
+    },
+    stepName:{
+      type:String,
     },
     duration: { type: Number, default: 1 },
     point: {
@@ -46,17 +53,8 @@ const taskSchema = new Schema(
       default: 'Project',
     },
     checkList: {
-      isCheckList: {
-        type: Boolean,
-        default: false,
-      },
-      checkListName: {
-        type: String,
-        trim: true,
-      },
-      checkListPoint: {
-        type: Array,
-      },
+      type: Object,   
+      default: {}
     },
     priority: {
       type: String,
@@ -88,8 +86,7 @@ const taskSchema = new Schema(
       type: Boolean,
       default: false,
     },
-    activatedOn: {
-      //activated on Date
+    assignedOn: {
       type: Date,
     },
     image: [

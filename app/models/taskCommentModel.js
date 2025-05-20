@@ -20,6 +20,17 @@ const taskCommentSchema = new Schema(
       ],
       required: true,
     },
+    siteDetails: {
+      isWorking: {
+        type: Boolean,
+      },
+      workers: {
+        type: Number,
+      },
+      materialAvailable: {
+        type: Boolean,
+      },
+    },
     comment: {
       type: String,
       required: true,

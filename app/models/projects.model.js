@@ -1,12 +1,14 @@
 const mongoose = require('mongoose');
 
-const projectModel = mongoose.model(
-  'projects',
-  new mongoose.Schema(
+const projectSchema = new mongoose.Schema(
     {
       project_name: String,
       siteID: String,
       project_location: String,
+      branch: {
+      type: String,
+      trim: true,
+      },
       client: Object,
       floor: String,
       area: String,
@@ -19,7 +21,7 @@ const projectModel = mongoose.model(
       },
       forceMajeure: [],
       project_admin: [],
-      project_manager: [],
+      // project_manager: [],
       sr_engineer: [],
       site_engineer: [],
       architect: [],
@@ -54,6 +56,42 @@ const projectModel = mongoose.model(
     },
     { timestamps: true }
   )
-);
 
-module.exports = projectModel;
+projectSchema.methods.deleteProjectById = async function(id) {
+  try {
+    const project = await this.model('projects').findOne({ _id: id });
+    if (!project) {
+      throw new Error(`Project with id ${id} not found`);
+    }
+    await Promise.all([
+      this.model('tasks').deleteMany({ siteID: project.siteID }),
+      this.model('paymentStages').deleteOne({ siteID: project.siteID }),
+      this.model('projectpaymentdetails').deleteMany({ siteID: project.siteID }),
+      project.remove()
+    ]);
+  } catch (error) {
+    console.error(error);
+    throw error;
+  }
+}
+
+// projectSchema.methods.deleteProjectById = async function(id) {
+//   try {
+//     const project = await this.model('projects').findOne({ _id: id });
+//     if (project) {
+//       await Promise.all([
+//         this.model('tasks').deleteMany({ siteID: project.siteID }),
+//         this.model('paymentStages').deleteOne({ siteID: project.siteID }),
+//         this.model('projectpaymentdetails').deleteMany({siteID: project.siteID})
+//       ]);
+//       await project.remove();
+//     }
+//   } catch (error) {
+//     console.error(error);
+//     throw error;
+//   }
+// }
+
+const Project = mongoose.model('projects', projectSchema);
+
+module.exports = Project;

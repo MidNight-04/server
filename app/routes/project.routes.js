@@ -83,4 +83,5 @@ module.exports = function (app) {
     controller.TicketUpdateByMember
   );
   app.post('/api/project/changeissuemember', controller.changeIssueMember);
+  app.get('/api/project/getallsiteids', controller.getAllSiteIds);
 };

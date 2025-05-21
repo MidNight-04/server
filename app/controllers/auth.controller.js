@@ -19,7 +19,7 @@ const Order = db.order;
 const axios = require('axios');
 const nodemailer = require('nodemailer');
 const otpGenerator = require('otp-generator');
-
+const awsS3 = require('../middlewares/aws-s3');
 var jwt = require('jsonwebtoken');
 var bcrypt = require('bcryptjs');
 const Brands = require('../models/brands.model');
@@ -108,15 +108,25 @@ exports.signup = (req, res) => {
   }
 };
 exports.updateProfile = async (req, res) => {
-  console.log('Upcoming data-', req.body);
 
-  let profileFiles = [];
+  let images = [];
 
-  if (req.files.profileImage) {
-    for (let i = 0; i < req.files.profileImage.length; i++) {
-      profileFiles.push(req.files.profileImage[i].location);
-    }
-  }
+  // if (req.files.image) {
+  //   for (let i = 0; i < req.files.profileImage.length; i++) {
+  //     profileFiles.push(req.files.profileImage[i].location);
+  //   }
+  // }
+
+  if (req.files?.image?.length > 0) {
+     await awsS3.uploadFiles(req.files?.image, `profile_photo`).then(async (data) => {
+     const profileFiles = data.map((file) => {
+       const url = 'https://thekedar-bucket.s3.us-east-1.amazonaws.com/' + file.s3key
+       return url;
+     })
+     images.push(...profileFiles);
+    });
+   }
+
   const findData = await User.find({ _id: req.body.id });
   if (findData?.length > 0) {
     let query = {
@@ -131,9 +141,9 @@ exports.updateProfile = async (req, res) => {
       zipCode: req.body.zipCode,
     };
 
-    if (profileFiles.length > 0) {
-      query['profileImage'] = profileFiles;
-    }
+    if (images.length > 0) {
+      query['profileImage'] = images;
+    };
 
     User.findByIdAndUpdate(req.body.id, query, (err, updated) => {
       if (err) {

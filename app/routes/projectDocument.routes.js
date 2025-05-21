@@ -1,5 +1,6 @@
 const controller = require("../controllers/projectDocument.controller");
 const { uploadImage } = require('../middlewares/uploadImage');
+const fileUploader = require('../middlewares/fileUploader');
 module.exports = function (app) {
     app.use(function (req, res, next) {
         res.header(
@@ -8,11 +9,10 @@ module.exports = function (app) {
         );
         next();
     });
-    app.post("/api/admin/project-document/add", uploadImage.fields([
-            {
-            name: 'document', maxCount: 10
-        }
-        ]), controller.addProjectDocument);
+    app.post("/api/admin/project-document/add",
+        // uploadImage.fields([{name: 'document', maxCount: 10 }]),
+        fileUploader,
+        controller.addProjectDocument);
     // app.post("/api/admin/category/update", uploadImage.fields([
     //         {
     //         name: 'categoryImage', maxCount: 10

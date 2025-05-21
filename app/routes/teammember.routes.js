@@ -1,5 +1,6 @@
 const controller = require('../controllers/teamMember.controller');
 const { uploadImage } = require('../middlewares/uploadImage');
+const fileUploader = require('../middlewares/fileUploader');
 
 module.exports = function (app) {
   app.use(function (req, res, next) {
@@ -13,12 +14,13 @@ module.exports = function (app) {
   app.put('/api/teammember/updatebyid', controller.updateMemberById);
   app.post(
     '/api/teammember/update-profile/:id',
-    uploadImage.fields([
-      {
-        name: 'profileImage',
-        maxCount: 10,
-      },
-    ]),
+    // uploadImage.fields([
+    //   {
+    //     name: 'profileImage',
+    //     maxCount: 10,
+    //   },
+    // ]),
+    fileUploader,
     controller.updateMemberProfileById
   );
   app.delete('/api/teammember/delete/:id', controller.deleteMemberById);

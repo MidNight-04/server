@@ -99,11 +99,7 @@ const taskSchema = new Schema(
         type: String,
       },
     ],
-    audio: [
-      {
-        type: String,
-      },
-    ],
+    audio: { type: String },
     reminder: [],
     status: {
       type: String,

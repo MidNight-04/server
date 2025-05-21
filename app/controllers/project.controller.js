@@ -691,13 +691,24 @@ exports.updateProjectTaskByMember = async (req, res) => {
   const { id, name, point, content, status, date, activeUser, userName } =
     req.body;
   // console.log(req.body);
-  let profileFiles = [];
+  let images = [];
+
+  // if (req.files?.image?.length > 0) {
+  //   for (let i = 0; i < req.files.image?.length; i++) {
+  //     profileFiles.push(req.files.image[i].location);
+  //   }
+  // }
 
   if (req.files?.image?.length > 0) {
-    for (let i = 0; i < req.files.image?.length; i++) {
-      profileFiles.push(req.files.image[i].location);
-    }
-  }
+     await awsS3.uploadFiles(req.files?.image, `project_update`).then(async (data) => {
+     const profileFiles = data.map((file) => {
+       const url = 'https://thekedar-bucket.s3.us-east-1.amazonaws.com/' + file.s3key
+       return url;
+     })
+     images.push(...profileFiles);
+    });
+   }
+
   try {
     // Find the project document by _id
     const project = await Project.findOne({ siteID: id });
@@ -721,7 +732,7 @@ exports.updateProjectTaskByMember = async (req, res) => {
           // updateStep.finalStatus[0].image = profileFiles;
           // updateStep.finalStatus[0].date = date;
           updateStep.dailyTask?.push({
-            image: profileFiles,
+            image: images,
             status: status,
             date: date,
           });
@@ -782,21 +793,35 @@ exports.updateProjectStatusById = async (req, res) => {
     } = req.body;
     let profileFiles = [];
 
+    // if (req.files?.image?.length > 0) {
+    //   for (let i = 0; i < req.files.image?.length; i++) {
+    //     if (typeof req.files.image[i] === 'string') {
+    //       profileFiles.push({
+    //         image: req.files.image[i],
+    //         isApproved: false,
+    //       });
+    //     } else {
+    //       profileFiles.push({
+    //         url: req.files.image[i].location,
+    //         isApproved: false,
+    //       });
+    //     }
+    //   }
+    // }
+
     if (req.files?.image?.length > 0) {
-      for (let i = 0; i < req.files.image?.length; i++) {
-        if (typeof req.files.image[i] === 'string') {
-          profileFiles.push({
-            image: req.files.image[i],
-            isApproved: false,
-          });
-        } else {
-          profileFiles.push({
-            url: req.files.image[i].location,
-            isApproved: false,
-          });
-        }
-      }
-    }
+     await awsS3.uploadFiles(req.files?.image, `project_update`).then(async (data) => {
+     const images = data.map((file) => {
+       const url = 'https://thekedar-bucket.s3.us-east-1.amazonaws.com/' + file.s3key
+       const obj = {
+        url:url,
+        isApproved:false
+       };
+       return obj;
+     })
+     profileFiles.push(...images);
+    });
+   }
 
     const logData = {
       log: `<span style="color: black;">${content}</span> ->> <em style="color: #fec20e;">${status}</em>`,
@@ -1090,11 +1115,22 @@ exports.clientQueryForProject = async (req, res) => {
     now.getMilliseconds()
   );
 
-  if (req.files.image) {
-    for (let i = 0; i < req.files.image.length; i++) {
-      profileFiles.push(req.files.image[i].location);
-    }
-  }
+  // if (req.files.image) {
+  //   for (let i = 0; i < req.files.image.length; i++) {
+  //     profileFiles.push(req.files.image[i].location);
+  //   }
+  // }
+
+    if (req.files?.image?.length > 0) {
+     await awsS3.uploadFiles(req.files?.image, `client_query`).then(async (data) => {
+     const images = data.map((file) => {
+       const url = 'https://thekedar-bucket.s3.us-east-1.amazonaws.com/' + file.s3key
+       return url;
+     })
+     profileFiles.push(...images);
+    });
+   }
+
   try {
     const project = await Project.findOne({ siteID: id });
     if (!project) {
@@ -1775,7 +1811,6 @@ exports.AddNewProjectPoint = async (req, res) => {
     }
 
     let updateResult;
-    console.log(forceMajeure);
 
     if (forceMajeure.isForceMajeure) {
       updateResult = await Project.updateOne(
@@ -2114,11 +2149,20 @@ exports.TicketUpdateByMember = async (req, res) => {
   try {
     let profileFiles = [];
     const { userId, ticketId, type, comment } = req.body;
-    if (req.files && req.files.image) {
-      for (let i = 0; i < req.files.image.length; i++) {
-        profileFiles.push(req.files.image[i].location);
-      }
-    }
+    // if (req.files && req.files.image) {
+    //   for (let i = 0; i < req.files.image.length; i++) {
+    //     profileFiles.push(req.files.image[i].location);
+    //   }
+    // }
+    if (req.files?.image?.length > 0) {
+     await awsS3.uploadFiles(req.files?.image, `client_query`).then(async (data) => {
+     const images = data.map((file) => {
+       const url = 'https://thekedar-bucket.s3.us-east-1.amazonaws.com/' + file.s3key
+       return url;
+     })
+     profileFiles.push(...images);
+    });
+   }
     try {
       const ticket = await Ticket.findById(ticketId);
       if (!ticket) {

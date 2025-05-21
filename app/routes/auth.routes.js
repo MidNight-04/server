@@ -1,6 +1,7 @@
 const { verifySignUp } = require("../middlewares");
 const controller = require("../controllers/auth.controller");
 const { uploadImage } = require("../middlewares/uploadImage");
+const uploader = require("../middlewares/fileUploader");
 
 module.exports = function (app) {
     app.use(function (req, res, next) {
@@ -22,11 +23,12 @@ module.exports = function (app) {
 
     app.post(
         "/api/user/update-profile",
-        uploadImage.fields([
-            {
-                name: 'profileImage', maxCount: 10
-            }
-        ]),
+        // uploadImage.fields([
+        //     {
+        //         name: 'profileImage', maxCount: 10
+        //     }
+        // ]),
+        uploader,
         controller.updateProfile
     );
     app.post("/api/auth/signin-otp", controller.signinOtp);

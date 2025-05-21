@@ -1,5 +1,6 @@
 const controller = require('../controllers/task.controller');
 const { uploadImage } = require('../middlewares/uploadImage');
+const uploader = require("../middlewares/fileUploader");
 
 module.exports = function (app) {
   app.use(function (req, res, next) {
@@ -9,39 +10,42 @@ module.exports = function (app) {
 
   app.post(
     '/api/task/add',
-    uploadImage.fields([
-      {
-        name: 'file',
-        maxCount: 10,
-      },
-      {
-        name: 'audio',
-        maxCount: 10,
-      },
-    ]),
+    // uploadImage.fields([
+    //   {
+    //     name: 'file',
+    //     maxCount: 10,
+    //   },
+    //   {
+    //     name: 'audio',
+    //     maxCount: 10,
+    //   },
+    // ]),
+    uploader,
     controller.addTask
   );
   app.post('/api/task/getall', controller.getAllTask);
   app.post('/api/task/employeeID/:id', controller.getTaskByEmployeeId);
   app.put(
     '/api/task/update/member',
-    uploadImage.fields([
-      {
-        name: 'image',
-        maxCount: 20,
-      },
-    ]),
+    // uploadImage.fields([
+    //   {
+    //     name: 'image',
+    //     maxCount: 20,
+    //   },
+    // ]),
+   uploader,
     controller.taskUpdateByMember
   );
 
   app.put(
     '/api/task/update/admin',
-    uploadImage.fields([
-      {
-        name: 'image',
-        maxCount: 20,
-      },
-    ]),
+    // uploadImage.fields([
+    //   {
+    //     name: 'image',
+    //     maxCount: 20,
+    //   },
+    // ]),
+    uploader,
     controller.taskUpdateByAdmin
   );
   app.delete('/api/task/delete/:id', controller.deleteTaskByAdmin);
@@ -61,22 +65,24 @@ module.exports = function (app) {
   app.post('/api/task/search/:searchTerm', controller.searchTask);
   app.post(
     '/api/task/taskaddcomment',
-    uploadImage.fields([
-      {
-        name: 'image',
-        maxCount: 20,
-      },
-      {
-        name: 'audio',
-        maxCount: 1,
-      },
-    ]),
+    // uploadImage.fields([
+    //   {
+    //     name: 'image',
+    //     maxCount: 20,
+    //   },
+    //   {
+    //     name: 'audio',
+    //     maxCount: 1,
+    //   },
+    // ]),
+    uploader,
     controller.taskAddComment
   );
   app.post('/api/task/edittask', controller.editTask);
   app.post('/api/task/deletetaskcomment', controller.deleteTaskComment);
   app.post('/api/task/approvetaskcomment', controller.approveTaskComment);
   app.post('/api/task/reassigntask', controller.reassignTask);
+  app.post('/api/task/deletetaskcommentimage', controller.deleteTaskCommentImage);
 
   app.post('/api/task/gettodaytaskbyid', controller.getTodayTaskById);
   app.post('/api/task/getyesterdaytaskbyid', controller.getYesterdayTaskById);

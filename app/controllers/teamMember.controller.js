@@ -8,6 +8,7 @@ const nodemailer = require('nodemailer');
 var jwt = require('jsonwebtoken');
 var bcrypt = require('bcryptjs');
 const { default: mongoose } = require('mongoose');
+const awsS3 = require('../middlewares/aws-s3');
 
 exports.signinOtp = (req, res) => {
   if (!helperFunction.checkEmailPhone(req.body.username)) {
@@ -302,11 +303,22 @@ exports.updateMemberProfileById = async (req, res) => {
 
   let profileFiles = [];
 
-  if (req.files.profileImage) {
-    for (let i = 0; i < req.files.profileImage.length; i++) {
-      profileFiles.push(req.files.profileImage[i].location);
-    }
+  // if (req.files.profileImage) {
+  //   for (let i = 0; i < req.files.profileImage.length; i++) {
+  //     profileFiles.push(req.files.profileImage[i].location);
+  //   }
+  // }
+
+  if (req.files?.image?.length > 0) {
+     await awsS3.uploadFiles(req.files?.image, `profile_photo`).then(async (data) => {
+     const images = data.map((file) => {
+       const url = 'https://thekedar-bucket.s3.us-east-1.amazonaws.com/' + file.s3key
+       return url;
+     })
+     profileFiles.push(...images);
+    });
   }
+
   const findData = await Member.find({ _id: req.params.id });
   if (findData?.length > 0) {
     let query = {

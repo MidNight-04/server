@@ -2,20 +2,30 @@ const config = require("../config/auth.config");
 const db = require("../models");
 const ProjectLog = db.projectlogs;
 const ProjectDocuments = db.projectDocument;
+const awsS3 = require('../middlewares/aws-s3');
+
 // const fetch = require('node-fetch');
 const fetch = (...args) =>
   import("node-fetch").then(({ default: fetch }) => fetch(...args));
 
-exports.addProjectDocument = (req, res) => {
+exports.addProjectDocument = async (req, res) => {
   let documentFiles = [];
-  console.log(req.files);
-  console.log(req.body);
 
-  if (req.files.document) {
-    for (let i = 0; i < req.files.document.length; i++) {
-      documentFiles.push(req.files.document[i].location);
-    }
-  }
+  // if (req.files.document) {
+  //   for (let i = 0; i < req.files.document.length; i++) {
+  //     documentFiles.push(req.files.document[i].location);
+  //   }
+  // }
+
+  if (req.files?.document?.length > 0) {
+     await awsS3.uploadFiles(req.files?.document, `project_doc`).then(async (data) => {
+     const images = data.map((file) => {
+       const url = 'https://thekedar-bucket.s3.us-east-1.amazonaws.com/' + file.s3key
+       return url;
+     })
+     documentFiles.push(...images);
+    });
+   }
 
   const log = {
     log: "Project document upload by admin",

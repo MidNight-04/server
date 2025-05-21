@@ -5,6 +5,7 @@ const config = require("../config/auth.config");
 const helperFunction = require("../middlewares/helper");
 const otpGenerator = require("otp-generator");
 const nodemailer = require("nodemailer");
+const awsS3 = require('../middlewares/aws-s3');
 var jwt = require("jsonwebtoken");
 
 exports.signinOtp = (req, res) => {
@@ -251,13 +252,24 @@ exports.addClient = async (req, res) => {
 exports.updateClientProfileById = async (req, res) => {
   // console.log("Upcoming data-", req.body);
 
-  let profileFiles = [];
+  let images = [];
 
-  if (req.files.profileImage) {
-    for (let i = 0; i < req.files.profileImage.length; i++) {
-      profileFiles.push(req.files.profileImage[i].location);
-    }
+  // if (req.files.profileImage) {
+  //   for (let i = 0; i < req.files.profileImage.length; i++) {
+  //     profileFiles.push(req.files.profileImage[i].location);
+  //   }
+  // }
+
+  if (req.files?.image?.length > 0) {
+    await awsS3.uploadFiles(req.files?.image, `profile_photo`).then(async (data) => {
+    const profileFiles = data.map((file) => {
+      const url = 'https://thekedar-bucket.s3.us-east-1.amazonaws.com/' + file.s3key
+      return url;
+     })
+     images.push(...profileFiles);
+    });
   }
+
   const findData = await Client.find({ _id: req.params.id });
   if (findData?.length > 0) {
     let query = {
@@ -267,8 +279,8 @@ exports.updateClientProfileById = async (req, res) => {
       address: req.body.address,
     };
 
-    if (profileFiles.length > 0) {
-      query["profileImage"] = profileFiles;
+    if (images.length > 0) {
+      query["profileImage"] = images;
     }
     // console.log(query)
     const updateProfile = await Client.updateOne(

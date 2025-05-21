@@ -21,18 +21,47 @@ let formatedtoday = yyyy + '-' + mm + '-' + dd;
 
 const limit = 10;
 
-exports.addTask = (req, res) => {
-  let files = [];
-  let audios = [];
-  if (req.files.file) {
-    for (let i = 0; i < req.files.file.length; i++) {
-      files.push(req.files.file[i].location);
-    }
+exports.addTask = async (req, res) => {
+  // let files = [];
+  // let audios = [];
+  // if (req.files.file) {
+  //   for (let i = 0; i < req.files.file.length; i++) {
+  //     files.push(req.files.file[i].location);
+  //   }
+  // }
+  // if (req.files.audio) {
+  //   for (let i = 0; i < req.files.audio.length; i++) {
+  //     audios.push(req.files.audio[i].location);
+  //   }
+  // }
+  const images = [];
+  const files = [];
+  let audioFile;
+
+  if (req.files?.image?.length > 0) {
+    await awsS3.uploadFiles(req.files?.image, `task`).then(async (data) => {
+    const profileFiles = data.map((file) => {
+      const url = 'https://thekedar-bucket.s3.us-east-1.amazonaws.com/' + file.s3key
+      return url;
+    })
+    images.push(...profileFiles);
+   });
   }
-  if (req.files.audio) {
-    for (let i = 0; i < req.files.audio.length; i++) {
-      audios.push(req.files.audio[i].location);
-    }
+
+  if (req.files?.docs?.length > 0) {
+    await awsS3.uploadFiles(req.files?.docs, `task`).then(async (data) => {
+    const documents = data.map((file) => {
+      const url = 'https://thekedar-bucket.s3.us-east-1.amazonaws.com/' + file.s3key
+      return url;
+    })
+    files.push(...documents);
+   });
+  }
+
+   if (req.files?.audio) {
+   await awsS3.uploadFiles(req.files?.audio, `task`).then(async (data) => {
+    audioFile = 'https://thekedar-bucket.s3.us-east-1.amazonaws.com/' + data[0].s3key;
+   });
   }
   const task = {
     title: req.body.title,
@@ -49,7 +78,8 @@ exports.addTask = (req, res) => {
     },
     dueDate: req.body.dueDate,
     file: files,
-    audio: audios,
+    image: images,
+    audio: audioFile,
     reminder: JSON.parse(req.body.reminder),
     referenceModel: 'teammembers',
   };
@@ -454,15 +484,46 @@ exports.searchTask = async (req, res) => {
   }
 };
 
+
+
 exports.taskAddComment = async (req, res) => {
   try {
-    const { taskId, type, comment, userId, isWorking, material, workers } =
-      req.body;
-    const profileFiles =
-      req.files?.image?.map((file) =>
-        typeof file === 'string' ? file : file.location
-      ) || [];
-    const audioFile = req.files?.audio?.[0]?.location;
+    const { taskId, type, comment, userId, isWorking, material, workers } = req.body;
+    // const profileFiles =
+    //   req.files?.image?.map((file) =>
+    //     typeof file === 'string' ? file : file.location
+    //   ) || [];
+    // const audioFile = req.files?.audio?.[0]?.location;
+
+  const images = [];
+  const files = [];
+  let audioFile;
+
+  if (req.files?.image?.length > 0) {
+    await awsS3.uploadFiles(req.files?.image, `taskComments`).then(async (data) => {
+    const profileFiles = data.map((file) => {
+      const url = 'https://thekedar-bucket.s3.us-east-1.amazonaws.com/' + file.s3key
+      return url;
+    })
+    images.push(...profileFiles);
+   });
+  }
+
+  if (req.files?.docs?.length > 0) {
+    await awsS3.uploadFiles(req.files?.docs, `taskComments`).then(async (data) => {
+    const documents = data.map((file) => {
+      const url = 'https://thekedar-bucket.s3.us-east-1.amazonaws.com/' + file.s3key
+      return url;
+    })
+    files.push(...documents);
+   });
+  }
+
+   if (req.files?.audio) {
+   await awsS3.uploadFiles(req.files?.audio, `taskComments`).then(async (data) => {
+    audioFile = 'https://thekedar-bucket.s3.us-east-1.amazonaws.com/' + data[0].s3key;
+   });
+  }
 
     const task = await Task.findById(taskId);
     if (!task) {
@@ -545,10 +606,7 @@ exports.taskAddComment = async (req, res) => {
       }
     }
 
-    if (
-      type === 'Complete' ||
-      (task.status !== 'Overdue' && type === 'In Progress')
-    ) {
+    if ( type === 'Complete' || (task.status !== 'Overdue' && type === 'In Progress') ) {
       task.status = type;
     }
 
@@ -558,8 +616,9 @@ exports.taskAddComment = async (req, res) => {
       createdBy: userId,
       referenceModel,
       taskId,
-      images: profileFiles,
+      images: images,
       audio: audioFile,
+      file: files,
     };
 
     if (type === 'In Progress') {

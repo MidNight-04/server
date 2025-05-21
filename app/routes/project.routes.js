@@ -22,33 +22,36 @@ module.exports = function (app) {
   app.post('/api/project/deleteImage', controller.deleteImage);
   app.put(
     '/api/project/updatetaskbymember',
-    uploadImage.fields([
-      {
-        name: 'image',
-        maxCount: 20,
-      },
-    ]),
+    // uploadImage.fields([
+    //   {
+    //     name: 'image',
+    //     maxCount: 20,
+    //   },
+    // ]),
+    fileUploader,
     controller.updateProjectTaskByMember
   );
   app.put('/api/project/updateimagestatusbyid', controller.updateImageStatus);
   app.put(
     '/api/project/updatestatusbyid',
-    uploadImage.fields([
-      {
-        name: 'image',
-        maxCount: 20,
-      },
-    ]),
+    // uploadImage.fields([
+    //   {
+    //     name: 'image',
+    //     maxCount: 20,
+    //   },
+    // ]),
+    fileUploader,
     controller.updateProjectStatusById
   );
   app.put(
     '/api/project/client-query',
-    uploadImage.fields([
-      {
-        name: 'image',
-        maxCount: 20,
-      },
-    ]),
+    // uploadImage.fields([
+    //   {
+    //     name: 'image',
+    //     maxCount: 20,
+    //   },
+    // ]),
+    fileUploader,
     controller.clientQueryForProject
   );
   app.put('/api/project/member/delete', controller.deleteProjectMember);
@@ -74,12 +77,13 @@ module.exports = function (app) {
   // ticket update related /api/project/ticketupdatemember/byid
   app.put(
     '/api/project/ticketupdatemember/byid',
-    uploadImage.fields([
-      {
-        name: 'image',
-        maxCount: 20,
-      },
-    ]),
+    // uploadImage.fields([
+    //   {
+    //     name: 'image',
+    //     maxCount: 20,
+    //   },
+    // ]),
+    fileUploader,
     controller.TicketUpdateByMember
   );
   app.post('/api/project/changeissuemember', controller.changeIssueMember);

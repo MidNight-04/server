@@ -1,5 +1,6 @@
 const controller = require("../controllers/paymentStages.controller");
-const { uploadImage } = require('../middlewares/uploadImage');
+const { uploadImage } = require('../middlewares/uploadImage');  
+const fileUploader = require('../middlewares/fileUploader');
 
 module.exports = function (app) {
     app.use(function (req, res, next) {
@@ -10,11 +11,13 @@ module.exports = function (app) {
         next();
     });
 
-    app.post("/api/paymentstages/add",uploadImage.fields([
-        {
-        name: 'stages', maxCount: 10
-    }
-    ]), controller.addPaymentStages);
+    app.post("/api/paymentstages/add",
+        // uploadImage.fields([
+        // {
+        // name: 'stages', maxCount: 10
+        // }]),
+        fileUploader,
+     controller.addPaymentStages);
     app.get("/api/paymentstages/getall", controller.getPaymentStages);
     app.put("/api/paymentstages/stageupdatebyid", controller.updatePaymentStagePointById);
     app.put("/api/paymentstages/addnewstage", controller.addNewPaymentStagePointById);

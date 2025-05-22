@@ -13,13 +13,13 @@ exports.addConstructionStep = async (req, res) => {
       message: "Priority already exist",
     });
   } else {
-    const workbook = xlsx.readFile(req.files[0].path, { type: "buffer" });
-    const sheetName = workbook.SheetNames[0];
-    const sheet = workbook.Sheets[sheetName];
+    const workbook = xlsx.readFile(req.files.file[0].path, { type: "buffer" });
+    // const sheetName = workbook.SheetNames[0];
+    // const sheet = workbook.Sheets[sheetName];
     
     // Convert sheet to JSON array
-    const data = xlsx.utils.sheet_to_json(sheet);
-    
+    const data = xlsx.utils.sheet_to_json(workbook.Sheets.Sheet1);
+
     const arraySave = [];
     if (data.length > 0) {
       for (let i = 0; i < data?.length; i++) {

@@ -169,6 +169,7 @@ exports.signinOtp = (req, res) => {
   if (!helperFunction.checkEmailPhone(req.body.username)) {
     return res.status(500).send({ message: 'Invalid Entry' });
   } else {
+    console.log(helperFunction.checkEmailPhone(req.body.username));
     User.findOne({
       [helperFunction.checkEmailPhone(req.body.username)]: req.body.username,
     })

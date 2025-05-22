@@ -1303,6 +1303,7 @@ exports.customFilters = async (req, res) => {
   const query = {
     isActive: true,
     dueDate: { $gte: start, $lte: end },
+    referenceModel: { $nin: ['clients', 'users'] },
   };
 
   if (userId) {

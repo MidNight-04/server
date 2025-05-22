@@ -18,27 +18,26 @@ exports.addProjectDocument = async (req, res) => {
   // }
 
   if (req.files?.document?.length > 0) {
-     await awsS3.uploadFiles(req.files?.document, `project_doc`).then(async (data) => {
-     const images = data.map((file) => {
-       const url = 'https://thekedar-bucket.s3.us-east-1.amazonaws.com/' + file.s3key
-       return url;
-     })
-     documentFiles.push(...images);
+    await awsS3.uploadFiles(req.files?.document, `project_doc`).then(async (data) => {
+      const images = data.map((file) => {
+        const url = 'https://thekedar-bucket.s3.us-east-1.amazonaws.com/' + file.s3key
+        return url;
+      })
+      documentFiles.push(...images);
     });
-   }
+  }
 
-  const log = {
-    log: "Project document upload by admin",
-    file: documentFiles,
-    date: req.body.date,
-    siteID: req.body.siteID,
-    member: {
-      name: req.body.userName,
-      Id: req.body.user,
-    },
-  };
+  // const log = {
+  //   log: "Project document upload by admin",
+  //   file: documentFiles,
+  //   date: req.body.date,
+  //   siteID: req.body.siteID,
+  //   member: {
+  //     name: req.body.userName,
+  //     Id: req.body.user,
+  //   },
+  // };
 
-  // console.log(req.file)
   const projectDocument = new ProjectDocuments({
     name: req.body.name,
     siteID: req.body.siteID,
@@ -49,12 +48,11 @@ exports.addProjectDocument = async (req, res) => {
   });
   projectDocument.save(async (err, data) => {
     if (err) {
-      // console.log("eroror.............")
       res.status(500).send({ message: "Error while uploading the document" });
       return;
     }
-    const logSave = new ProjectLog(log);
-    await logSave.save();
+    // const logSave = new ProjectLog(log);
+    // await logSave.save();
     res.status(200).send({
       message: "Document have been upload successfully",
       data: data,

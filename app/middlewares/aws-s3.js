@@ -32,7 +32,6 @@ exports.uploadFile = function (file, key) {
           console.log(err);
         } else {
           resolve(key);
-          //console.log("Successfully uploaded data to myBucket/myKey" + data);
         }
       });
     });
@@ -40,15 +39,11 @@ exports.uploadFile = function (file, key) {
 };
 
 exports.uploadFiles = function (files, prefix) {
-  // console.log(">>files>>>",files);
   return new Promise(function (resolve, reject) {
     var s3KeyArr = [];
     for (var i = 0; i < files.length; i++) {
       const file = files[i];
-      // console.log("filename===>" + file.filename);
-      let fileExt = path.extname(file.originalname);
-      // let myKey = prefix + file.filename + fileExt;
-      let myKey = prefix + file.filename;
+      let myKey = `${prefix}${file.filename.replace(/ /g, "_")}`;
       fs.readFile(file.path, function (err, data) {
         if (err) {
           throw err;
@@ -91,7 +86,6 @@ exports.getUploadFile = function (key) {
     if (!imgUrl) {
       reject("No image found");
     }
-    // console.log(imgUrl)
     resolve(imgUrl);
   });
 };

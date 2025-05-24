@@ -610,6 +610,10 @@ exports.taskAddComment = async (req, res) => {
       task.status = type;
     }
 
+    if(type === 'Reopened') {
+      task.status = 'In Progress';
+    };
+
     const newComment = {
       comment,
       type,
@@ -1623,5 +1627,90 @@ exports.deleteChecklist = async (req, res) => {
   } catch (error) {
     console.error('Error deleting checklist:', error);
     res.status(500).send({ message: 'Error deleting checklist' });
+  }
+};
+
+exports.manuallyCloseTask = async (req, res) => {
+  try {
+    const { taskId,  date } = req.body;
+
+    const task = await Task.findById(taskId);
+
+      const project = await Project.findOne({ siteID: task.siteID });
+      if (project) {
+        const projectStatuses = project.project_status;
+
+        for (let i = 0; i < projectStatuses.length; i++) {
+          const projectStatus = projectStatuses[i];
+
+          for (let j = 0; j < projectStatus.step.length; j++) {
+            const step = projectStatus.step[j];
+
+            if (step.taskId.toString() === task._id.toString()) {
+              const today = new Date();
+
+              const activateTask = async (taskId) => {
+                const taskToActivate = await Task.findById(taskId);
+                if (taskToActivate) {
+                  const dueDate = new Date(today);
+                  dueDate.setDate(today.getDate() + taskToActivate.duration);
+                  await updateTaskAndReschedule(taskId, { dueDate: dueDate });
+                  await Task.findByIdAndUpdate(
+                    taskId,
+                    {
+                      $set: {
+                        isActive: true,
+                        assignedOn: today,
+                        dueDate: dueDate,
+                      },
+                    },
+                    { new: true }
+                  );
+                }
+              };
+
+              // Find next steps
+              let nextStep = projectStatus.step[j + 1];
+              let nextNextStep = projectStatus.step[j + 2];
+
+              // If no nextStep, try from next projectStatus
+              if (!nextStep && projectStatuses[i + 1]) {
+                nextStep = projectStatuses[i + 1].step[0];
+              }
+              // If no nextNextStep, try from next projectStatus
+              if (
+                projectStatus.step[j + 1] &&
+                !projectStatus.step[j + 2] &&
+                projectStatuses[i + 1]
+              ) {
+                nextNextStep = projectStatuses[i + 1].step[0];
+              }
+
+              // If no nextNextStep, try second step from next projectStatus
+              if (!nextNextStep && projectStatuses[i + 1]) {
+                nextNextStep = projectStatuses[i + 1].step[1];
+              }
+
+              // Activate steps if available
+              if (nextStep?.taskId) {
+                await activateTask(nextStep.taskId);
+              }
+              if (nextNextStep?.taskId) {
+                await activateTask(nextNextStep.taskId);
+              }
+
+              break; // Found the task, no need to continue
+            }
+          }
+        }
+      }
+    
+    task.status = 'Complete';
+    task.updatedOn = new Date(date).toISOString();
+    await task.save();
+    res.status(200).send({ message: 'Task Closed successfully' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).send({ message: 'Error while adding comment' });
   }
 };

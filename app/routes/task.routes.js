@@ -83,6 +83,7 @@ module.exports = function (app) {
   app.post('/api/task/approvetaskcomment', controller.approveTaskComment);
   app.post('/api/task/reassigntask', controller.reassignTask);
   app.post('/api/task/deletetaskcommentimage', controller.deleteTaskCommentImage);
+  app.post('/api/task/manuallyclosetask', controller.manuallyCloseTask);
 
   app.post('/api/task/gettodaytaskbyid', controller.getTodayTaskById);
   app.post('/api/task/getyesterdaytaskbyid', controller.getYesterdayTaskById);

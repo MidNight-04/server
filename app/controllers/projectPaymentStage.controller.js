@@ -165,21 +165,24 @@ exports.addNewPaymentStagePointById = async (req, res) => {
   const newObj = {
     payment: parseFloat(payment),
     stage: stage,
-  };
+    paymentStatus: "Not Due Yet",
+    paymentDueDate: "",
+    installments: []
+    };
   await PaymentStages.updateOne({ _id: id }, { $push: { stages: newObj } })
     .then(async () => {
-      const logData = {
-        log: `<span style="color: black;">${stage} (${payment}%) payment stage</span> ->> <em style="color: green">added</em>`,
-        file: [],
-        date: date,
-        siteID: siteID,
-        member: {
-          name: userName,
-          Id: activeUser,
-        },
-      };
-      const logSave = new ProjectLog(logData);
-      await logSave.save();
+      // const logData = {
+      //   log: `<span style="color: black;">${stage} (${payment}%) payment stage</span> ->> <em style="color: green">added</em>`,
+      //   file: [],
+      //   date: date,
+      //   siteID: siteID,
+      //   member: {
+      //     name: userName,
+      //     Id: activeUser,
+      //   },
+      // };
+      // const logSave = new ProjectLog(logData);
+      // await logSave.save();
       return res.json({
         status: 200,
         message: "New Payment stage add successfully",

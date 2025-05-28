@@ -2029,6 +2029,15 @@ exports.DeleteProjectPoint = async (req, res) => {
 
     const stepToRemove = projectStatus.step[stepIndex];
 
+    let extension = 0;
+
+    if(!stepToRemove.forceMajeure) {
+      extension = Math.max(project.extension - duration, 0);
+      if (extension < 0) {
+        extension = 0;
+      }
+    };
+
     const updatePayload = {
       $pull: {
         'project_status.$[status].step': { point },
@@ -2036,12 +2045,9 @@ exports.DeleteProjectPoint = async (req, res) => {
           forceMajeure: { reason: stepToRemove.taskId.title },
         }),
       },
-      $inc: { extension: -duration },
+      $inc: { extension: -extension },
     };
-    console.log('updatePayload', name,point);
-
-    // console.log(stepToRemove.taskId);
-
+    
     if (checkList) {
       updatePayload.$pull.inspections = {
         checkListStep: name,

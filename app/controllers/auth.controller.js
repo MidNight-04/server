@@ -29,7 +29,7 @@ exports.signup = (req, res) => {
     res.status(500).send({ message: 'Invaild Entry' });
   } else {
     let query = {
-      name: req.body.username,
+      name: req.body.name || req.body.username,
       username: req.body.username,
       [helperFunction.checkEmailPhone(req.body.email)]: req.body.email,
       // password: bcrypt.hashSync(req.body.password, 8),
@@ -37,11 +37,11 @@ exports.signup = (req, res) => {
       city: req.body?.city,
       state: req.body?.state,
       country: req.body?.country,
+      phone: req.body.phone,
+      email: req.body.email,
     };
-    // console.log("ROLES COMING OR NOT ---->>>>>>", req.body.role);
 
     if (req.body.role?.length > 0) {
-      // console.log("INSIDE THE IF CONDITION");
       Role.find(
         {
           name: { $in: req.body.role },
@@ -52,13 +52,13 @@ exports.signup = (req, res) => {
             return;
           }
           query['roles'] = roles.map(role => role._id);
-          if (helperFunction.checkEmailPhone(req.body.email) === 'phone') {
-            query['email'] = '';
-          } else if (
-            helperFunction.checkEmailPhone(req.body.email) === 'email'
-          ) {
-            query['phone'] = '';
-          }
+          // if (helperFunction.checkEmailPhone(req.body.email) === 'phone') {
+          //   query['email'] = '';
+          // } else if (
+          //   helperFunction.checkEmailPhone(req.body.email) === 'email'
+          // ) {
+          //   query['phone'] = '';
+          // }
           const user = new User(query);
           user.save((err, userSaved) => {
             if (err) {
@@ -84,11 +84,11 @@ exports.signup = (req, res) => {
         }
 
         query['roles'] = [role._id];
-        if (helperFunction.checkEmailPhone(req.body.email) === 'phone') {
-          query['email'] = '';
-        } else if (helperFunction.checkEmailPhone(req.body.email) === 'email') {
-          query['phone'] = '';
-        }
+        // if (helperFunction.checkEmailPhone(req.body.email) === 'phone') {
+        //   query['email'] = '';
+        // } else if (helperFunction.checkEmailPhone(req.body.email) === 'email') {
+        //   query['phone'] = '';
+        // }
         const user = new User(query);
         user.save((err, userSaved) => {
           if (err) {

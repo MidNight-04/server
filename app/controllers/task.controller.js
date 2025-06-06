@@ -88,7 +88,7 @@ exports.addTask = async (req, res) => {
   let assignedBy = await User.findOne({ _id: req.body.assignedID });
 
   if(!assignedBy){
-    assignedBy = await TeamMembers.findById(req.body.member);
+    assignedBy = await TeamMembers.findById(req.body.assignedID);
   }
 
   const issueMember = await TeamMembers.findById(req.body.member);

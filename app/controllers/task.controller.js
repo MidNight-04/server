@@ -10,6 +10,7 @@ const Ticket = require('../models/ticketModel');
 const Client = require('../models/client.model');
 const awsS3 = require('../middlewares/aws-s3');
 const { updateTaskAndReschedule } = require('../helper/schedule');
+const { assignedNotification, clientUpdate, teamUpdate } = require("../helper/reminder")
 
 let today = new Date();
 let yyyy = today.getFullYear();
@@ -84,11 +85,30 @@ exports.addTask = async (req, res) => {
     referenceModel: 'teammembers',
   };
 
+  let assignedBy = await User.findOne({ _id: req.body.assignedID });
+
+  if(!assignedBy){
+    assignedBy = await TeamMembers.findById(req.body.member);
+  }
+
+  const issueMember = await TeamMembers.findById(req.body.member);
+
   Task.create(task).then((taskSave, err) => {
     if (err) {
       res.status(500).send({ message: 'There was problelm while create task' });
       return;
     } else {
+      assignedNotification({
+        phone:issueMember.phone,
+        assignedTo:issueMember.name,
+        assignedBy:assignedBy.name,
+        category:task.category,
+        taskName:task.title,
+        description:task.description,
+        priority:task.priority,
+        frequency:task.repeat.repeatType === "norepeat" ? "Once" : task.repeat.repeatType,
+        dueDate:task.dueDate
+      });
       res.status(201).send({
         status: 201,
         message: 'Task created successfully',
@@ -525,9 +545,75 @@ exports.taskAddComment = async (req, res) => {
    });
   }
 
-    const task = await Task.findById(taskId);
+    let task = await Task.findById(taskId).populate(['issueMember']);
+
+    let member = await TeamMembers.findById(userId);
+
+    if(!member){
+      member = await User.findById(userId);
+    }
+
+    if(task.category === "Project") {
+
     if (!task) {
       return res.status(404).send({ message: 'Task not found' });
+    }
+      const siteId = task.siteID
+      const seniorEngineer = await Project.findOne({siteID:siteId}).select('sr_engineer').populate({
+        path: 'sr_engineer',
+        model: 'teammembers',
+      });
+
+      if(seniorEngineer.sr_engineer[0]._id.toString() !== mongoose.Types.ObjectId(userId).toString()) {
+        teamUpdate({
+          phone:seniorEngineer.sr_engineer[0].phone,
+          assignedTo: seniorEngineer.sr_engineer[0].name,
+          assignedBy: member.name,
+          category:task.category,
+          taskName:task.title,
+          description:task.description,
+          priority:task.priority,
+          frequency:task.repeat.repeatType === "norepeat" ? "Once" : task.repeat.repeatType,
+          dueDate:task.dueDate.toDateString()
+        })
+      }
+
+    } else {
+      task = await Task.findById(taskId).populate(['issueMember']);
+      let assignedBy = await TeamMembers.findById(task.assignedBy);
+
+      if(!assignedBy){
+        assignedBy = await User.findById(task.assignedBy);
+      }
+
+      if(assignedBy._id.toString() !== mongoose.Types.ObjectId(userId).toString()) {
+        teamUpdate({
+          phone:assignedBy.phone,
+          assignedTo: assignedBy.name,
+          assignedBy: member.name,
+          category:task.category,
+          taskName:task.title,
+          description:task.description,
+          priority:task.priority,
+          frequency:task.repeat.repeatType === "norepeat" ? "Once" : task.repeat.repeatType,
+          dueDate:task.dueDate.toDateString()
+        })
+      }
+
+      if(task.issueMember._id.toString() !== mongoose.Types.ObjectId(userId).toString()) {
+
+        teamUpdate({
+          phone:task.issueMember.phone,
+          assignedTo: task.issueMember.name,
+          assignedBy: member.name,
+          category:task.category || "", 
+          taskName:task.title,
+          description:task.description,
+          priority:task.priority,
+          frequency:task.repeat.repeatType === "norepeat" ? "Once" : task.repeat.repeatType,
+          dueDate:task.dueDate.toDateString()
+        })
+      }
     }
 
     const referenceModel = await getReferenceModel(userId);
@@ -550,7 +636,7 @@ exports.taskAddComment = async (req, res) => {
               const today = new Date();
 
               const activateTask = async (taskId) => {
-                const taskToActivate = await Task.findById(taskId);
+                const taskToActivate = await Task.findById(taskId).populate('issueMember');
                 if (taskToActivate) {
                   const dueDate = new Date(today);
                   dueDate.setDate(today.getDate() + taskToActivate.duration);
@@ -565,7 +651,18 @@ exports.taskAddComment = async (req, res) => {
                       },
                     },
                     { new: true }
-                  );
+                  )
+                  assignedNotification({
+                    phone:taskToActivate.issueMember.phone,
+                    assignedTo:taskToActivate.issueMember.name,
+                    assignedBy:"Admin",
+                    category:taskToActivate.category,
+                    taskName:taskToActivate.title,
+                    description:taskToActivate.description,
+                    priority:taskToActivate.priority,
+                    frequency:taskToActivate.repeat.repeatType === "norepeat" ? "Once" : task.repeat.repeatType,
+                    dueDate:dueDate.toDateString()
+                  })
                 }
               };
 
@@ -757,17 +854,19 @@ exports.deleteTaskComment = async (req, res) => {
 
 exports.approveTaskComment = async (req, res) => {
   try {
-    const { commentId, userId } = req.body;
+    const { commentId, userId, taskId, siteID } = req.body;
     if (!commentId) {
       return res.status(400).send({ message: 'Missing commentId' });
     }
-    const comment = await TaskComment.findById(commentId);
+    const comment = await TaskComment.findById(commentId).populate('createdBy');
     if (!comment) {
       return res.status(404).send({ message: 'Comment not found' });
     }
     if (comment.approved.isApproved) {
       return res.status(400).send({ message: 'Comment already approved' });
     }
+    const client = await Project.findOne({siteID:siteID}).select('client').populate('client');
+    const task = await Task.findById(taskId);
     const referenceModel = await getReferenceModel(userId);
     if (!referenceModel) {
       return res.status(404).send({ message: 'User not found' });
@@ -782,7 +881,16 @@ exports.approveTaskComment = async (req, res) => {
           'approved.approvedOn': Date.now(),
         },
       }
-    );
+    )
+    await clientUpdate({
+      clientName:client.client.name,
+      phone:client.client.phone,
+      issueMember:comment.createdBy.name,
+      taskName:task.title,
+      status:task.status,
+      dueDate:task.dueDate.toDateString(),
+      remarks: comment.comment
+    })
     res.status(200).send({ message: 'Comment approved successfully' });
   } catch (error) {
     console.error('Server error:', error);

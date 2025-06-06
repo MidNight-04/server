@@ -9,7 +9,10 @@ const projectSchema = new mongoose.Schema(
       type: String,
       trim: true,
       },
-      client: Object,
+      client: {
+        type:mongoose.Schema.Types.ObjectId,
+        ref: 'clients'
+      },
       floor: String,
       area: String,
       cost: Number,

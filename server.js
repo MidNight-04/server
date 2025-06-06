@@ -7,7 +7,7 @@ const bodyParser = require('body-parser');
 const app = express();
 const path = require('path');
 const cron = require('node-cron');
-const sendWhatsAppMessage = require('./app/helper/reminder');
+const {sendWhatsAppMessage, dueDateNotification} = require('./app/helper/reminder');
 const Task = require('./app/models/task.model');
 const { loadAndScheduleAllTasks } = require('./app/helper/schedule');
 const fetch = (...args) =>
@@ -66,6 +66,7 @@ cron.schedule('0 9 * * *', async () => {
   try {
     console.log('⏳ Running Cron Job...');
     await sendWhatsAppMessage();
+    await dueDateNotification();
   } catch (error) {
     console.error('Error running cron job:', error);
   }
@@ -88,6 +89,7 @@ cron.schedule('*/30 * * * *', async () => {
     throw new Error(`Error updating tasks: ${error.message}`);
   }
 });
+
 loadAndScheduleAllTasks();
 // creating a simple route for the start of the application
 // app.get('/', (req, res) => {

@@ -37,6 +37,10 @@ const taskSchema = new Schema(
       type: Schema.Types.ObjectId,
       ref: 'User',
     },
+    // refModel: {
+    //   type: String,
+    //   enum: ['teammembers', 'clients', 'User'],
+    // },
     subscribedMembers: [
       {
         type: Schema.Types.ObjectId,

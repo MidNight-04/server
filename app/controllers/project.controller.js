@@ -90,9 +90,9 @@ exports.deleteStatusImage = async (req, res) => {
 
 exports.addProject = async (req, res) => {
   try {
-    const { uploadData } = req.body;
+    const { data } = req.body;
     const existingProject = await Project.findOne({
-      siteID: uploadData.siteID,
+      siteID: data.siteID,
     });
     if (existingProject) {
       return res
@@ -101,7 +101,7 @@ exports.addProject = async (req, res) => {
     }
 
     const allSteps = await Process.find();
-    const [floorType, floorCountStr] = uploadData?.floor?.split('+');
+    const [floorType, floorCountStr] = data?.floor?.split('+');
     const floorCount = parseInt(floorCountStr, 10);
 
     const projectStepArray = allSteps
@@ -147,13 +147,13 @@ exports.addProject = async (req, res) => {
 
       if (roleKey === 'client') {
         return {
-          issueMember: uploadData[roleKey],
+          issueMember: data[roleKey],
           referenceModel: 'clients',
         };
       }
       return roleKey
-        ? { issueMember: uploadData[roleKey], referenceModel: 'teammembers' }
-        : { issueMember: uploadData[roleKey], referenceModel: 'teammembers' };
+        ? { issueMember: data[roleKey], referenceModel: 'teammembers' }
+        : { issueMember: data[roleKey], referenceModel: 'teammembers' };
     };
 
     const allChecklist = await CheckList.find();
@@ -200,15 +200,15 @@ exports.addProject = async (req, res) => {
 
         return {
           title: el.content,
-          branch: uploadData.branch,
+          branch: data.branch,
           description: el.content,
           stepName: projectStepArray[i].name,
-          assignedBy: uploadData.assignedID,
+          assignedBy: data.assignedID,
           duration: el.duration !== '' ? el.duration : 0,
           point:idx,
           dueDate:
             i === 0 && idx === 0 ? dayjs().add(el.duration, 'day') : null,
-          siteID: uploadData.siteID,
+          siteID: data.siteID,
           isActive: i === 0 && idx === 0,
           assignedOn: i === 0 && idx === 0 ? new Date() : null,
           checkList: checklistDetails,
@@ -236,37 +236,37 @@ exports.addProject = async (req, res) => {
     }
 
     const projectData = {
-      project_name: uploadData.name,
-      siteID: uploadData.siteID,
-      project_location: uploadData.location,
-      branch: uploadData.branch,
-      client: uploadData.client,
-      floor: uploadData.floor,
-      area: uploadData.area,
-      cost: parseInt(uploadData.cost, 10),
-      date: uploadData.date,
-      duration: uploadData.duration,
-      // project_manager: uploadData.manager,
-      sr_engineer: uploadData.sr_engineer,
-      site_engineer: uploadData.engineer,
-      contractor: uploadData.contractor,
-      operation: uploadData.operation,
-      sales: uploadData.sales,
-      project_admin: uploadData.admin,
-      architect: uploadData.architect,
-      accountant: uploadData.accountant,
+      project_name: data.name,
+      siteID: data.siteID,
+      project_location: data.location,
+      branch: data.branch,
+      client: data.client,
+      floor: data.floor,
+      area: data.area,
+      cost: parseInt(data.cost, 10),
+      date: data.date,
+      duration: data.duration,
+      // project_manager: data.manager,
+      sr_engineer: data.sr_engineer,
+      site_engineer: data.engineer,
+      contractor: data.contractor,
+      operation: data.operation,
+      sales: data.sales,
+      project_admin: data.admin,
+      architect: data.architect,
+      accountant: data.accountant,
       openTicket: [],
       project_status: taskIds,
       inspections: [],
     };
 
     const paymentStages = await PaymentStages.findOne({
-      floor: uploadData.floor,
+      floor: data.floor,
     });
 
     if (!paymentStages) {
       return res.status(204).json({
-        message: `First create payment stage for ${uploadData.floor} floor`,
+        message: `First create payment stage for ${data.floor} floor`,
       });
     };
 
@@ -278,8 +278,8 @@ exports.addProject = async (req, res) => {
     }));
 
     const paymentStageData = {
-      siteID: uploadData.siteID,
-      clientID: uploadData.client?.id,
+      siteID: data.siteID,
+      clientID: data.client?.id,
       floor: paymentStages.floor,
       stages,
     };

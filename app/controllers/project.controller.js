@@ -417,10 +417,11 @@ exports.getProjectByMember = (req, res) => {
     });
 };
 
-exports.getProjectByClientId = (req, res) => {
-  mongoose.set('strictPopulate', false);
-  Project.find({ client: req.params.id })
-    .populate({
+exports.getProjectByClientId = async (req, res) => {
+  try {
+    mongoose.set('strictPopulate', false);
+
+    const projects = await  Project.find({ client: req.params.id }).populate({
       path: 'project_status',
       populate: {
         path: 'step',
@@ -445,23 +446,28 @@ exports.getProjectByClientId = (req, res) => {
           ],
         },
       },
-    })
-    .then((project, err) => {
-      if (err) {
-        res.status(500).send({
-          message: 'There was a problem in getting the list of project',
-        });
-        return;
-      }
-      if (project) {
-        // console.log(project)
-        res.status(200).send({
-          message: 'List of project fetched successfuly',
-          data: project,
-        });
-      }
     });
+   console.log('Projects:', projects,req.params.id);
+    if (!projects || projects.length === 0) {
+      return res.status(404).send({
+        message: 'No projects found for the given client ID',
+        data:projects,
+      });
+    }
+
+    res.status(200).send({
+      message: 'List of projects fetched successfully',
+      data: projects,
+    });
+  } catch (err) {
+    console.error('Error fetching projects:', err);
+    res.status(500).send({
+      message: 'There was a problem getting the list of projects',
+      error: err.message,
+    });
+  }
 };
+
 
 exports.deleteProjectById = async (req, res) => {
   try {

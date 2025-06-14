@@ -107,7 +107,7 @@ exports.addTask = async (req, res) => {
         description:task.description,
         priority:task.priority,
         frequency:task.repeat.repeatType === "norepeat" ? "Once" : task.repeat.repeatType,
-        dueDate:task.dueDate
+        dueDate: new Date(task.dueDate).toDateString()
       });
       res.status(201).send({
         status: 201,

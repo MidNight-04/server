@@ -28,5 +28,5 @@ module.exports = function (app) {
     app.delete("/api/client/delete/:id", controller.deleteClientById);
     app.post("/api/auth-client/signin-otp", controller.signinOtp);
     app.post("/api/auth-client/signin", controller.signin);
-    
+    app.post("/api/auth-client/signinwithpassword", controller.loginWithPassword);
 };

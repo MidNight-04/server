@@ -393,3 +393,48 @@ exports.getTeammemberByRole = async (req, res) => {
       .send({ message: 'Something went wrong while getting the team members' });
   }
 };
+
+exports.loginWithPassword = async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    const user = await Member.findOne({ email });
+    if (!user) {
+      return res.status(404).send({ message: 'User not found' });
+    }
+
+    const isPasswordValid = bcrypt.compareSync(password, user.password);
+    if (!isPasswordValid) {
+      return res.status(401).send({ message: 'Invalid password' });
+    }
+
+   const token = jwt.sign({ id: user.id }, config.secret, {
+      expiresIn: 86400, // 24 hours
+    });
+
+    req.session.token = token;
+    user.token = token;
+
+    await user.save();
+
+    res.status(200).send({
+      status: 200,
+      message: 'You have been logged in',
+      id: user._id,
+      username: user.name,
+      employeeID: user.employeeID,
+      email: user.email,
+      phone: user.phone,
+      roles:
+        user?.role?.name.toLowerCase() === 'admin'
+          ? 'ROLE_' + 'PROJECT ' + user.role.name.toUpperCase()
+          : 'ROLE_' + user.role.name.toUpperCase(),
+      token: token,
+    });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).send({ message: 'Something went wrong' });
+  }
+};
+

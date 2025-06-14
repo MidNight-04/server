@@ -6,6 +6,7 @@ const helperFunction = require("../middlewares/helper");
 const otpGenerator = require("otp-generator");
 const nodemailer = require("nodemailer");
 const awsS3 = require('../middlewares/aws-s3');
+const bcrypt = require("bcryptjs");
 var jwt = require("jsonwebtoken");
 
 exports.signinOtp = (req, res) => {
@@ -250,15 +251,7 @@ exports.addClient = async (req, res) => {
 };
 
 exports.updateClientProfileById = async (req, res) => {
-  // console.log("Upcoming data-", req.body);
-
   let images = [];
-
-  // if (req.files.profileImage) {
-  //   for (let i = 0; i < req.files.profileImage.length; i++) {
-  //     profileFiles.push(req.files.profileImage[i].location);
-  //   }
-  // }
 
   if (req.files?.image?.length > 0) {
     await awsS3.uploadFiles(req.files?.image, `profile_photo`).then(async (data) => {
@@ -277,17 +270,18 @@ exports.updateClientProfileById = async (req, res) => {
       phone: req.body.phone,
       email: req.body.email,
       address: req.body.address,
+      password: await bcrypt.hash('Password@1',8),
     };
 
     if (images.length > 0) {
       query["profileImage"] = images;
     }
-    // console.log(query)
+
     const updateProfile = await Client.updateOne(
       { _id: req.params.id },
       { $set: query }
     );
-    // console.log(updateProfile)
+
     if (updateProfile.modifiedCount === 1) {
       res.json({
         status: 200,
@@ -318,6 +312,7 @@ exports.getAllClient = (req, res) => {
   });
   return;
 };
+
 exports.deleteClientById = (req, res) => {
   const id = req.params.id;
   Client.deleteOne({ _id: id }, (err, dealer) => {
@@ -334,6 +329,7 @@ exports.deleteClientById = (req, res) => {
     return;
   });
 };
+
 exports.getClientById = (req, res) => {
   const id = req.params.id;
   Client.findById(id, (err, data) => {
@@ -347,9 +343,10 @@ exports.getClientById = (req, res) => {
     }
   });
 };
-exports.updateClientById = (req, res) => {
+
+exports.updateClientById = async (req, res) => {
   const { id, name, email, phone, address } = req.body;
-  const data = { name: name, email: email, phone: phone, address: address };
+  const data = { name: name, email: email, phone: phone, address: address, password: await bcrypt.hash('Password@1',8), };
   Client.updateOne({ _id: id }, data, (err, updated) => {
     if (err) {
       //   console.log(err);
@@ -361,3 +358,45 @@ exports.updateClientById = (req, res) => {
     }
   });
 };
+
+exports.loginWithPassword = async (req, res) => {
+  try {
+    const { username, password } = req.body;
+    const key = helperFunction.checkEmailPhone(username);
+    if (!key) {
+      return res.status(400).send({ message: "Invalid Entry" });
+    }
+
+    const user = await Client.findOne({ [key]: username });
+    if (!user) {
+      return res.status(404).send({ message: "User Not found." });
+    }
+
+    const isPasswordValid = await bcrypt.compare(password, user.password);
+    if (!isPasswordValid) {
+      return res.status(401).send({ message: 'Invalid password' });
+    }
+
+    const token = jwt.sign({ id: user.id }, config.secret, { expiresIn: 86400 }); // 24 hours
+
+    req.session.token = token;
+    user.token = token;
+    await user.save();
+
+    res.status(200).send({
+      status: 200,
+      message: "You have been logged in",
+      id: user._id,
+      username: user.name,
+      email: user.email,
+      phone: user.phone,
+      roles: "ROLE_CLIENT",
+      token,
+    });
+
+  } catch (err) {
+    console.error("Login error:", err);
+    res.status(500).send({ message: 'Something went wrong' });
+  }
+};
+

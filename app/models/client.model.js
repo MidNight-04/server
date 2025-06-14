@@ -7,6 +7,9 @@ const clientModel = mongoose.model(
         email: String,
         phone: String,
         address: String,
+        password: String,
+        token: String,
+        refreshToken: String,
         loginOtp:{
             type:String,
             default:""

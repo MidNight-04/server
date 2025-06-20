@@ -6,7 +6,7 @@ const taskSchema = new Schema(
       type: String,
       trim: true,
     },
-    branch:{
+    branch: {
       type: String,
       trim: true,
     },
@@ -14,8 +14,8 @@ const taskSchema = new Schema(
       type: String,
       trim: true,
     },
-    stepName:{
-      type:String,
+    stepName: {
+      type: String,
     },
     duration: { type: Number, default: 1 },
     point: {
@@ -35,12 +35,13 @@ const taskSchema = new Schema(
     },
     assignedBy: {
       type: Schema.Types.ObjectId,
-      ref: 'User',
+      refPath: 'refModel',
     },
-    // refModel: {
-    //   type: String,
-    //   enum: ['teammembers', 'clients', 'User'],
-    // },
+    refModel: {
+      type: String,
+      enum: ['teammembers', 'clients', 'User'],
+      default: 'User',
+    },
     subscribedMembers: [
       {
         type: Schema.Types.ObjectId,
@@ -57,8 +58,8 @@ const taskSchema = new Schema(
       default: 'Project',
     },
     checkList: {
-      type: Object,   
-      default: {}
+      type: Object,
+      default: {},
     },
     priority: {
       type: String,
@@ -141,17 +142,17 @@ const taskSchema = new Schema(
 );
 
 taskSchema.index({
-  'title': 'text',
-  'description': 'text',
-  'siteID': 'text',
-  'category': 'text',
-  'priority': 'text',
+  title: 'text',
+  description: 'text',
+  siteID: 'text',
+  category: 'text',
+  priority: 'text',
   'assignedBy.name': 'text',
   'assignedBy.employeeID': 'text',
   'issueMember.name': 'text',
   'issueMember.employeeID': 'text',
   'repeat.repeatType': 'text',
-  'status': 'text',
+  status: 'text',
 });
 
 const taskModel = model('Tasks', taskSchema);

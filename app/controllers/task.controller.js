@@ -10,7 +10,11 @@ const Ticket = require('../models/ticketModel');
 const Client = require('../models/client.model');
 const awsS3 = require('../middlewares/aws-s3');
 const { updateTaskAndReschedule } = require('../helper/schedule');
-const { assignedNotification, clientUpdate, teamUpdate } = require("../helper/reminder")
+const {
+  assignedNotification,
+  clientUpdate,
+  teamUpdate,
+} = require('../helper/reminder');
 
 let today = new Date();
 let yyyy = today.getFullYear();
@@ -40,35 +44,42 @@ exports.addTask = async (req, res) => {
   let audioFile;
 
   if (req.files?.image?.length > 0) {
-    await awsS3.uploadFiles(req.files?.image, `task`).then(async (data) => {
-    const profileFiles = data.map((file) => {
-      const url = 'https://thekedar-bucket.s3.us-east-1.amazonaws.com/' + file.s3key
-      return url;
-    })
-    images.push(...profileFiles);
-   });
+    await awsS3.uploadFiles(req.files?.image, `task`).then(async data => {
+      const profileFiles = data.map(file => {
+        const url =
+          'https://thekedar-bucket.s3.us-east-1.amazonaws.com/' + file.s3key;
+        return url;
+      });
+      images.push(...profileFiles);
+    });
   }
 
   if (req.files?.docs?.length > 0) {
-    await awsS3.uploadFiles(req.files?.docs, `task`).then(async (data) => {
-    const documents = data.map((file) => {
-      const url = 'https://thekedar-bucket.s3.us-east-1.amazonaws.com/' + file.s3key
-      return url;
-    })
-    files.push(...documents);
-   });
+    await awsS3.uploadFiles(req.files?.docs, `task`).then(async data => {
+      const documents = data.map(file => {
+        const url =
+          'https://thekedar-bucket.s3.us-east-1.amazonaws.com/' + file.s3key;
+        return url;
+      });
+      files.push(...documents);
+    });
   }
 
-   if (req.files?.audio) {
-   await awsS3.uploadFiles(req.files?.audio, `task`).then(async (data) => {
-    audioFile = 'https://thekedar-bucket.s3.us-east-1.amazonaws.com/' + data[0].s3key;
-   });
+  if (req.files?.audio) {
+    await awsS3.uploadFiles(req.files?.audio, `task`).then(async data => {
+      audioFile =
+        'https://thekedar-bucket.s3.us-east-1.amazonaws.com/' + data[0].s3key;
+    });
   }
+
+  const referenceModel = await getReferenceModel(req.body.assignedID);
+
   const task = {
     title: req.body.title,
     description: req.body.description,
     issueMember: req.body.member,
     assignedBy: req.body.assignedID,
+    userRef: referenceModel,
     category: req.body.category,
     priority: req.body.priority,
     isActive: true,
@@ -87,7 +98,7 @@ exports.addTask = async (req, res) => {
 
   let assignedBy = await User.findOne({ _id: req.body.assignedID });
 
-  if(!assignedBy){
+  if (!assignedBy) {
     assignedBy = await TeamMembers.findById(req.body.assignedID);
   }
 
@@ -99,15 +110,18 @@ exports.addTask = async (req, res) => {
       return;
     } else {
       assignedNotification({
-        phone:issueMember.phone,
-        assignedTo:issueMember.name,
-        assignedBy:assignedBy.name,
-        category:task.category,
-        taskName:task.title,
-        description:task.description,
-        priority:task.priority,
-        frequency:task.repeat.repeatType === "norepeat" ? "Once" : task.repeat.repeatType,
-        dueDate: new Date(task.dueDate).toDateString()
+        phone: issueMember.phone,
+        assignedTo: issueMember.name,
+        assignedBy: assignedBy.name,
+        category: task.category,
+        taskName: task.title,
+        description: task.description,
+        priority: task.priority,
+        frequency:
+          task.repeat.repeatType === 'norepeat'
+            ? 'Once'
+            : task.repeat.repeatType,
+        dueDate: new Date(task.dueDate).toDateString(),
       });
       res.status(201).send({
         status: 201,
@@ -445,13 +459,13 @@ exports.getTaskByid = async (req, res) => {
         },
       ])
       .exec()
-      .then((task) => {
+      .then(task => {
         if (!task) {
           throw new Error('Task not found');
         }
         return task;
       })
-      .catch((error) => {
+      .catch(error => {
         throw error;
       });
     if (!task) {
@@ -504,115 +518,142 @@ exports.searchTask = async (req, res) => {
   }
 };
 
-
-
 exports.taskAddComment = async (req, res) => {
   try {
-    const { taskId, type, comment, userId, isWorking, material, workers } = req.body;
+    const { taskId, type, comment, userId, isWorking, material, workers } =
+      req.body;
     // const profileFiles =
     //   req.files?.image?.map((file) =>
     //     typeof file === 'string' ? file : file.location
     //   ) || [];
     // const audioFile = req.files?.audio?.[0]?.location;
 
-  const images = [];
-  const files = [];
-  let audioFile;
+    const images = [];
+    const files = [];
+    let audioFile;
 
-  if (req.files?.image?.length > 0) {
-    await awsS3.uploadFiles(req.files?.image, `taskComments`).then(async (data) => {
-    const profileFiles = data.map((file) => {
-      const url = 'https://thekedar-bucket.s3.us-east-1.amazonaws.com/' + file.s3key
-      return url;
-    })
-    images.push(...profileFiles);
-   });
-  }
+    if (req.files?.image?.length > 0) {
+      await awsS3
+        .uploadFiles(req.files?.image, `taskComments`)
+        .then(async data => {
+          const profileFiles = data.map(file => {
+            const url =
+              'https://thekedar-bucket.s3.us-east-1.amazonaws.com/' +
+              file.s3key;
+            return url;
+          });
+          images.push(...profileFiles);
+        });
+    }
 
-  if (req.files?.docs?.length > 0) {
-    await awsS3.uploadFiles(req.files?.docs, `taskComments`).then(async (data) => {
-    const documents = data.map((file) => {
-      const url = 'https://thekedar-bucket.s3.us-east-1.amazonaws.com/' + file.s3key
-      return url;
-    })
-    files.push(...documents);
-   });
-  }
+    if (req.files?.docs?.length > 0) {
+      await awsS3
+        .uploadFiles(req.files?.docs, `taskComments`)
+        .then(async data => {
+          const documents = data.map(file => {
+            const url =
+              'https://thekedar-bucket.s3.us-east-1.amazonaws.com/' +
+              file.s3key;
+            return url;
+          });
+          files.push(...documents);
+        });
+    }
 
-   if (req.files?.audio) {
-   await awsS3.uploadFiles(req.files?.audio, `taskComments`).then(async (data) => {
-    audioFile = 'https://thekedar-bucket.s3.us-east-1.amazonaws.com/' + data[0].s3key;
-   });
-  }
+    if (req.files?.audio) {
+      await awsS3
+        .uploadFiles(req.files?.audio, `taskComments`)
+        .then(async data => {
+          audioFile =
+            'https://thekedar-bucket.s3.us-east-1.amazonaws.com/' +
+            data[0].s3key;
+        });
+    }
 
     let task = await Task.findById(taskId).populate(['issueMember']);
 
     let member = await TeamMembers.findById(userId);
 
-    if(!member){
+    if (!member) {
       member = await User.findById(userId);
     }
 
-    if(task.category === "Project") {
+    if (task.category === 'Project') {
+      if (!task) {
+        return res.status(404).send({ message: 'Task not found' });
+      }
+      const siteId = task.siteID;
+      const seniorEngineer = await Project.findOne({ siteID: siteId })
+        .select('sr_engineer')
+        .populate({
+          path: 'sr_engineer',
+          model: 'teammembers',
+        });
 
-    if (!task) {
-      return res.status(404).send({ message: 'Task not found' });
-    }
-      const siteId = task.siteID
-      const seniorEngineer = await Project.findOne({siteID:siteId}).select('sr_engineer').populate({
-        path: 'sr_engineer',
-        model: 'teammembers',
-      });
-
-      if(seniorEngineer.sr_engineer[0]._id.toString() !== mongoose.Types.ObjectId(userId).toString()) {
+      if (
+        seniorEngineer.sr_engineer[0]._id.toString() !==
+        mongoose.Types.ObjectId(userId).toString()
+      ) {
         teamUpdate({
-          phone:seniorEngineer.sr_engineer[0].phone,
+          phone: seniorEngineer.sr_engineer[0].phone,
           assignedTo: seniorEngineer.sr_engineer[0].name,
           assignedBy: member.name,
-          category:task.category,
-          taskName:task.title,
-          description:task.description,
-          priority:task.priority,
-          frequency:task.repeat.repeatType === "norepeat" ? "Once" : task.repeat.repeatType,
-          dueDate:task.dueDate.toDateString()
-        })
+          category: task.category,
+          taskName: task.title,
+          description: task.description,
+          priority: task.priority,
+          frequency:
+            task.repeat.repeatType === 'norepeat'
+              ? 'Once'
+              : task.repeat.repeatType,
+          dueDate: task.dueDate.toDateString(),
+        });
       }
-
     } else {
       task = await Task.findById(taskId).populate(['issueMember']);
       let assignedBy = await TeamMembers.findById(task.assignedBy);
 
-      if(!assignedBy){
+      if (!assignedBy) {
         assignedBy = await User.findById(task.assignedBy);
       }
 
-      if(assignedBy._id.toString() !== mongoose.Types.ObjectId(userId).toString()) {
+      if (
+        assignedBy._id.toString() !== mongoose.Types.ObjectId(userId).toString()
+      ) {
         teamUpdate({
-          phone:assignedBy.phone,
+          phone: assignedBy.phone,
           assignedTo: assignedBy.name,
           assignedBy: member.name,
-          category:task.category,
-          taskName:task.title,
-          description:task.description,
-          priority:task.priority,
-          frequency:task.repeat.repeatType === "norepeat" ? "Once" : task.repeat.repeatType,
-          dueDate:task.dueDate.toDateString()
-        })
+          category: task.category,
+          taskName: task.title,
+          description: task.description,
+          priority: task.priority,
+          frequency:
+            task.repeat.repeatType === 'norepeat'
+              ? 'Once'
+              : task.repeat.repeatType,
+          dueDate: task.dueDate.toDateString(),
+        });
       }
 
-      if(task.issueMember._id.toString() !== mongoose.Types.ObjectId(userId).toString()) {
-
+      if (
+        task.issueMember._id.toString() !==
+        mongoose.Types.ObjectId(userId).toString()
+      ) {
         teamUpdate({
-          phone:task.issueMember.phone,
+          phone: task.issueMember.phone,
           assignedTo: task.issueMember.name,
           assignedBy: member.name,
-          category:task.category || "", 
-          taskName:task.title,
-          description:task.description,
-          priority:task.priority,
-          frequency:task.repeat.repeatType === "norepeat" ? "Once" : task.repeat.repeatType,
-          dueDate:task.dueDate.toDateString()
-        })
+          category: task.category || '',
+          taskName: task.title,
+          description: task.description,
+          priority: task.priority,
+          frequency:
+            task.repeat.repeatType === 'norepeat'
+              ? 'Once'
+              : task.repeat.repeatType,
+          dueDate: task.dueDate.toDateString(),
+        });
       }
     }
 
@@ -635,8 +676,10 @@ exports.taskAddComment = async (req, res) => {
             if (step.taskId.toString() === task._id.toString()) {
               const today = new Date();
 
-              const activateTask = async (taskId) => {
-                const taskToActivate = await Task.findById(taskId).populate('issueMember');
+              const activateTask = async taskId => {
+                const taskToActivate = await Task.findById(taskId).populate(
+                  'issueMember'
+                );
                 if (taskToActivate) {
                   const dueDate = new Date(today);
                   dueDate.setDate(today.getDate() + taskToActivate.duration);
@@ -651,18 +694,21 @@ exports.taskAddComment = async (req, res) => {
                       },
                     },
                     { new: true }
-                  )
+                  );
                   assignedNotification({
-                    phone:taskToActivate.issueMember.phone,
-                    assignedTo:taskToActivate.issueMember.name,
-                    assignedBy:"Admin",
-                    category:taskToActivate.category,
-                    taskName:taskToActivate.title,
-                    description:taskToActivate.description,
-                    priority:taskToActivate.priority,
-                    frequency:taskToActivate.repeat.repeatType === "norepeat" ? "Once" : task.repeat.repeatType,
-                    dueDate:dueDate.toDateString()
-                  })
+                    phone: taskToActivate.issueMember.phone,
+                    assignedTo: taskToActivate.issueMember.name,
+                    assignedBy: 'Admin',
+                    category: taskToActivate.category,
+                    taskName: taskToActivate.title,
+                    description: taskToActivate.description,
+                    priority: taskToActivate.priority,
+                    frequency:
+                      taskToActivate.repeat.repeatType === 'norepeat'
+                        ? 'Once'
+                        : task.repeat.repeatType,
+                    dueDate: dueDate.toDateString(),
+                  });
                 }
               };
 
@@ -703,13 +749,16 @@ exports.taskAddComment = async (req, res) => {
       }
     }
 
-    if ( type === 'Complete' || (task.status !== 'Overdue' && type === 'In Progress') ) {
+    if (
+      type === 'Complete' ||
+      (task.status !== 'Overdue' && type === 'In Progress')
+    ) {
       task.status = type;
     }
 
-    if(type === 'Reopened') {
+    if (type === 'Reopened') {
       task.status = 'In Progress';
-    };
+    }
 
     const newComment = {
       comment,
@@ -746,7 +795,7 @@ exports.taskAddComment = async (req, res) => {
   }
 };
 
-const getReferenceModel = async (userId) => {
+const getReferenceModel = async userId => {
   const models = [
     { model: TeamMembers, referenceModel: 'teammembers' },
     { model: User, referenceModel: 'User' },
@@ -865,7 +914,9 @@ exports.approveTaskComment = async (req, res) => {
     if (comment.approved.isApproved) {
       return res.status(400).send({ message: 'Comment already approved' });
     }
-    const client = await Project.findOne({siteID:siteID}).select('client').populate('client');
+    const client = await Project.findOne({ siteID: siteID })
+      .select('client')
+      .populate('client');
     const task = await Task.findById(taskId);
     const referenceModel = await getReferenceModel(userId);
     if (!referenceModel) {
@@ -881,16 +932,16 @@ exports.approveTaskComment = async (req, res) => {
           'approved.approvedOn': Date.now(),
         },
       }
-    )
+    );
     await clientUpdate({
-      clientName:client.client.name,
-      phone:client.client.phone,
-      issueMember:comment.createdBy.name,
-      taskName:task.title,
-      status:task.status,
-      dueDate:task.dueDate.toDateString(),
-      remarks: comment.comment
-    })
+      clientName: client.client.name,
+      phone: client.client.phone,
+      issueMember: comment.createdBy.name,
+      taskName: task.title,
+      status: task.status,
+      dueDate: task.dueDate.toDateString(),
+      remarks: comment.comment,
+    });
     res.status(200).send({ message: 'Comment approved successfully' });
   } catch (error) {
     console.error('Server error:', error);
@@ -1605,6 +1656,7 @@ exports.customDashboardFilters = async (req, res) => {
       isActive: true,
       // status:"In Progress",
       dueDate: { $gte: start, $lte: end },
+      siteID: { $exists: true },
     };
 
     if (userId) {
@@ -1632,9 +1684,9 @@ exports.customDashboardFilters = async (req, res) => {
       query.siteID = siteId;
     }
 
-      if (branch) {
-    query.branch = branch;
-  }
+    if (branch) {
+      query.branch = branch;
+    }
 
     await fetchTasks(res, query, page);
   } catch (error) {
@@ -1655,9 +1707,9 @@ exports.addChecklist = async (req, res) => {
       return res.status(404).send({ message: 'Task not found' });
     }
 
-    const checklistItems = checklist.checkList.map((item) => ({
+    const checklistItems = checklist.checkList.map(item => ({
       heading: item.heading,
-      points: item.points.map((point) => ({
+      points: item.points.map(point => ({
         ...point,
         isChecked: null,
         image: '',
@@ -1740,79 +1792,79 @@ exports.deleteChecklist = async (req, res) => {
 
 exports.manuallyCloseTask = async (req, res) => {
   try {
-    const { taskId,  date } = req.body;
+    const { taskId, date } = req.body;
 
     const task = await Task.findById(taskId);
 
-      const project = await Project.findOne({ siteID: task.siteID });
-      if (project) {
-        const projectStatuses = project.project_status;
+    const project = await Project.findOne({ siteID: task.siteID });
+    if (project) {
+      const projectStatuses = project.project_status;
 
-        for (let i = 0; i < projectStatuses.length; i++) {
-          const projectStatus = projectStatuses[i];
+      for (let i = 0; i < projectStatuses.length; i++) {
+        const projectStatus = projectStatuses[i];
 
-          for (let j = 0; j < projectStatus.step.length; j++) {
-            const step = projectStatus.step[j];
+        for (let j = 0; j < projectStatus.step.length; j++) {
+          const step = projectStatus.step[j];
 
-            if (step.taskId.toString() === task._id.toString()) {
-              const today = new Date();
+          if (step.taskId.toString() === task._id.toString()) {
+            const today = new Date();
 
-              const activateTask = async (taskId) => {
-                const taskToActivate = await Task.findById(taskId);
-                if (taskToActivate) {
-                  const dueDate = new Date(today);
-                  dueDate.setDate(today.getDate() + taskToActivate.duration);
-                  await updateTaskAndReschedule(taskId, { dueDate: dueDate });
-                  await Task.findByIdAndUpdate(
-                    taskId,
-                    {
-                      $set: {
-                        isActive: true,
-                        assignedOn: today,
-                        dueDate: dueDate,
-                      },
+            const activateTask = async taskId => {
+              const taskToActivate = await Task.findById(taskId);
+              if (taskToActivate) {
+                const dueDate = new Date(today);
+                dueDate.setDate(today.getDate() + taskToActivate.duration);
+                await updateTaskAndReschedule(taskId, { dueDate: dueDate });
+                await Task.findByIdAndUpdate(
+                  taskId,
+                  {
+                    $set: {
+                      isActive: true,
+                      assignedOn: today,
+                      dueDate: dueDate,
                     },
-                    { new: true }
-                  );
-                }
-              };
-
-              // Find next steps
-              let nextStep = projectStatus.step[j + 1];
-              let nextNextStep = projectStatus.step[j + 2];
-
-              // If no nextStep, try from next projectStatus
-              if (!nextStep && projectStatuses[i + 1]) {
-                nextStep = projectStatuses[i + 1].step[0];
+                  },
+                  { new: true }
+                );
               }
-              // If no nextNextStep, try from next projectStatus
-              if (
-                projectStatus.step[j + 1] &&
-                !projectStatus.step[j + 2] &&
-                projectStatuses[i + 1]
-              ) {
-                nextNextStep = projectStatuses[i + 1].step[0];
-              }
+            };
 
-              // If no nextNextStep, try second step from next projectStatus
-              if (!nextNextStep && projectStatuses[i + 1]) {
-                nextNextStep = projectStatuses[i + 1].step[1];
-              }
+            // Find next steps
+            let nextStep = projectStatus.step[j + 1];
+            let nextNextStep = projectStatus.step[j + 2];
 
-              // Activate steps if available
-              if (nextStep?.taskId) {
-                await activateTask(nextStep.taskId);
-              }
-              if (nextNextStep?.taskId) {
-                await activateTask(nextNextStep.taskId);
-              }
-
-              break; // Found the task, no need to continue
+            // If no nextStep, try from next projectStatus
+            if (!nextStep && projectStatuses[i + 1]) {
+              nextStep = projectStatuses[i + 1].step[0];
             }
+            // If no nextNextStep, try from next projectStatus
+            if (
+              projectStatus.step[j + 1] &&
+              !projectStatus.step[j + 2] &&
+              projectStatuses[i + 1]
+            ) {
+              nextNextStep = projectStatuses[i + 1].step[0];
+            }
+
+            // If no nextNextStep, try second step from next projectStatus
+            if (!nextNextStep && projectStatuses[i + 1]) {
+              nextNextStep = projectStatuses[i + 1].step[1];
+            }
+
+            // Activate steps if available
+            if (nextStep?.taskId) {
+              await activateTask(nextStep.taskId);
+            }
+            if (nextNextStep?.taskId) {
+              await activateTask(nextNextStep.taskId);
+            }
+
+            break; // Found the task, no need to continue
           }
         }
       }
-    
+    }
+
     task.status = 'Complete';
     task.updatedOn = new Date(date).toISOString();
     await task.save();

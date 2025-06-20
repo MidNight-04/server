@@ -1,3 +1,5 @@
+/** @format */
+
 const db = require('../models');
 const Project = db.projects;
 const Process = db.constructionsteps;
@@ -130,16 +132,16 @@ exports.addProject = async (req, res) => {
       .sort((a, b) => a.priority - b.priority);
 
     const roleMap = {
-      'admin': 'admin',
+      admin: 'admin',
       'site manager': 'manager',
-      'architect': 'architect',
+      architect: 'architect',
       'sr. engineer': 'sr_engineer',
       'sr. architect': 'sr. architect',
       'site engineer': 'engineer',
-      'accountant': 'accountant',
-      'operations': 'operation',
-      'sales': 'sales',
-      'client': 'client',
+      accountant: 'accountant',
+      operations: 'operation',
+      sales: 'sales',
+      client: 'client',
     };
 
     const getIssueMemberAndModel = role => {
@@ -174,29 +176,29 @@ exports.addProject = async (req, res) => {
 
         let checklistDetails = {};
         if (el.checkList === 'Yes') {
-          const check = allChecklist.find(checklist =>
-            checklist.name === el.checkListName
-            );
+          const check = allChecklist.find(
+            checklist => checklist.name === el.checkListName
+          );
 
           if (check) {
-          const checklistItems = check.checkList.map((item) => ({
-            heading: item.heading,
-            points: item.points.map((point) => ({
-              ...point,
-              isChecked: null,
-              image: '',
-            })),
-          }));
+            const checklistItems = check.checkList.map(item => ({
+              heading: item.heading,
+              points: item.points.map(point => ({
+                ...point,
+                isChecked: null,
+                image: '',
+              })),
+            }));
 
-          checklistDetails = {
-            id: check._id,
-            step: check.checkListStep,
-            name: check.name,
-            number: check.checkListNumber,
-            items: checklistItems,
-          };
+            checklistDetails = {
+              id: check._id,
+              step: check.checkListStep,
+              name: check.name,
+              number: check.checkListNumber,
+              items: checklistItems,
+            };
           }
-        };
+        }
 
         return {
           title: el.content,
@@ -205,7 +207,7 @@ exports.addProject = async (req, res) => {
           stepName: projectStepArray[i].name,
           assignedBy: data.assignedID,
           duration: el.duration !== '' ? el.duration : 0,
-          point:idx,
+          point: idx,
           dueDate:
             i === 0 && idx === 0 ? dayjs().add(el.duration, 'day') : null,
           siteID: data.siteID,
@@ -268,7 +270,7 @@ exports.addProject = async (req, res) => {
       return res.status(204).json({
         message: `First create payment stage for ${data.floor} floor`,
       });
-    };
+    }
 
     const stages = paymentStages.stages.map(item => ({
       ...item,
@@ -421,7 +423,7 @@ exports.getProjectByClientId = async (req, res) => {
   try {
     mongoose.set('strictPopulate', false);
 
-    const projects = await  Project.find({ client: req.params.id }).populate({
+    const projects = await Project.find({ client: req.params.id }).populate({
       path: 'project_status',
       populate: {
         path: 'step',
@@ -447,11 +449,11 @@ exports.getProjectByClientId = async (req, res) => {
         },
       },
     });
-   console.log('Projects:', projects,req.params.id);
+
     if (!projects || projects.length === 0) {
       return res.status(404).send({
         message: 'No projects found for the given client ID',
-        data:projects,
+        data: projects,
       });
     }
 
@@ -467,7 +469,6 @@ exports.getProjectByClientId = async (req, res) => {
     });
   }
 };
-
 
 exports.deleteProjectById = async (req, res) => {
   try {
@@ -706,14 +707,17 @@ exports.updateProjectTaskByMember = async (req, res) => {
   // }
 
   if (req.files?.image?.length > 0) {
-     await awsS3.uploadFiles(req.files?.image, `project_update`).then(async (data) => {
-     const profileFiles = data.map((file) => {
-       const url = 'https://thekedar-bucket.s3.us-east-1.amazonaws.com/' + file.s3key
-       return url;
-     })
-     images.push(...profileFiles);
-    });
-   }
+    await awsS3
+      .uploadFiles(req.files?.image, `project_update`)
+      .then(async data => {
+        const profileFiles = data.map(file => {
+          const url =
+            'https://thekedar-bucket.s3.us-east-1.amazonaws.com/' + file.s3key;
+          return url;
+        });
+        images.push(...profileFiles);
+      });
+  }
 
   try {
     // Find the project document by _id
@@ -816,18 +820,22 @@ exports.updateProjectStatusById = async (req, res) => {
     // }
 
     if (req.files?.image?.length > 0) {
-     await awsS3.uploadFiles(req.files?.image, `project_update`).then(async (data) => {
-     const images = data.map((file) => {
-       const url = 'https://thekedar-bucket.s3.us-east-1.amazonaws.com/' + file.s3key
-       const obj = {
-        url:url,
-        isApproved:false
-       };
-       return obj;
-     })
-     profileFiles.push(...images);
-    });
-   }
+      await awsS3
+        .uploadFiles(req.files?.image, `project_update`)
+        .then(async data => {
+          const images = data.map(file => {
+            const url =
+              'https://thekedar-bucket.s3.us-east-1.amazonaws.com/' +
+              file.s3key;
+            const obj = {
+              url: url,
+              isApproved: false,
+            };
+            return obj;
+          });
+          profileFiles.push(...images);
+        });
+    }
 
     const logData = {
       log: `<span style="color: black;">${content}</span> ->> <em style="color: #fec20e;">${status}</em>`,
@@ -879,7 +887,7 @@ exports.updateProjectStatusById = async (req, res) => {
     if (checkListName) {
       await Project.updateOne(
         {
-          'siteID': id,
+          siteID: id,
           'inspections.checkListStep': name,
           'inspections.name': checkListName,
           'inspections.checkListNumber': parseInt(point),
@@ -994,7 +1002,7 @@ exports.updateProjectStatusById = async (req, res) => {
     if (checkListName) {
       await Project.updateOne(
         {
-          'siteID': id,
+          siteID: id,
           'inspections.checkListStep': name,
           'inspections.name': checkListName,
           'inspections.checkListNumber': parseInt(point),
@@ -1127,15 +1135,18 @@ exports.clientQueryForProject = async (req, res) => {
   //   }
   // }
 
-    if (req.files?.image?.length > 0) {
-     await awsS3.uploadFiles(req.files?.image, `client_query`).then(async (data) => {
-     const images = data.map((file) => {
-       const url = 'https://thekedar-bucket.s3.us-east-1.amazonaws.com/' + file.s3key
-       return url;
-     })
-     profileFiles.push(...images);
-    });
-   }
+  if (req.files?.image?.length > 0) {
+    await awsS3
+      .uploadFiles(req.files?.image, `client_query`)
+      .then(async data => {
+        const images = data.map(file => {
+          const url =
+            'https://thekedar-bucket.s3.us-east-1.amazonaws.com/' + file.s3key;
+          return url;
+        });
+        profileFiles.push(...images);
+      });
+  }
 
   try {
     const project = await Project.findOne({ siteID: id });
@@ -1205,7 +1216,7 @@ exports.addNewPointById = async (req, res) => {
   } = req.body;
   try {
     const filter = {
-      'siteID': id,
+      siteID: id,
       'inspections.checkListStep': checkListStep,
       'inspections.name': name,
       'inspections.checkListNumber': number,
@@ -1267,7 +1278,7 @@ exports.addNewExtraPointById = async (req, res) => {
   try {
     await Project.updateOne(
       {
-        'siteID': id,
+        siteID: id,
         'inspections.checkListStep': checkListStep,
         'inspections.name': name,
         'inspections.checkListNumber': number,
@@ -1360,7 +1371,7 @@ exports.deleteExtraPointById = async (req, res) => {
     } = req.body;
     await Project.updateOne(
       {
-        'siteID': id,
+        siteID: id,
         'inspections.checkListStep': checkListStep,
         'inspections.name': name,
         'inspections.checkListNumber': number,
@@ -1820,7 +1831,7 @@ exports.AddNewProjectPoint = async (req, res) => {
 
     if (forceMajeure.isForceMajeure) {
       updateResult = await Project.updateOne(
-        { 'siteID': id, 'project_status.name': stepName },
+        { siteID: id, 'project_status.name': stepName },
         {
           $set: {
             'project_status.$.step':
@@ -1841,7 +1852,7 @@ exports.AddNewProjectPoint = async (req, res) => {
       );
     } else {
       updateResult = await Project.updateOne(
-        { 'siteID': id, 'project_status.name': stepName },
+        { siteID: id, 'project_status.name': stepName },
         {
           $set: {
             'project_status.$.step':
@@ -1999,7 +2010,8 @@ exports.AddNewProjectPoint = async (req, res) => {
 // };
 
 exports.DeleteProjectPoint = async (req, res) => {
-  const { id, name, point, content, checkList, checkListName, duration } = req.body;
+  const { id, name, point, content, checkList, checkListName, duration } =
+    req.body;
 
   try {
     const project = await Project.findOne({ siteID: id }).populate({
@@ -2016,7 +2028,7 @@ exports.DeleteProjectPoint = async (req, res) => {
     if (!project) {
       return res.status(404).json({ message: 'Project not found' });
     }
-    
+
     const projectStatus = project.project_status.find(
       status => status.name === name
     );
@@ -2037,12 +2049,12 @@ exports.DeleteProjectPoint = async (req, res) => {
 
     let extension = 0;
 
-    if(!stepToRemove.forceMajeure) {
+    if (!stepToRemove.forceMajeure) {
       extension = Math.max(project.extension - duration, 0);
       if (extension < 0) {
         extension = 0;
       }
-    };
+    }
 
     const updatePayload = {
       $pull: {
@@ -2053,7 +2065,7 @@ exports.DeleteProjectPoint = async (req, res) => {
       },
       $inc: { extension: -extension },
     };
-    
+
     if (checkList) {
       updatePayload.$pull.inspections = {
         checkListStep: name,
@@ -2063,7 +2075,7 @@ exports.DeleteProjectPoint = async (req, res) => {
     }
 
     const updateResult = await Project.updateOne(
-      { 'siteID': id, 'project_status.name': name },
+      { siteID: id, 'project_status.name': name },
       updatePayload,
       { arrayFilters: [{ 'status.name': name }] }
     );
@@ -2167,14 +2179,18 @@ exports.TicketUpdateByMember = async (req, res) => {
     //   }
     // }
     if (req.files?.image?.length > 0) {
-     await awsS3.uploadFiles(req.files?.image, `client_query`).then(async (data) => {
-     const images = data.map((file) => {
-       const url = 'https://thekedar-bucket.s3.us-east-1.amazonaws.com/' + file.s3key
-       return url;
-     })
-     profileFiles.push(...images);
-    });
-   }
+      await awsS3
+        .uploadFiles(req.files?.image, `client_query`)
+        .then(async data => {
+          const images = data.map(file => {
+            const url =
+              'https://thekedar-bucket.s3.us-east-1.amazonaws.com/' +
+              file.s3key;
+            return url;
+          });
+          profileFiles.push(...images);
+        });
+    }
     try {
       const ticket = await Ticket.findById(ticketId);
       if (!ticket) {
@@ -2225,13 +2241,13 @@ exports.changeIssueMember = async (req, res) => {
     }
     let issueMember;
     const issueMap = {
-      'Admin': 'project_admin',
-      'Manager': 'project_manager',
+      Admin: 'project_admin',
+      Manager: 'project_manager',
       'Sr. Engineer': 'sr_engineer',
       'Site Engineer': 'site_engineer',
-      'Accountant': 'accountant',
-      'Operations': 'operation',
-      'Sales': 'sales',
+      Accountant: 'accountant',
+      Operations: 'operation',
+      Sales: 'sales',
     };
     issueMember = issueMap[issue] || null;
     if (!issueMember) {
@@ -2298,11 +2314,17 @@ exports.changeIssueMember = async (req, res) => {
 
 exports.getAllSiteIds = async (req, res) => {
   try {
-    const project = await Project.find({}).select(['siteID',"date"])
-    res.status(200).json({ status: 200, message: 'All site IDs fetched successfully', data: project })
+    const project = await Project.find({}).select(['siteID', 'date']);
+    res.status(200).json({
+      status: 200,
+      message: 'All site IDs fetched successfully',
+      data: project,
+    });
   } catch (error) {
-    console.error(error)
-    res.status(500).json({ status: 500, message: 'Error while getting all site IDs' })
+    console.error(error);
+    res
+      .status(500)
+      .json({ status: 500, message: 'Error while getting all site IDs' });
   }
 };
 

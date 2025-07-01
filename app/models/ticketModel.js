@@ -1,4 +1,4 @@
-const { Schema, model } = require("mongoose");
+const { Schema, model } = require('mongoose');
 
 const ticketSchema = new Schema(
   {
@@ -28,16 +28,11 @@ const ticketSchema = new Schema(
     },
     assignMember: {
       type: Schema.Types.ObjectId,
-      refPath: "referenceModel",
+      refPath: 'User',
     },
     assignedBy: {
       type: Schema.Types.ObjectId,
-      refPath: "clients",
-    },
-    referenceModel: {
-      type: String,
-      default: "teammembers",
-      enum: ["teammembers", "clients"],
+      refPath: 'User',
     },
     siteID: {
       type: String,
@@ -50,23 +45,23 @@ const ticketSchema = new Schema(
     ],
     status: {
       type: String,
-      enum: ["Pending", "In Progress", "Complete", "Closed", "Reopened"],
-      default: "Pending",
+      enum: ['Pending', 'In Progress', 'Complete', 'Closed', 'Reopened'],
+      default: 'Pending',
     },
     completedOn: {
       type: Date,
-      default: "",
+      default: '',
     },
     comments: [
       {
         type: Schema.Types.ObjectId,
-        ref: "TaskComment",
+        ref: 'TaskComment',
       },
     ],
   },
   { timestamps: true }
 );
 
-const ticketModel = model("Tickets", ticketSchema);
+const ticketModel = model('Tickets', ticketSchema);
 
 module.exports = ticketModel;

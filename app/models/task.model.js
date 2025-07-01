@@ -27,25 +27,19 @@ const taskSchema = new Schema(
     },
     issueMember: {
       type: Schema.Types.ObjectId,
-      refPath: 'referenceModel',
+      refPath: 'User',
+      required: true,
     },
-    referenceModel: {
-      type: String,
-      enum: ['teammembers', 'clients'],
-    },
+
     assignedBy: {
       type: Schema.Types.ObjectId,
-      refPath: 'refModel',
-    },
-    refModel: {
-      type: String,
-      enum: ['teammembers', 'clients', 'User'],
-      default: 'User',
+      refPath: 'User',
+      required: true,
     },
     subscribedMembers: [
       {
         type: Schema.Types.ObjectId,
-        ref: 'teammembers',
+        ref: 'User',
       },
     ],
     siteID: {

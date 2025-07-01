@@ -54,14 +54,10 @@ const taskCommentSchema = new Schema(
     },
     createdBy: {
       type: Schema.Types.ObjectId,
-      refPath: 'referenceModel',
+      refPath: 'User',
       required: true,
     },
-    referenceModel: {
-      type: String,
-      enum: ['teammembers', 'User', 'clients'],
-      default: 'teammembers',
-    },
+
     approved: {
       isApproved: {
         type: Boolean,
@@ -69,12 +65,7 @@ const taskCommentSchema = new Schema(
       },
       approvedBy: {
         type: Schema.Types.ObjectId,
-        refPath: 'approveRef',
-      },
-      approveRef: {
-        type: String,
-        enum: ['teammembers', 'User'],
-        default: 'teammembers',
+        refPath: 'User',
       },
       approvedOn: {
         type: Date,

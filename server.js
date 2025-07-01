@@ -6,8 +6,12 @@ const morgan = require('morgan');
 const bodyParser = require('body-parser');
 const app = express();
 const path = require('path');
-const cron = require('node-cron');
-const {sendWhatsAppMessage, dueDateNotification} = require('./app/helper/reminder');
+const cron = require('node-cron');;
+const sessionMiddleware = require('./app/middlewares/sessionMiddleware');
+const {
+  sendWhatsAppMessage,
+  dueDateNotification,
+} = require('./app/helper/reminder');
 const Task = require('./app/models/task.model');
 const { loadAndScheduleAllTasks } = require('./app/helper/schedule');
 const fetch = (...args) =>
@@ -43,12 +47,16 @@ app.use(
   })
 );
 
+app.use(express.json());
+app.use(sessionMiddleware);
+
 const db = require('./app/models');
 const dbConfig = require('./app/config/db.config');
 
 db.mongoose
   .connect(
-    `mongodb+srv://${process.env.MONGODB_HOST}:${process.env.MONGODB_PASSWORD}@${process.env.MONGODB_URL}.mongodb.net/${process.env.MONGODB_DB}`,
+    // `mongodb+srv://${process.env.MONGODB_HOST}:${process.env.MONGODB_PASSWORD}@${process.env.MONGODB_URL}.mongodb.net/${process.env.MONGODB_DB}`,
+    'mongodb+srv://vikasraghavthikedaar:Qaz_7410@cluster0.enllx.mongodb.net/test',
     {
       useNewUrlParser: true,
       useUnifiedTopology: true,
@@ -76,11 +84,11 @@ cron.schedule('0 9 * * *', async () => {
 
 cron.schedule('*/30 * * * *', async () => {
   try {
-  const filter = {
-    isActive: true,
-    dueDate: { $lt: new Date() },
-    status: { $nin: ['Overdue', 'Complete'] },
-  };
+    const filter = {
+      isActive: true,
+      dueDate: { $lt: new Date() },
+      status: { $nin: ['Overdue', 'Complete'] },
+    };
     const update = { $set: { status: 'Overdue' } };
     const options = { new: true };
     const tasks = await Task.updateMany(filter, update, options);

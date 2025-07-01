@@ -1,6 +1,7 @@
 const db = require('../models');
 const config = require('../config/auth.config');
-const Member = db.teammembers;
+const Member = db.user;
+const Role = db.role;
 const axios = require('axios');
 const helperFunction = require('../middlewares/helper');
 const otpGenerator = require('otp-generator');
@@ -171,7 +172,7 @@ exports.signin = async (req, res) => {
       return res.status(500).send({ message: 'Invalid Entry' });
     }
 
-    const user = await Member.findOne({
+    const user = await User.findOne({
       [helperFunction.checkEmailPhone(req.body.username)]: req.body.username,
     })
       .populate('role')
@@ -246,25 +247,28 @@ exports.addMember = async (req, res) => {
   }
 };
 
-exports.getAllMember = (req, res) => {
-  Member.find({})
-    .populate('role')
-    .sort({ employeeID: 1 })
-    .then((member, err) => {
-      if (err) {
-        res.status(500).send({
-          message: 'There was a problem in getting the list of role',
-        });
-        return;
-      }
-      if (member) {
-        res.status(200).send({
-          message: 'List of member fetched successfuly',
-          data: member,
-        });
-      }
+exports.getAllMember = async (req, res) => {
+  try {
+    const roles = await Role.find({ name: { $in: ['user', 'Client'] } }).select(
+      '_id'
+    );
+    const roleIds = roles.map(role => role._id);
+
+    const members = await Member.find({ roles: { $nin: roleIds } })
+      .populate('roles')
+      .sort({ employeeID: 1 });
+
+    return res.status(200).send({
+      message: 'List of members fetched successfully',
+      data: members,
     });
-  return;
+  } catch (error) {
+    console.error('Error fetching members:', error);
+    return res.status(500).send({
+      message: 'There was a problem in getting the list of members',
+      error: error.message,
+    });
+  }
 };
 
 exports.deleteMemberById = (req, res) => {
@@ -310,13 +314,16 @@ exports.updateMemberProfileById = async (req, res) => {
   // }
 
   if (req.files?.image?.length > 0) {
-     await awsS3.uploadFiles(req.files?.image, `profile_photo`).then(async (data) => {
-     const images = data.map((file) => {
-       const url = 'https://thekedar-bucket.s3.us-east-1.amazonaws.com/' + file.s3key
-       return url;
-     })
-     profileFiles.push(...images);
-    });
+    await awsS3
+      .uploadFiles(req.files?.image, `profile_photo`)
+      .then(async data => {
+        const images = data.map(file => {
+          const url =
+            'https://thekedar-bucket.s3.us-east-1.amazonaws.com/' + file.s3key;
+          return url;
+        });
+        profileFiles.push(...images);
+      });
   }
 
   const findData = await Member.find({ _id: req.params.id });
@@ -377,7 +384,7 @@ exports.updateMemberById = (req, res) => {
 exports.getTeammemberByRole = async (req, res) => {
   try {
     const { role } = req.body;
-    const teammembers = await Member.find({
+    const teammembers = await User.find({
       role: mongoose.Types.ObjectId(role),
     });
     if (!teammembers || teammembers.length === 0) {
@@ -408,7 +415,7 @@ exports.loginWithPassword = async (req, res) => {
       return res.status(401).send({ message: 'Invalid password' });
     }
 
-   const token = jwt.sign({ id: user.id }, config.secret, {
+    const token = jwt.sign({ id: user.id }, config.secret, {
       expiresIn: 86400, // 24 hours
     });
 
@@ -431,10 +438,8 @@ exports.loginWithPassword = async (req, res) => {
           : 'ROLE_' + user.role.name.toUpperCase(),
       token: token,
     });
-
   } catch (err) {
     console.error(err);
     res.status(500).send({ message: 'Something went wrong' });
   }
 };
-

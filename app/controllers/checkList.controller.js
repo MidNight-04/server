@@ -1,8 +1,8 @@
-const config = require("../config/auth.config");
-const db = require("../models");
+const config = require('../config/auth.config');
+const db = require('../models');
 const CheckList = db.checkList;
-const xlsx = require("xlsx");
-const axios = require("axios");
+const xlsx = require('xlsx');
+const axios = require('axios');
 
 exports.addCheckList = async (req, res) => {
   const { name, checkList } = req.body;
@@ -12,38 +12,37 @@ exports.addCheckList = async (req, res) => {
   };
   const find = CheckList.find({ name: req.body.name });
   if (find?.length > 0) {
-    res.status(200).send({ message: "Record already exist" });
+    res.status(200).send({ message: 'Record already exist' });
   } else {
     let Check = new CheckList(data);
     Check.save((err, result) => {
       if (err) {
-        res.status(500).send({ message: "Could not create checklist" });
+        res.status(500).send({ message: 'Could not create checklist' });
         return;
       } else {
         console.log(result);
-        res.status(201).send({ message: "Record created Successfuly" });
+        res.status(201).send({ message: 'Record created Successfuly' });
       }
       return;
     });
   }
 };
-exports.getAllCheckList = (req, res) => {
-  CheckList.find({}).then((data, err) => {
-    if (err) {
-      res.status(500).send({
-        message: "There was a problem in getting the checklist",
-      });
-      return;
-    }
-    if (data) {
-      res.status(200).send({
-        message: "List of checklist fetched successfuly",
-        data: data,
-      });
-    }
-  });
-  return;
+
+exports.getAllCheckList = async (req, res) => {
+  try {
+    const data = await CheckList.find({});
+    res.status(200).send({
+      message: 'List of checklist fetched successfully',
+      data,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).send({
+      message: 'There was a problem in getting the checklist',
+    });
+  }
 };
+
 exports.addNewPointById = async (req, res) => {
   const { id, name, checkList } = req.body;
   try {
@@ -63,18 +62,18 @@ exports.addNewPointById = async (req, res) => {
     if (result.modifiedCount === 1) {
       res.json({
         status: 200,
-        message: "New point added successfully",
+        message: 'New point added successfully',
       });
     } else {
       res.json({
         status: 400,
-        message: "Error on add new point",
+        message: 'Error on add new point',
       });
     }
   } catch (error) {
     res.json({
       status: 400,
-      message: "Error while record create",
+      message: 'Error while record create',
     });
   }
 };
@@ -85,12 +84,12 @@ exports.addNewExtraPointById = async (req, res) => {
     const filter = {
       _id: id,
       name: name,
-      "checkList.heading": heading,
+      'checkList.heading': heading,
     };
     // Construct the update operation to push a new point
     const updateOperation = {
       $push: {
-        "checkList.$.points": { point: point },
+        'checkList.$.points': { point: point },
       },
     };
     // Perform the update
@@ -98,18 +97,18 @@ exports.addNewExtraPointById = async (req, res) => {
     if (result.modifiedCount === 1) {
       res.json({
         status: 200,
-        message: "New point added successfully",
+        message: 'New point added successfully',
       });
     } else {
       res.json({
         status: 400,
-        message: "Error on add new point",
+        message: 'Error on add new point',
       });
     }
   } catch (error) {
     res.json({
       status: 400,
-      message: "Error while record update",
+      message: 'Error while record update',
     });
   }
 };
@@ -120,26 +119,26 @@ exports.deletePointById = async (req, res) => {
     const filter = {
       _id: id,
       name: name,
-      "checkList.heading": heading,
+      'checkList.heading': heading,
     };
     // Construct the update operation to push a new point
     const updateOperation = {
       $pull: {
-        "checkList.$.points": { point: point },
+        'checkList.$.points': { point: point },
       },
     };
     // Perform the update
     CheckList.updateOne(filter, updateOperation)
-      .then((result) => {
+      .then(result => {
         res.json({
           status: 200,
-          message: "New point deleted successfully",
+          message: 'New point deleted successfully',
         });
       })
-      .catch((error) => {
+      .catch(error => {
         res.json({
           status: 400,
-          message: "Error on delete point",
+          message: 'Error on delete point',
         });
       });
     // console.log(result);
@@ -157,7 +156,7 @@ exports.deletePointById = async (req, res) => {
   } catch (error) {
     res.json({
       status: 400,
-      message: "Error while record delete",
+      message: 'Error while record delete',
     });
   }
 };
@@ -181,18 +180,18 @@ exports.addNewHeadingById = async (req, res) => {
     if (result.modifiedCount === 1) {
       res.json({
         status: 200,
-        message: "New point added successfully",
+        message: 'New point added successfully',
       });
     } else {
       res.json({
         status: 400,
-        message: "Error on add new point",
+        message: 'Error on add new point',
       });
     }
   } catch (error) {
     res.json({
       status: 400,
-      message: "Error while record create",
+      message: 'Error while record create',
     });
   }
 };
@@ -202,11 +201,11 @@ exports.deleteCheckListById = (req, res) => {
     if (err) {
       res
         .status(500)
-        .send({ message: "The requested data could not be fetched" });
+        .send({ message: 'The requested data could not be fetched' });
       return;
     }
     res.status(200).send({
-      message: "Record delete successfully",
+      message: 'Record delete successfully',
       status: 200,
     });
     return;

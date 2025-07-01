@@ -1,6 +1,7 @@
 const controller = require('../controllers/project.controller');
 const { uploadImage } = require('../middlewares/uploadImage');
 const fileUploader = require('../middlewares/fileUploader');
+const { verifyToken, isSenior } = require('../middlewares/authJwt');
 
 module.exports = function (app) {
   app.use(function (req, res, next) {
@@ -10,18 +11,34 @@ module.exports = function (app) {
 
   app.post(
     '/api/project/deletestatusimage',
+    verifyToken,
+    isSenior,
     fileUploader,
     controller.deleteStatusImage
   );
-  app.post('/api/project/add', controller.addProject);
-  app.get('/api/project/getall', controller.getAllProject);
-  app.get('/api/project/member/:id', controller.getProjectByMember);
-  app.get('/api/project/client/:id', controller.getProjectByClientId);
-  app.get('/api/project/databyid/:id', controller.getProjectById);
-  app.put('/api/project/updatebyid', controller.updateProjectById);
-  app.post('/api/project/deleteImage', controller.deleteImage);
+  app.post('/api/project/add', verifyToken, isSenior, controller.addProject);
+  app.get('/api/project/getall', verifyToken, controller.getAllProject);
+  app.get(
+    '/api/project/member/:id',
+    verifyToken,
+    controller.getProjectByMember
+  );
+  app.get(
+    '/api/project/client/:id',
+    verifyToken,
+    controller.getProjectByClientId
+  );
+  app.get('/api/project/databyid/:id', verifyToken, controller.getProjectById);
+  app.put('/api/project/updatebyid', verifyToken, controller.updateProjectById);
+  app.post(
+    '/api/project/deleteImage',
+    verifyToken,
+    isSenior,
+    controller.deleteImage
+  );
   app.put(
     '/api/project/updatetaskbymember',
+    verifyToken,
     // uploadImage.fields([
     //   {
     //     name: 'image',
@@ -31,7 +48,12 @@ module.exports = function (app) {
     fileUploader,
     controller.updateProjectTaskByMember
   );
-  app.put('/api/project/updateimagestatusbyid', controller.updateImageStatus);
+  app.put(
+    '/api/project/updateimagestatusbyid',
+    verifyToken,
+    isSenior,
+    controller.updateImageStatus
+  );
   app.put(
     '/api/project/updatestatusbyid',
     // uploadImage.fields([
@@ -41,6 +63,7 @@ module.exports = function (app) {
     //   },
     // ]),
     fileUploader,
+    verifyToken,
     controller.updateProjectStatusById
   );
   app.put(
@@ -52,18 +75,43 @@ module.exports = function (app) {
     //   },
     // ]),
     fileUploader,
+    verifyToken,
     controller.clientQueryForProject
   );
-  app.put('/api/project/member/delete', controller.deleteProjectMember);
-  app.put('/api/project/member/add', controller.addProjectMember);
-  app.delete('/api/project/delete/:id', controller.deleteProjectById);
-  app.put('/api/singleproject/checklist/addpoint', controller.addNewPointById);
+  app.put(
+    '/api/project/member/delete',
+    verifyToken,
+    isSenior,
+    controller.deleteProjectMember
+  );
+  app.put(
+    '/api/project/member/add',
+    verifyToken,
+    isSenior,
+    controller.addProjectMember
+  );
+  app.delete(
+    '/api/project/delete/:id',
+    verifyToken,
+    isSenior,
+    controller.deleteProjectById
+  );
+  app.put(
+    '/api/singleproject/checklist/addpoint',
+    verifyToken,
+    isSenior,
+    controller.addNewPointById
+  );
   app.put(
     '/api/singleproject/checklist/addextrapoint',
+    verifyToken,
+    isSenior,
     controller.addNewExtraPointById
   );
   app.put(
     '/api/singleproject/checklist/deletepoint',
+    verifyToken,
+    isSenior,
     controller.deleteExtraPointById
   );
   app.get('/api/project/filterlist', controller.filterData);
@@ -71,8 +119,18 @@ module.exports = function (app) {
   app.post('/api/project/initiate-payment', controller.initiatePayment);
   app.post('/api/project/verify-payment', controller.verifyPayment);
   app.put('/api/project/createnewpoint', controller.AddNewProjectPoint);
-  app.put('/api/project/deletepoint', controller.DeleteProjectPoint);
-  app.put('/api/project/deletestep', controller.ProjectStepDelete);
+  app.put(
+    '/api/project/deletepoint',
+    verifyToken,
+    isSenior,
+    controller.DeleteProjectPoint
+  );
+  app.put(
+    '/api/project/deletestep',
+    verifyToken,
+    isSenior,
+    controller.ProjectStepDelete
+  );
 
   // ticket update related /api/project/ticketupdatemember/byid
   app.put(
@@ -86,6 +144,11 @@ module.exports = function (app) {
     fileUploader,
     controller.TicketUpdateByMember
   );
-  app.post('/api/project/changeissuemember', controller.changeIssueMember);
+  app.post(
+    '/api/project/changeissuemember',
+    verifyToken,
+    isSenior,
+    controller.changeIssueMember
+  );
   app.get('/api/project/getallsiteids', controller.getAllSiteIds);
 };

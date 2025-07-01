@@ -16,7 +16,7 @@ if (!API_KEY) {
 const sendWhatsAppMessage = async () => {
   try {
     const today = new Date();
-    const teammembers = await TeamMember.find();
+    const teammembers = await User.find();
     const allPromises = [];
 
     const startOfWeek = new Date(today);

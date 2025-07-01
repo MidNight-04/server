@@ -15,11 +15,11 @@ const PaytmChecksum = require('../helper/PaytmChecksum');
 const PayProjects = db.projectPay;
 const Task = db.task;
 const CheckList = db.checkList;
-const TeamMember = db.teammembers;
 const ProjectLog = db.projectlogs;
 const uploadImage = require('../middlewares/uploadImage');
 const awsS3 = require('../middlewares/aws-s3');
 const dayjs = require('dayjs');
+const ConstructionStep = require('../models/ConstructionStep');
 const { updateTaskAndReschedule } = require('../helper/schedule');
 
 let today = new Date();
@@ -93,6 +93,18 @@ exports.deleteStatusImage = async (req, res) => {
 exports.addProject = async (req, res) => {
   try {
     const { data } = req.body;
+    const roleMap = {
+      'Site Engineer': 'engineer',
+      'Sr. Engineer': 'sr_engineer',
+      Operations: 'operation',
+      'Site Manager': 'operation',
+      Sales: 'sales',
+      Accountant: 'accountant',
+      Architect: 'architect',
+      Admin: 'admin',
+      Contractor: 'contractor',
+      Client: 'client',
+    };
     const existingProject = await Project.findOne({
       siteID: data.siteID,
     });
@@ -102,7 +114,7 @@ exports.addProject = async (req, res) => {
         .send({ message: 'Project already exists with siteID' });
     }
 
-    const allSteps = await Process.find();
+    const allSteps = await ConstructionStep.find();
     const [floorType, floorCountStr] = data?.floor?.split('+');
     const floorCount = parseInt(floorCountStr, 10);
 
@@ -131,49 +143,17 @@ exports.addProject = async (req, res) => {
       })
       .sort((a, b) => a.priority - b.priority);
 
-    const roleMap = {
-      admin: 'admin',
-      'site manager': 'manager',
-      architect: 'architect',
-      'sr. engineer': 'sr_engineer',
-      'sr. architect': 'sr. architect',
-      'site engineer': 'engineer',
-      accountant: 'accountant',
-      operations: 'operation',
-      sales: 'sales',
-      client: 'client',
-    };
-
-    const getIssueMemberAndModel = role => {
-      const roleKey = roleMap[role.toLowerCase()];
-
-      if (roleKey === 'client') {
-        return {
-          issueMember: data[roleKey],
-          referenceModel: 'clients',
-        };
-      }
-      return roleKey
-        ? { issueMember: data[roleKey], referenceModel: 'teammembers' }
-        : { issueMember: data[roleKey], referenceModel: 'teammembers' };
-    };
-
     const allChecklist = await CheckList.find();
 
     const taskIds = [];
 
     for (let i = 0; i < projectStepArray.length; i++) {
-      console.log(projectStepArray[i].name);
       const tasks = {
         name: projectStepArray[i].name,
         priority: projectStepArray[i].priority,
         step: [],
       };
       const tasksToSave = projectStepArray[i].step.map((el, idx) => {
-        const { issueMember, referenceModel } = getIssueMemberAndModel(
-          el.issueMember[0]
-        );
-
         let checklistDetails = {};
         if (el.checkList === 'Yes') {
           const check = allChecklist.find(
@@ -200,12 +180,16 @@ exports.addProject = async (req, res) => {
           }
         }
 
+        const rawRole = el.issueMember?.[0];
+        const mappedRoleKey = roleMap[rawRole];
+        const memberId = data[mappedRoleKey];
+
         return {
           title: el.content,
           branch: data.branch,
           description: el.content,
           stepName: projectStepArray[i].name,
-          assignedBy: data.assignedID,
+          assignedBy: data.assignedBy,
           duration: el.duration !== '' ? el.duration : 0,
           point: idx,
           dueDate:
@@ -214,8 +198,7 @@ exports.addProject = async (req, res) => {
           isActive: i === 0 && idx === 0,
           assignedOn: i === 0 && idx === 0 ? new Date() : null,
           checkList: checklistDetails,
-          issueMember,
-          referenceModel,
+          issueMember: memberId,
         };
       });
 
@@ -315,26 +298,29 @@ exports.addProject = async (req, res) => {
   }
 };
 
-exports.getAllProject = (req, res) => {
-  mongoose.set('strictPopulate', false);
-  Project.find({})
-    .populate({
+exports.getAllProject = async (req, res) => {
+  try {
+    mongoose.set('strictPopulate', false); // optional, depending on your schema strictness
+
+    const projects = await Project.find({}).populate({
       path: 'project_status',
       populate: {
         path: 'step',
         populate: {
           path: 'taskId',
-          model: Task,
+          model: 'Tasks',
           populate: [
             {
               path: 'issueMember',
-              select: '_id name role',
+              model: 'User',
+              select: '-password -token -refreshToken -loginOtp',
               populate: {
                 path: 'role',
               },
             },
             {
               path: 'assignedBy',
+              model: 'User',
               select: '-password -token -refreshToken -loginOtp',
               populate: {
                 path: 'roles',
@@ -343,22 +329,19 @@ exports.getAllProject = (req, res) => {
           ],
         },
       },
-    })
-    .then((project, err) => {
-      if (err) {
-        res.status(500).send({
-          message: 'There was a problem in getting the list of project',
-        });
-        return;
-      }
-      if (project) {
-        res.status(200).send({
-          message: 'List of project fetched successfuly',
-          data: project,
-        });
-      }
     });
-  return;
+
+    return res.status(200).send({
+      message: 'List of project fetched successfully',
+      data: projects,
+    });
+  } catch (err) {
+    console.error('Error fetching projects:', err);
+    return res.status(500).send({
+      message: 'There was a problem in getting the list of projects',
+      error: err.message,
+    });
+  }
 };
 
 exports.getProjectByMember = (req, res) => {
@@ -578,6 +561,7 @@ exports.addProjectMember = async (req, res) => {
       .send({ message: 'Error on add record', status: 500 });
   }
 };
+
 exports.deleteProjectMember = async (req, res) => {
   try {
     const { siteID, employeeID } = req.body;
@@ -627,6 +611,7 @@ exports.deleteProjectMember = async (req, res) => {
       .send({ message: 'Error on remove record', status: 500 });
   }
 };
+
 exports.getProjectById = (req, res) => {
   const id = req.params.id;
   mongoose.set('strictPopulate', false);
@@ -634,7 +619,7 @@ exports.getProjectById = (req, res) => {
     .populate({
       // path: 'project_admin project_manager site_engineer accountant sr_engineer sales operation architect',
       path: 'project_admin site_engineer accountant sr_engineer sales operation architect',
-      model: 'teammembers',
+      model: 'User',
       populate: {
         path: 'role',
         model: 'projectroles',
@@ -650,13 +635,15 @@ exports.getProjectById = (req, res) => {
           populate: [
             {
               path: 'issueMember',
-              select: '_id name role',
+              model: 'User',
+              select: '-password -token -refreshToken -loginOtp',
               populate: {
-                path: 'role',
+                path: 'roles',
               },
             },
             {
               path: 'assignedBy',
+              model: 'User',
               select: '-password -token -refreshToken -loginOtp',
               populate: {
                 path: 'roles',
@@ -694,6 +681,7 @@ exports.updateProjectById = (req, res) => {
     }
   });
 };
+
 exports.updateProjectTaskByMember = async (req, res) => {
   const { id, name, point, content, status, date, activeUser, userName } =
     req.body;
@@ -925,6 +913,7 @@ exports.updateProjectStatusById = async (req, res) => {
     });
   }
 };
+
 exports.updateProjectStatusById = async (req, res) => {
   try {
     const {
@@ -1202,6 +1191,7 @@ exports.clientQueryForProject = async (req, res) => {
     });
   }
 };
+
 exports.addNewPointById = async (req, res) => {
   const {
     id,
@@ -1260,6 +1250,7 @@ exports.addNewPointById = async (req, res) => {
     });
   }
 };
+
 exports.addNewExtraPointById = async (req, res) => {
   const {
     id,
@@ -1502,6 +1493,7 @@ exports.filterData = async (req, res) => {
     });
   }
 };
+
 exports.filterMemberData = async (req, res) => {
   const { searchData, memberId } = req.query;
   const regex = new RegExp(searchData, 'i'); // 'i' for case-insensitive matching
@@ -1794,7 +1786,6 @@ exports.AddNewProjectPoint = async (req, res) => {
         checkListPoint: [],
       },
       issueMember: issueMember._id,
-      referenceModel: 'teammembers',
     };
 
     // If both index are found, proceed to insert the new object into the step array
@@ -2233,12 +2224,9 @@ exports.changeIssueMember = async (req, res) => {
   try {
     const { userId, siteId, issue, newMember } = req.body;
     const proj = await Project.findOne({ siteID: siteId });
-    const newM = await TeamMember.findById(newMember);
-    let user;
-    user = await TeamMember.findById(userId);
-    if (!user) {
-      user = await User.findById(userId);
-    }
+    const newM = await User.findById(newMember);
+    const user = await User.findById(userId);
+
     let issueMember;
     const issueMap = {
       Admin: 'project_admin',
@@ -2257,7 +2245,7 @@ exports.changeIssueMember = async (req, res) => {
       });
     }
     const oldMember = proj[issueMember][0];
-    const oldM = await TeamMember.findById(oldMember);
+    const oldM = await User.findById(oldMember);
     const tasks = await Task.find({
       siteID: siteId,
       issueMember: oldMember,

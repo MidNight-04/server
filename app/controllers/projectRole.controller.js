@@ -1,11 +1,10 @@
 const db  = require("../models")
-const RoleModel = db.projectroles;
+const RoleModel = db.role;
 
 exports.addProjectRole = (req, res) => {
   let data = {
     name:req.body.name
   };
-  console.log(data)
   const findRole = RoleModel.find({name:req.body.name});
   if(findRole?.length>0){
     res.status(200).send({ message: "Record already exist"});
@@ -29,7 +28,7 @@ exports.addProjectRole = (req, res) => {
   }
 };
 
-exports.getAllProjectRole = (req, res) => { 
+exports.getAllRole = (req, res) => { 
     RoleModel.find({})
       .then((role, err) => {
         if (err) {

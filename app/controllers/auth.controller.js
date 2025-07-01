@@ -1,3 +1,4 @@
+require('dotenv').config();
 const config = require('../config/auth.config');
 const db = require('../models');
 const helperFunction = require('../middlewares/helper');
@@ -23,117 +24,106 @@ const awsS3 = require('../middlewares/aws-s3');
 var jwt = require('jsonwebtoken');
 var bcrypt = require('bcryptjs');
 const Brands = require('../models/brands.model');
+const cookie = require('cookie');
+const { signToken } = require('../middlewares/authJwt');
 
-exports.signup = (req, res) => {
-  if (!helperFunction.checkEmailPhone(req.body.email)) {
-    res.status(500).send({ message: 'Invaild Entry' });
-  } else {
-    let query = {
-      name: req.body.name || req.body.username,
-      username: req.body.username,
-      [helperFunction.checkEmailPhone(req.body.email)]: req.body.email,
-      // password: bcrypt.hashSync(req.body.password, 8),
-      token: null,
-      city: req.body?.city,
-      state: req.body?.state,
-      country: req.body?.country,
-      phone: req.body.phone,
-      email: req.body.email,
-    };
+exports.signup = async (req, res) => {
+  try {
+    const {
+      firstName,
+      lastName,
+      username,
+      password,
+      email,
+      phone,
+      city,
+      state,
+      zipcode,
+      role,
+    } = req.body;
 
-    if (req.body.role?.length > 0) {
-      Role.find(
-        {
-          name: { $in: req.body.role },
-        },
-        (err, roles) => {
-          if (err) {
-            res.status(500).send({ message: err });
-            return;
-          }
-          query['roles'] = roles.map(role => role._id);
-          // if (helperFunction.checkEmailPhone(req.body.email) === 'phone') {
-          //   query['email'] = '';
-          // } else if (
-          //   helperFunction.checkEmailPhone(req.body.email) === 'email'
-          // ) {
-          //   query['phone'] = '';
-          // }
-          const user = new User(query);
-          user.save((err, userSaved) => {
-            if (err) {
-              res.status(500).send({ message: err });
-              return;
-            }
-            if (userSaved) {
-              res.send({
-                message: 'User was registered successfully!',
-                status: 201,
-              });
-            }
-            return;
-          });
-        }
-      );
-    } else {
-      // console.log("INSIDE THE ELSE CONDITION");
-      Role.findOne({ name: 'user' }, (err, role) => {
-        if (err) {
-          res.status(500).send({ message: err });
-          return;
-        }
-
-        query['roles'] = [role._id];
-        // if (helperFunction.checkEmailPhone(req.body.email) === 'phone') {
-        //   query['email'] = '';
-        // } else if (helperFunction.checkEmailPhone(req.body.email) === 'email') {
-        //   query['phone'] = '';
-        // }
-        const user = new User(query);
-        user.save((err, userSaved) => {
-          if (err) {
-            res.status(500).send({ message: err });
-            return;
-          }
-          if (userSaved) {
-            res.send({
-              message: 'User was registered successfully!',
-              status: 201,
-            });
-          }
-          return;
-        });
+    const isValid = helperFunction.checkEmailPhone(email);
+    if (!isValid) {
+      return res.status(400).send({
+        message: 'Invalid entry. Must be a valid email or phone number.',
       });
     }
+
+    const query = {
+      firstName,
+      lastName,
+      username,
+      password: bcrypt.hashSync(password, 8),
+      phone,
+      email,
+      city,
+      state,
+      zipCode: zipcode,
+    };
+
+    let roleIds;
+    if (role?.length > 0) {
+      const roles = await Role.find({ name: { $in: role } });
+      roleIds = roles.map(r => r._id);
+    } else {
+      const defaultRole = await Role.findOne({ name: 'user' });
+      roleIds = [defaultRole._id];
+    }
+
+    query.roles = roleIds;
+
+    const newUser = new User(query);
+    const savedUser = await newUser.save();
+
+    return res.status(201).send({
+      message: 'User was registered successfully!',
+      status: 201,
+    });
+  } catch (error) {
+    console.error('Signup Error:', error);
+    return res.status(500).send({
+      message: error.message || 'Internal Server Error',
+    });
   }
 };
+
 exports.updateProfile = async (req, res) => {
+  try {
+    const userId = req.body.id;
+    if (!userId) {
+      return res.status(400).send({ message: 'User ID is required.' });
+    }
 
-  let images = [];
+    let images = [];
+    if (req.files?.image?.length > 0) {
+      try {
+        const uploaded = await awsS3.uploadFiles(
+          req.files.image,
+          'profile_photo'
+        );
+        const imageUrls = uploaded.map(
+          file =>
+            `https://thekedar-bucket.s3.us-east-1.amazonaws.com/${file.s3key}`
+        );
+        images.push(...imageUrls);
+      } catch (uploadError) {
+        return res.status(500).send({
+          message: 'Failed to upload profile images.',
+          reason: uploadError.message,
+        });
+      }
+    }
 
-  // if (req.files.image) {
-  //   for (let i = 0; i < req.files.profileImage.length; i++) {
-  //     profileFiles.push(req.files.profileImage[i].location);
-  //   }
-  // }
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).send({ message: 'User does not exist.' });
+    }
 
-  if (req.files?.image?.length > 0) {
-     await awsS3.uploadFiles(req.files?.image, `profile_photo`).then(async (data) => {
-     const profileFiles = data.map((file) => {
-       const url = 'https://thekedar-bucket.s3.us-east-1.amazonaws.com/' + file.s3key
-       return url;
-     })
-     images.push(...profileFiles);
-    });
-   }
-
-  const findData = await User.find({ _id: req.body.id });
-  if (findData?.length > 0) {
-    let query = {
+    const updateData = {
       phone: req.body.phone,
-      city: req.body?.city,
-      state: req.body?.state,
-      country: req.body?.country,
+      city: req.body.city,
+      state: req.body.state,
+      country: req.body.country,
       username: req.body.username,
       firstname: req.body.firstname,
       lastname: req.body.lastname,
@@ -142,609 +132,610 @@ exports.updateProfile = async (req, res) => {
     };
 
     if (images.length > 0) {
-      query['profileImage'] = images;
-    };
+      updateData.profileImage = images;
+    }
 
-    User.findByIdAndUpdate(req.body.id, query, (err, updated) => {
-      if (err) {
-        res.status(500).send({
-          message:
-            'Could not update the status, please try again after sometime',
-          reason: err,
-        });
-        return;
-      } else {
-        res.status(200).send({ message: 'Updated Successfuly', data: updated });
-      }
-      return;
+    const updatedUser = await User.findByIdAndUpdate(userId, updateData, {
+      new: true,
     });
-  } else {
-    res.status(200).send({
-      message: 'User does not exist',
+
+    return res.status(200).send({
+      message: 'Updated successfully',
+      data: updatedUser,
+    });
+  } catch (error) {
+    return res.status(500).send({
+      message: 'Could not update the profile. Please try again later.',
+      reason: error.message,
     });
   }
 };
 
-exports.signinOtp = (req, res) => {
-  if (!helperFunction.checkEmailPhone(req.body.username)) {
-    return res.status(500).send({ message: 'Invalid Entry' });
-  } else {
-    console.log(helperFunction.checkEmailPhone(req.body.username));
-    User.findOne({
-      [helperFunction.checkEmailPhone(req.body.username)]: req.body.username,
-    })
-      .populate('roles', '-__v')
-      .exec((err, user) => {
-        if (err) {
-          res.status(500).send({ message: err });
-          return;
-        } else if (!user) {
-          return res.status(404).send({ message: 'User Not found.' });
-        } else {
-          const otp = otpGenerator.generate(6, {
+exports.signinOtp = async (req, res) => {
+  const { username } = req.body;
+  const identifierType = helperFunction.checkEmailPhone(username);
+
+  if (!identifierType) {
+    return res.status(400).send({
+      message: 'Invalid entry. Must be a valid email or phone number.',
+    });
+  }
+
+  try {
+    const user = await User.findOne({ [identifierType]: username }).populate(
+      'roles',
+      '-__v'
+    );
+
+    if (!user) {
+      return res.status(404).send({ message: 'User not found.' });
+    }
+
+    const otp =
+      username === '1234567899'
+        ? '123456'
+        : otpGenerator.generate(6, {
             upperCaseAlphabets: false,
             specialChars: false,
             lowerCaseAlphabets: false,
           });
-          if (helperFunction.checkEmailPhone(req.body.username) === 'phone') {
-            if (req.body.username === '1234567899') {
-              User.updateOne(
-                {
-                  [helperFunction.checkEmailPhone(req.body.username)]:
-                    req.body.username,
-                },
-                {
-                  $set: {
-                    loginOtp: '123456',
-                  },
-                }
-              ).then(async (updated, err) => {
-                if (err) {
-                  res.status(500).send({ message: err.message });
-                  return;
-                } else {
-                  // console.log("Send otp on phone functionality");
-                  let config = {
-                    method: 'get',
-                    maxBodyLength: Infinity,
-                    // url: `http://103.10.234.154/vendorsms/pushsms.aspx?user=thikedaar&password=Y4EMFT9E&msisdn=${`91${req.body.username}`}&sid=THIKDR&msg= Your one time password (OTP) is ${otp} Regard THIKEDAAR DOT COM PVT LTD&fl=0&gwid=2\n`,
-                    url: `http://control.yourbulksms.com/api/sendhttp.php?authkey=3237646161617232303155&mobiles=${`91${req.body.username}`}&message=${`Your one time password (OTP) is ${123456} Regard THIKEDAAR DOT COM PVT LTD`}&sender=THIKDR&route=2&country=0&DLT_TE_ID=1207161666918773610`,
-                    // headers: {
-                    //   Cookie: "ASP.NET_SessionId=jgh41m1vafih33n0itqbpcby",
-                    // },
-                  };
-                  const response = await axios.request(config);
-                  // console.log(response)
-                  res.status(200).send({
-                    message: 'OTP send on your Phone',
-                    status: 200,
-                    otp: '123456',
-                    username: req.body.username,
-                  });
-                }
-              });
-              return;
-            } else {
-              User.updateOne(
-                {
-                  [helperFunction.checkEmailPhone(req.body.username)]:
-                    req.body.username,
-                },
-                {
-                  $set: {
-                    loginOtp: otp,
-                  },
-                }
-              ).then(async (updated, err) => {
-                if (err) {
-                  res.status(500).send({ message: err.message });
-                  return;
-                } else {
-                  // console.log("Send otp on phone functionality");
-                  let config = {
-                    method: 'get',
-                    maxBodyLength: Infinity,
-                    // url: `http://103.10.234.154/vendorsms/pushsms.aspx?user=thikedaar&password=Y4EMFT9E&msisdn=${`91${req.body.username}`}&sid=THIKDR&msg= Your one time password (OTP) is ${otp} Regard THIKEDAAR DOT COM PVT LTD&fl=0&gwid=2\n`,
-                    url: `http://control.yourbulksms.com/api/sendhttp.php?authkey=3237646161617232303155&mobiles=${`91${req.body.username}`}&message=${`Your one time password (OTP) is ${otp} Regard THIKEDAAR DOT COM PVT LTD`}&sender=THIKDR&route=2&country=0&DLT_TE_ID=1207161666918773610`,
-                    // headers: {
-                    //   Cookie: "ASP.NET_SessionId=jgh41m1vafih33n0itqbpcby",
-                    // },
-                  };
-                  const response = await axios.request(config);
-                  // console.log(response)
-                  res.status(200).send({
-                    message: 'OTP send on your Phone',
-                    status: 200,
-                    otp: otp,
-                    username: req.body.username,
-                  });
-                }
-              });
-              return;
-            }
-          } else {
-            console.log(req.body.username);
-            // define the transporter
-            var transporter = nodemailer.createTransport({
-              service: 'Gmail',
-              auth: {
-                user: 'ranjitkvns7@gmail.com',
-                pass: 'rqezkbtfbfmdrwfn',
-              },
-            });
 
-            // Define the email
-            const mailOptions = email => ({
-              from: 'Sender',
-              to: email,
-              subject: 'OTP Verification for Login',
-              html: `<div>
-                         <p>Hello, ${user.username} Your OTP verification code for login in thikedaar.in - </p>
-                         <span style="font-weight:bold,background-color:red,color:white">${otp}</span>
-                     </div>`,
-            });
+    await User.updateOne(
+      { [identifierType]: username },
+      { $set: { loginOtp: otp } }
+    );
 
-            // We send the email
-            transporter.sendMail(
-              mailOptions(user.email),
-              function (error, info) {
-                if (error) {
-                  // console.log(error);
-                  res.status(500).send({ message: error.message });
-                } else {
-                  console.log('otp send on Email');
-                  User.updateOne(
-                    {
-                      [helperFunction.checkEmailPhone(req.body.username)]:
-                        req.body.username,
-                    },
-                    {
-                      $set: {
-                        loginOtp: otp,
-                      },
-                    }
-                  ).then((updated, err) => {
-                    if (err) {
-                      res.status(500).send({ message: err.message });
-                      return;
-                    } else {
-                      res.status(200).send({
-                        message: 'OTP send for login on your Email',
-                        status: 200,
-                        otp: otp,
-                        username: req.body.username,
-                      });
-                    }
-                  });
-                  return;
-                }
-              }
-            );
-          }
-        }
+    if (identifierType === 'phone') {
+      const smsUrl = `http://control.yourbulksms.com/api/sendhttp.php?authkey=3237646161617232303155&mobiles=91${username}&message=Your one time password (OTP) is ${otp} Regard THIKEDAAR DOT COM PVT LTD&sender=THIKDR&route=2&country=0&DLT_TE_ID=1207161666918773610`;
+
+      await axios.get(smsUrl);
+
+      return res.status(200).send({
+        message: 'OTP sent to your phone',
+        status: 200,
+        otp,
+        username,
       });
+    } else {
+      // Send email
+      const transporter = nodemailer.createTransport({
+        service: 'Gmail',
+        auth: {
+          user: 'ranjitkvns7@gmail.com',
+          pass: 'rqezkbtfbfmdrwfn',
+        },
+      });
+
+      const mailOptions = {
+        from: 'no-reply@thikedaar.in',
+        to: user.email,
+        subject: 'OTP Verification for Login',
+        html: `<div>
+                 <p>Hello ${user.username},</p>
+                 <p>Your OTP for login is:</p>
+                 <h2 style="color:#0d6efd;">${otp}</h2>
+               </div>`,
+      };
+
+      await transporter.sendMail(mailOptions);
+
+      return res.status(200).send({
+        message: 'OTP sent to your email',
+        status: 200,
+        otp,
+        username,
+      });
+    }
+  } catch (error) {
+    console.error('OTP Signin Error:', error);
+    return res
+      .status(500)
+      .send({ message: error.message || 'Internal server error' });
   }
 };
 
-exports.signin = (req, res) => {
-  if (!helperFunction.checkEmailPhone(req.body.username)) {
-    return res.status(500).send({ message: 'Invalid Entry' });
-  } else {
-    User.findOne({
-      [helperFunction.checkEmailPhone(req.body.username)]: req.body.username,
-    })
-      .populate('roles', '-__v')
-      .exec((err, user) => {
-        if (err) {
-          res.status(500).send({ message: err });
-          return;
-        } else if (!user) {
-          return res.status(404).send({ message: 'User Not found.' });
-        } else {
-          if (user.loginOtp === req.body.otp) {
-            let token = jwt.sign({ id: user.id }, config.secret, {
-              expiresIn: 86400, // 24 hours
-            });
+exports.createUser = async (req, res) => {
+  try {
+    const {
+      firstname,
+      lastname,
+      username,
+      email,
+      password,
+      employeeID,
+      phone,
+      city,
+      state,
+      zipCode,
+      userStatus = 'active',
+      roles,
+    } = req.body;
 
-            let authorities = [];
-            console.log(user);
+    if (
+      !firstname ||
+      !lastname ||
+      !username ||
+      !email ||
+      !password ||
+      !employeeID ||
+      !phone ||
+      !city ||
+      !state ||
+      !zipCode ||
+      !roles
+    ) {
+      return res.status(400).json({ message: 'All fields are required' });
+    }
 
-            for (let i = 0; i < user.roles.length; i++) {
-              authorities.push('ROLE_' + user.roles[i].name.toUpperCase());
-            }
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return res.status(409).json({ message: 'User already exists' });
+    }
 
-            req.session.token = token;
+    let images = [];
+    if (req.files?.image?.length > 0) {
+      try {
+        const uploaded = await awsS3.uploadFiles(
+          req.files.image,
+          'profile_photo'
+        );
+        const imageUrls = uploaded.map(
+          file =>
+            `https://thekedar-bucket.s3.us-east-1.amazonaws.com/${file.s3key}`
+        );
+        images.push(...imageUrls);
+      } catch (uploadError) {
+        return res.status(500).send({
+          message: 'Failed to upload profile images.',
+          reason: uploadError.message,
+        });
+      }
+    }
 
-            user.token = token;
-            user.save((err, success) => {
-              if (err) {
-                res
-                  .status(500)
-                  .send({ message: 'Oops, Internal server error' });
-                return;
-              }
-              if (success) {
-                res.status(200).send({
-                  status: 200,
-                  message: 'You have been logged in',
-                  id: user._id,
-                  username: user.username,
-                  email: user.email,
-                  phone: user.phone,
-                  roles: authorities[0],
-                  token: token,
-                  country: user.country,
-                  city: user.city,
-                  state: user.state,
-                });
-                return;
-              }
-            });
-            return;
-          } else {
-            return res.status(500).send({ message: 'Invalid OTP' });
-          }
-        }
-      });
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    const user = await User.create({
+      firstname,
+      lastname,
+      username,
+      email,
+      password: hashedPassword,
+      employeeID,
+      phone,
+      city,
+      state,
+      zipCode,
+      userStatus,
+      roles,
+      profileImage: images[0] || null,
+    });
+
+    return res.status(201).json({ message: 'User created successfully', user });
+  } catch (err) {
+    console.error('Error creating user:', err);
+    return res.status(500).json({ message: 'Server error' });
   }
+};
+
+exports.signin = async (req, res) => {
+  try {
+    const { username, otp } = req.body;
+
+    const identifierType = helperFunction.checkEmailPhone(username);
+    if (!identifierType) {
+      return res
+        .status(400)
+        .json({ message: 'Invalid email or phone number.' });
+    }
+
+    const user = await User.findOne({ [identifierType]: username }).populate(
+      'roles'
+    );
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found.' });
+    }
+
+    if (user.loginOtp.toString() !== otp.toString()) {
+      return res.status(401).json({ message: 'Invalid OTP.' });
+    }
+
+    const token = signToken({ id: user._id }, process.env.SESSION_SECRET, {
+      // expiresIn: '2h',
+      expiresIn: '7d',
+    });
+
+    user.token = token;
+    await user.save();
+
+    return res.status(200).json({
+      status: 200,
+      message: 'You have been logged in',
+      id: user._id,
+      username: user.username,
+      name: `${user.firstname} ${user.lastname}`,
+      token,
+      // expiresIn: 7200, // 2 hours
+      expiresIn: 604800,
+      email: user.email,
+      phone: user.phone,
+      userType: `ROLE_${user.roles.name.toUpperCase()}`,
+      country: user.country,
+      city: user.city,
+      state: user.state,
+    });
+  } catch (error) {
+    console.log(error);
+    return res
+      .status(500)
+      .json({ message: 'Internal server error', error: error.message });
+  }
+};
+
+exports.logout = (req, res) => {
+  res.setHeader('Set-Cookie', 'token=; HttpOnly; Path=/; Max-Age=0');
+  res.status(200).json({ message: 'Logged out' });
 };
 
 exports.signout = async (req, res) => {
   try {
-    req.session = null;
+    req.session.destroy(err => {
+      if (err) {
+        return res.status(500).send({ message: 'Logout failed.' });
+      }
+      res.clearCookie('connect.sid'); // Optional: remove cookie
+      return res.status(200).send({ message: 'Logged out successfully.' });
+    });
     return res.status(200).send({ message: "You've been signed out!" });
   } catch (err) {
     this.next(err);
   }
 };
 
-exports.forgotPassword = function (req, res) {
+exports.forgotPassword = async (req, res) => {
   const { email } = req.body;
-  User.findOne({ email }).then((user, err) => {
-    if (err) {
-      res.status(500).send({ message: err.message });
-      return;
+
+  try {
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res
+        .status(404)
+        .send({ message: 'User not found with this email.' });
     }
-    if (user) {
-      // define the transporter
-      var transporter = nodemailer.createTransport({
-        service: 'Gmail',
-        auth: {
-          user: 'divyanshusingh4755@gmail.com',
-          pass: 'hvxtnrhhsreawglx',
-        },
-      });
 
-      let random = 'pass_' + new Date().getTime();
+    const resetToken = 'pass_' + crypto.randomBytes(20).toString('hex');
 
-      // Define the email
-      const mailOptions = email => ({
-        from: 'Sender',
-        to: email,
-        subject: 'Subject',
-        // text: `http://localhost:3000/forgot-password/${random}`,
-        text: `http://thikedaar.in/forgot-password/${random}`,
-      });
+    const transporter = nodemailer.createTransport({
+      service: 'Gmail',
+      auth: {
+        user: 'divyanshusingh4755@gmail.com',
+        pass: 'hvxtnrhhsreawglx',
+      },
+    });
 
-      // We send the email
-      transporter.sendMail(mailOptions(email), function (error, info) {
-        if (error) {
-          // console.log(error);
-          res.status(500).send({ message: error.message });
-        } else {
-          console.log('Email sent');
-          User.updateOne(
-            { email },
-            {
-              $set: {
-                refreshToken: random,
-              },
-            }
-          ).then((updated, err) => {
-            if (err) {
-              res.status(500).send({ message: err.message });
-              return;
-            } else {
-              res
-                .status(200)
-                .send({ message: 'Email send for password', status: 200 });
-            }
-          });
-        }
-      });
-    } else {
-      res.status(200).send({ message: 'Unable to find user' });
-      return;
-    }
-  });
+    const resetLink = `http://thikedaar.in/forgot-password/${resetToken}`;
+    const mailOptions = {
+      from: 'no-reply@thikedaar.in',
+      to: email,
+      subject: 'Password Reset Request',
+      text: `You requested to reset your password. Click the link to continue: ${resetLink}`,
+      html: `<p>You requested to reset your password.</p><p><a href="${resetLink}">Click here to reset it</a></p>`,
+    };
+
+    await transporter.sendMail(mailOptions);
+    await User.updateOne({ email }, { $set: { refreshToken: resetToken } });
+
+    return res.status(200).send({
+      message: 'Reset password email sent successfully.',
+      status: 200,
+    });
+  } catch (err) {
+    console.error('Forgot Password Error:', err);
+    return res.status(500).send({
+      message: 'Something went wrong. Please try again later.',
+      error: err.message,
+    });
+  }
 };
 
-exports.changePassword = function (req, res) {
-  const { refreshToken, password } = req.body;
-  console.log('password reset body---', req.body);
-  User.updateOne(
-    { refreshToken },
-    {
-      $set: {
-        password: bcrypt.hashSync(password, 8),
-      },
+exports.changePassword = async (req, res) => {
+  try {
+    const { refreshToken, password } = req.body;
+    if (!refreshToken || !password) {
+      return res
+        .status(400)
+        .send({ message: 'Refresh token and password are required.' });
     }
-  ).then((updated, err) => {
-    if (err) {
-      res.send(500, err.message);
-      return;
-    } else {
-      res.status(200).send({ message: updated, status: 200 });
+    const hashedPassword = bcrypt.hashSync(password, 8);
+    const result = await User.updateOne(
+      { refreshToken },
+      {
+        $set: { password: hashedPassword, refreshToken: null },
+      }
+    );
+    if (result.modifiedCount === 0) {
+      return res
+        .status(404)
+        .send({ message: 'Invalid or expired reset token.' });
     }
-  });
+    return res
+      .status(200)
+      .send({ message: 'Password changed successfully.', status: 200 });
+  } catch (err) {
+    console.error('Change Password Error:', err);
+    return res
+      .status(500)
+      .send({ message: 'Internal server error.', error: err.message });
+  }
 };
 
 exports.getallusers = async (req, res) => {
-  User.find({}, (err, user) => {
-    if (err) {
-      res
-        .status(500)
-        .send({ message: 'There was a problem in getting the list of users' });
-      return;
-    }
-    let userData = [];
-
-    res.status(200).send(user);
-    return;
-  });
-};
-
-exports.singleProfile = (req, res) => {
-  let id = req.params.id;
-  User.findById(id, (err, user) => {
-    if (err) {
-      res.status(500).send({ Error: err });
-      return;
-    } else {
-      if (user) {
-        res.status(200).send({
-          data: user,
-        });
-      } else {
-        res.status(404).send({
-          message: 'No user found',
-        });
-      }
-    }
-  });
-};
-
-exports.getUsersDetails = (req, res) => {
-  let id = req.body.id;
-  if (id) {
-    User.findOne({ _id: id }, (err, user) => {
-      if (err) {
-        res
-          .status(500)
-          .send({ message: 'The requested data could not be fetched' });
-        return;
-      } else if (user) {
-        const modifiedResponse = {
-          _id: user._id,
-          profileImage: user.profileImage,
-          name: user.name,
-          username: user.username,
-          firstname: user.firstname,
-          lastname: user.lastname,
-          email: user.email,
-          city: user.city,
-          state: user.state,
-          country: user.country,
-          countryCode: user.countryCode,
-          zipCode: user.zipCode,
-          phone: user.phone,
-          isExist: user.isExist,
-          roles: user.roles,
-        };
-
-        res.status(200).send({
-          message: 'Details feched successfully',
-          data: modifiedResponse,
-        });
-        return;
-      } else {
-        res
-          .status(500)
-          .send({ message: 'The requested data could not be fetched' });
-        return;
-      }
-    });
-  } else {
-    User.find({}, (err, user) => {
-      if (err) {
-        res
-          .status(500)
-          .send({ message: 'The requested data could not be fetched' });
-        return;
-      } else if (user) {
-        res.status(200).send({
-          message: 'Details feched successfully',
-          data: user,
-        });
-        return;
-      } else {
-        res
-          .status(500)
-          .send({ message: 'The requested data could not be fetched' });
-        return;
-      }
+  try {
+    const users = await User.find({});
+    return res.status(200).send(users);
+  } catch (err) {
+    console.error('Get All Users Error:', err);
+    return res.status(500).send({
+      message: 'There was a problem retrieving the list of users.',
+      error: err.message,
     });
   }
 };
-// login after OTP verification
 
-exports.login = (req, res) => {
-  User.findOne({
-    phone: req.body.phone,
-  }).exec(async (err, user) => {
-    console.log(user);
-    if (err) {
-      res.status(500).send({ message: err });
-      return;
-    } else if (!user) {
-      //CREATE NEW USER
-      let role = await Role.find({ name: 'user' });
-      role = role.filter(el => {
-        return el._id;
+exports.singleProfile = async (req, res) => {
+  const { id } = req.params;
+  try {
+    const user = await User.findById(id);
+    if (!user) {
+      return res.status(404).send({ message: 'No user found.' });
+    }
+    return res.status(200).send({ data: user });
+  } catch (err) {
+    console.error('Single Profile Error:', err);
+    return res
+      .status(500)
+      .send({ message: 'Error fetching user profile.', error: err.message });
+  }
+};
+
+exports.getUsersDetails = async (req, res) => {
+  const { id } = req.body;
+
+  try {
+    if (id) {
+      const user = await User.findById(id)
+        .select('-password -token')
+        .populate('roles', '-__v');
+
+      if (!user) {
+        return res.status(404).send({ message: 'User not found.' });
+      }
+
+      const modifiedResponse = {
+        _id: user._id,
+        profileImage: user.profileImage,
+        name: user.name,
+        username: user.username,
+        firstname: user.firstname,
+        lastname: user.lastname,
+        email: user.email,
+        city: user.city,
+        state: user.state,
+        country: user.country,
+        countryCode: user.countryCode,
+        zipCode: user.zipCode,
+        phone: user.phone,
+        isExist: user.isExist,
+        roles: user.roles,
+      };
+
+      return res.status(200).send({
+        message: 'Details fetched successfully',
+        data: modifiedResponse,
       });
-      User.create(
-        { phone: req.body.phone, roles: role._id, status: 'ACTIVE' },
-        (err, result) => {
-          if (err) {
-            res.status(500).send({ message: err });
-            return;
-          } else {
-            let token = jwt.sign({ id: result._id }, config.secret, {
-              expiresIn: 86400, // 24 hours
-            });
-            res.status(200).send({
-              _id: result._id,
-              phone: result.phone,
-              isExist: true,
-              token: token,
-            });
-          }
-        }
-      );
     } else {
-      //LOGIN FOR EXISTING USER
-      let token = jwt.sign({ id: user._id }, config.secret, {
-        expiresIn: 86400, // 24 hours
-      });
-      let role = await Role.find({ name: 'user' });
-      role = role.filter(el => {
-        return el._id;
-      });
-      user.roles = role;
-      user.token = token;
-      user.save((err, result) => {
-        if (err) {
-          res.status(500).send({ message: err });
-          return;
-        } else {
-          res.status(200).send({
-            _id: result._id,
-            phone: result.phone,
-            isExist: result.isExist,
-            token: token,
-          });
-        }
+      const users = await User.find({});
+      return res.status(200).send({
+        message: 'Details fetched successfully',
+        data: users,
       });
     }
-  });
+  } catch (err) {
+    console.error('GetUsersDetails Error:', err);
+    return res.status(500).send({
+      message: 'An error occurred while fetching user data.',
+      error: err.message,
+    });
+  }
 };
-// get state list api
+
+exports.login = async (req, res) => {
+  try {
+    const { phone } = req.body;
+    if (!phone) {
+      return res.status(400).send({ message: 'Phone number is required.' });
+    }
+
+    let user = await User.findOne({ phone });
+
+    const role = await Role.findOne({ name: 'user' });
+    if (!role) {
+      return res.status(500).send({ message: 'Default user role not found.' });
+    }
+
+    if (!user) {
+      user = await User.create({
+        phone,
+        roles: role._id,
+        status: 'ACTIVE',
+      });
+    } else {
+      user.roles = role._id;
+    }
+
+    const token = jwt.sign({ id: user._id }, config.secret, {
+      expiresIn: 86400, // 24 hours
+    });
+
+    user.token = token;
+    await user.save();
+
+    return res.status(200).send({
+      _id: user._id,
+      phone: user.phone,
+      isExist: true,
+      token,
+    });
+  } catch (err) {
+    console.error('Login Error:', err);
+    return res.status(500).send({
+      message: 'Login failed due to internal error.',
+      error: err.message,
+    });
+  }
+};
+
 exports.getStates = async (req, res) => {
-  const { country_name } = req.body;
-
   try {
-    if (country_name) {
-      const states = await State.find({ country_name });
-      return res.status(200).send({
-        states,
-      });
-    } else {
-      const states = await State.find({ country_name: 'India' });
-      return res.status(200).send({
-        states,
-      });
-    }
+    const countryName = req.body.country_name?.trim() || 'India';
+
+    const states = await State.find({ country_name: countryName });
+
+    return res.status(200).send({
+      message: `States fetched for ${countryName}`,
+      states,
+    });
   } catch (error) {
-    res.status(500).send({ message: error });
-    return;
+    console.error('Get States Error:', error);
+    return res.status(500).send({
+      message: 'Failed to fetch states.',
+      error: error.message,
+    });
   }
 };
 
-// get city list api
 exports.getCities = async (req, res) => {
-  const { state_name } = req.body;
   try {
-    if (state_name) {
-      const cities = await City.find({ state_name });
-      return res.status(200).send({
-        cities,
-      });
-    } else {
-      const cities = await City.find({});
-      return res.status(200).send({
-        cities,
-      });
-    }
+    const stateName = req.body.state_name?.trim();
+
+    const filter = stateName ? { state_name: stateName } : {};
+    const cities = await City.find(filter);
+
+    return res.status(200).send({
+      message: stateName
+        ? `Cities fetched for state: ${stateName}`
+        : 'All cities fetched',
+      cities,
+    });
   } catch (error) {
-    res.status(500).send({ message: error });
-    return;
+    console.error('Get Cities Error:', error);
+    return res.status(500).send({
+      message: 'Failed to fetch cities.',
+      error: error.message,
+    });
   }
 };
 
-// get city list api
 exports.getCities = async (req, res) => {
-  const { state_name } = req.body;
   try {
-    if (state_name) {
-      const cities = await City.find({ state_name });
-      return res.status(200).send({
-        cities,
-      });
-    } else {
-      const cities = await City.find({});
-      return res.status(200).send({
-        cities,
-      });
-    }
+    const stateName = req.body.state_name?.trim();
+
+    const query = stateName ? { state_name: stateName } : {};
+    const cities = await City.find(query);
+
+    return res.status(200).send({
+      message: stateName
+        ? `Cities fetched for state: ${stateName}`
+        : 'All cities fetched successfully',
+      cities,
+    });
   } catch (error) {
-    res.status(500).send({ message: error });
-    return;
+    console.error('Error fetching cities:', error);
+    return res.status(500).send({
+      message: 'Failed to fetch cities.',
+      error: error.message,
+    });
   }
 };
-// complete profile for user
-exports.completeProfile = (req, res) => {
-  let temp = {
-    name: req.body.name,
-    location: req.body.location,
-    isExist: true,
-  };
-  User.findOneAndUpdate(
-    { phone: req.body.phone },
-    { $set: temp },
-    { new: true }
-  ).exec((err, user) => {
-    if (err) {
-      res.status(500).send({ message: err });
-      return;
-    } else if (user) {
-      res.send({ message: 'Complete profile successfully!' });
+
+exports.completeProfile = async (req, res) => {
+  try {
+    const { phone, name, location } = req.body;
+
+    if (!phone || !name || !location) {
+      return res
+        .status(400)
+        .send({ message: 'Phone, name, and location are required.' });
     }
-    return;
-  });
+
+    const updatedUser = await User.findOneAndUpdate(
+      { phone },
+      {
+        $set: {
+          name,
+          location,
+          isExist: true,
+        },
+      },
+      { new: true }
+    );
+
+    if (!updatedUser) {
+      return res
+        .status(404)
+        .send({ message: 'User not found with this phone number.' });
+    }
+
+    return res.status(200).send({
+      message: 'Profile completed successfully!',
+      data: updatedUser,
+    });
+  } catch (err) {
+    console.error('Complete Profile Error:', err);
+    return res.status(500).send({
+      message: 'Something went wrong while completing the profile.',
+      error: err.message,
+    });
+  }
 };
 
 // get profile
 
 // complete profile for user
-exports.getProfile = (req, res) => {
-  let query = {
-    phone: req.query.phone,
-  };
-  User.findOne(query, {
-    name: 1,
-    location: 1,
-    isExist: 1,
-    phone: 1,
-    countryCode: 1,
-  }).exec((err, user) => {
-    if (err) {
-      res.status(500).send({ message: err });
-      return;
-    } else if (user) {
-      res.send({ message: 'Profile details', result: user });
+exports.getProfile = async (req, res) => {
+  try {
+    const { phone } = req.query;
+
+    if (!phone) {
+      return res.status(400).send({ message: 'Phone number is required.' });
     }
-    return;
-  });
+
+    const user = await User.findOne(
+      { phone },
+      {
+        name: 1,
+        location: 1,
+        isExist: 1,
+        phone: 1,
+        countryCode: 1,
+      }
+    );
+
+    if (!user) {
+      return res.status(404).send({ message: 'User not found.' });
+    }
+
+    return res.status(200).send({
+      message: 'Profile details fetched successfully.',
+      result: user,
+    });
+  } catch (err) {
+    console.error('Get Profile Error:', err);
+    return res.status(500).send({
+      message: 'An error occurred while fetching profile.',
+      error: err.message,
+    });
+  }
 };
 
 // getprofileData
@@ -1500,11 +1491,12 @@ exports.orderDetails = (req, res) => {
     return;
   });
 };
+
 exports.orderDetailsByData = (req, res) => {
   const { vendor, product } = req.body;
   if (vendor && product) {
     Order.find(
-      { 'architectId': vendor, 'productDetail._id': product },
+      { architectId: vendor, 'productDetail._id': product },
       (err, orders) => {
         if (err) {
           res.status(500).send({
@@ -1955,4 +1947,41 @@ exports.getProductRating = (req, res) => {
 
     return;
   });
+};
+
+const ACCESS_EXPIRY = '1d';
+
+function generateAccessToken(user) {
+  return jwt.sign(
+    {
+      id: user.id,
+      email: user.email,
+      role: user.role,
+    },
+    process.env.SESSION_SECRET,
+    { expiresIn: ACCESS_EXPIRY }
+  );
+}
+
+exports.refreshToken = async (req, res) => {
+  const { refreshToken } = req.body;
+  if (!refreshToken) {
+    return res.status(400).json({ message: 'Refresh token required' });
+  }
+
+  try {
+    const payload = jwt.verify(refreshToken, process.env.REFRESH_SECRET);
+    const user = await User.findById(payload.id);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    const newAccessToken = generateAccessToken(user);
+
+    res.status(200).json({ accessToken: newAccessToken });
+  } catch (err) {
+    console.error('Refresh token error:', err);
+    return res
+      .status(401)
+      .json({ message: 'Invalid or expired refresh token' });
+  }
 };

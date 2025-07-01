@@ -4,7 +4,7 @@ exports.getAllTickets = async (req, res) => {
   try {
     const tickets = await Ticket.find({}).populate({
       path: "assignMember",
-      modal: "teammembers",
+      modal: "User",
     });
     res.status(200).send({ data: tickets });
   } catch (err) {

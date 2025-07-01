@@ -2,6 +2,7 @@ const controller = require("../controllers/client.controller");
 const { uploadImage } = require("../middlewares/uploadImage");
 const fileUploader = require("../middlewares/fileUploader");
 
+
 module.exports = function (app) {
     app.use(function (req, res, next) {
         res.header(

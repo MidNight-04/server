@@ -1,7 +1,6 @@
 const db = require('../models');
 const Task = db.task;
 const TaskComment = require('../models/taskCommentModel');
-const TeamMembers = require('../models/teamMember.model');
 const Checklist = require('../models/projectCheckList.model');
 const Project = db.projects;
 const mongoose = require('mongoose');
@@ -72,14 +71,11 @@ exports.addTask = async (req, res) => {
     });
   }
 
-  const referenceModel = await getReferenceModel(req.body.assignedID);
-
   const task = {
     title: req.body.title,
     description: req.body.description,
     issueMember: req.body.member,
     assignedBy: req.body.assignedID,
-    userRef: referenceModel,
     category: req.body.category,
     priority: req.body.priority,
     isActive: true,
@@ -93,16 +89,11 @@ exports.addTask = async (req, res) => {
     image: images,
     audio: audioFile,
     reminder: JSON.parse(req.body.reminder),
-    referenceModel: 'teammembers',
   };
 
-  let assignedBy = await User.findOne({ _id: req.body.assignedID });
+  const assignedBy = await User.findOne({ _id: req.body.assignedID });
 
-  if (!assignedBy) {
-    assignedBy = await TeamMembers.findById(req.body.assignedID);
-  }
-
-  const issueMember = await TeamMembers.findById(req.body.member);
+  const issueMember = await User.findById(req.body.member);
 
   Task.create(task).then((taskSave, err) => {
     if (err) {
@@ -298,7 +289,7 @@ exports.getAllProjectTaskByClient = async (req, res) => {
         model: 'Tickets',
         populate: {
           path: 'assignMember',
-          model: 'teammembers',
+          model: 'User',
           select: '_id name employeeID',
         },
       })
@@ -337,7 +328,7 @@ exports.getAllProjectTickets = async (req, res) => {
       path: 'openTicket',
       populate: {
         path: 'assignMember',
-        model: 'teammembers',
+        model: 'User',
       },
     });
     if (ticket?.length > 0) {
@@ -417,7 +408,7 @@ exports.getAllProjectTaskByMember = async (req, res) => {
     }).populate([
       {
         path: 'assignMember',
-        model: 'teammembers',
+        model: 'User',
       },
       {
         path: 'assignedBy',
@@ -446,33 +437,33 @@ exports.getAllProjectTaskByMember = async (req, res) => {
 exports.getTaskByid = async (req, res) => {
   try {
     const { id } = req.params;
+
     const task = await Task.findById(id)
       .populate([
-        'assignedBy',
-        'issueMember',
+        {
+          path: 'assignedBy',
+          model: 'User',
+          select: '_id firstname lastname roles',
+        },
+        {
+          path: 'issueMember',
+          model: 'User',
+          select: '_id firstname lastname roles',
+        },
         {
           path: 'comments',
-          populate: {
-            path: 'createdBy',
-          },
           options: { sort: { createdAt: -1 } },
+          populate: { path: 'createdBy' },
         },
       ])
-      .exec()
-      .then(task => {
-        if (!task) {
-          throw new Error('Task not found');
-        }
-        return task;
-      })
-      .catch(error => {
-        throw error;
-      });
+      .exec();
+
     if (!task) {
-      return res.status(404).send({
-        message: 'Task not found',
-      });
+      return res.status(404).send({ message: 'Task not found' });
     }
+
+    console.log(task);
+
     res.status(200).send({
       message: 'Task fetched successfully',
       data: task,
@@ -572,11 +563,7 @@ exports.taskAddComment = async (req, res) => {
 
     let task = await Task.findById(taskId).populate(['issueMember']);
 
-    let member = await TeamMembers.findById(userId);
-
-    if (!member) {
-      member = await User.findById(userId);
-    }
+    const member = await User.findById(userId);
 
     if (task.category === 'Project') {
       if (!task) {
@@ -587,7 +574,6 @@ exports.taskAddComment = async (req, res) => {
         .select('sr_engineer')
         .populate({
           path: 'sr_engineer',
-          model: 'teammembers',
         });
 
       if (
@@ -611,11 +597,7 @@ exports.taskAddComment = async (req, res) => {
       }
     } else {
       task = await Task.findById(taskId).populate(['issueMember']);
-      let assignedBy = await TeamMembers.findById(task.assignedBy);
-
-      if (!assignedBy) {
-        assignedBy = await User.findById(task.assignedBy);
-      }
+      const assignedBy = await User.findById(task.assignedBy);
 
       if (
         assignedBy._id.toString() !== mongoose.Types.ObjectId(userId).toString()
@@ -655,11 +637,6 @@ exports.taskAddComment = async (req, res) => {
           dueDate: task.dueDate.toDateString(),
         });
       }
-    }
-
-    const referenceModel = await getReferenceModel(userId);
-    if (!referenceModel) {
-      return res.status(404).send({ message: 'User not found' });
     }
 
     if (type === 'Complete') {
@@ -764,7 +741,6 @@ exports.taskAddComment = async (req, res) => {
       comment,
       type,
       createdBy: userId,
-      referenceModel,
       taskId,
       images: images,
       audio: audioFile,
@@ -793,23 +769,6 @@ exports.taskAddComment = async (req, res) => {
     console.error(error);
     res.status(500).send({ message: 'Error while adding comment' });
   }
-};
-
-const getReferenceModel = async userId => {
-  const models = [
-    { model: TeamMembers, referenceModel: 'teammembers' },
-    { model: User, referenceModel: 'User' },
-    { model: Client, referenceModel: 'clients' },
-  ];
-
-  for (const { model, referenceModel } of models) {
-    const user = await model.findById(userId);
-    if (user) {
-      return referenceModel;
-    }
-  }
-
-  return null;
 };
 
 exports.editTask = async (req, res) => {
@@ -918,17 +877,12 @@ exports.approveTaskComment = async (req, res) => {
       .select('client')
       .populate('client');
     const task = await Task.findById(taskId);
-    const referenceModel = await getReferenceModel(userId);
-    if (!referenceModel) {
-      return res.status(404).send({ message: 'User not found' });
-    }
     await TaskComment.updateOne(
       { _id: commentId },
       {
         $set: {
           'approved.isApproved': true,
           'approved.approvedBy': userId,
-          'approved.approveRef': referenceModel,
           'approved.approvedOn': Date.now(),
         },
       }
@@ -952,26 +906,18 @@ exports.approveTaskComment = async (req, res) => {
 exports.reassignTask = async (req, res) => {
   try {
     const { taskId, userId, newAssigneeId } = req.body;
-    let user = await User.findById(userId);
-    let referenceModel = 'User';
-    if (!user) {
-      user = await TeamMembers.findById(userId);
-      referenceModel = 'teammembers';
-    }
-    const newAssignee = await TeamMembers.findById(newAssigneeId);
+    const newAssignee = await User.findById(newAssigneeId);
     const comment = await TaskComment.create({
       taskId,
       type: 'Task Updated',
       comment: `Task reassigned to ${newAssignee.name}.`,
       createdBy: userId,
-      referenceModel: referenceModel,
     });
     await Task.updateOne(
       { _id: taskId },
       {
         $set: {
           issueMember: newAssigneeId,
-          referenceModel: 'teammembers',
           'reassigned.isReassigned': true,
           'reassigned.assignedTo': newAssigneeId,
           'reassigned.assignedBy': userId,
@@ -1466,7 +1412,6 @@ exports.customFilters = async (req, res) => {
   const query = {
     isActive: true,
     dueDate: { $gte: start, $lte: end },
-    referenceModel: { $nin: ['clients', 'users'] },
   };
 
   if (userId) {
@@ -1565,8 +1510,16 @@ const fetchTasks = async (res, filters, page = 0, limit = 10) => {
     const tasks = await Task.find(filters)
       .sort({ dueDate: 1 })
       .populate([
-        'issueMember',
-        'assignedBy',
+        {
+          path: 'assignedBy',
+          model: 'User',
+          select: '_id firstname lastname roles',
+        },
+        {
+          path: 'issueMember',
+          model: 'User',
+          select: '_id firstname lastname roles',
+        },
         'comments',
         {
           path: 'comments',

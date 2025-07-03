@@ -31,6 +31,7 @@ module.exports = function (app) {
   );
   app.post('/api/auth/signin-otp', controller.signinOtp);
   app.post('/api/auth/signin', controller.signin);
+  app.put('/api/auth/updateuser', verifyToken, uploader, controller.updateUser);
   app.post('/api/auth/forgot-password', controller.forgotPassword);
   app.post('/api/auth/change-password', verifyToken, controller.changePassword);
 

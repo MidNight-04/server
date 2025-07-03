@@ -61,7 +61,7 @@ const sendWhatsAppMessage = async () => {
               parameters: [
                 {
                   name: 'user_name',
-                  value: member.name,
+                  value: member.firstname + ' ' + member.lastname,
                 },
                 {
                   name: 'overdue',
@@ -84,7 +84,7 @@ const sendWhatsAppMessage = async () => {
             {
               headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${API_KEY}`,
+                Authorization: `Bearer ${API_KEY}`,
               },
             }
           );
@@ -115,60 +115,73 @@ const sendWhatsAppMessage = async () => {
   }
 };
 
-const assignedNotification = async ({ phone, assignedTo, assignedBy, category, taskName, description, priority, frequency, dueDate }) => {
-  try{
+const assignedNotification = async ({
+  phone,
+  assignedTo,
+  assignedBy,
+  category,
+  taskName,
+  description,
+  priority,
+  frequency,
+  dueDate,
+}) => {
+  try {
     const msg = await axios.post(
-      `${WATI_API_URL}?whatsappNumber=${phone}`, 
+      `${WATI_API_URL}?whatsappNumber=${phone}`,
       {
         template_name: 'task_assigned',
         broadcast_name: 'task_assigned_040620251728',
-              parameters: [
-                {
-                  name: 'assignedTo',
-                  value: assignedTo,
-                },
-                {
-                  name: 'assignedBy',
-                  value: assignedBy,
-                },
-                {
-                  name: 'category',
-                  value: category,
-                },
-                {
-                  name: 'taskName',
-                  value: taskName,
-                },
-                {
-                  name: 'description',
-                  value: description,
-                },
-                {
-                  name: 'priority',
-                  value: priority,
-                },
-                {
-                  name: 'frequency',
-                  value: frequency,
-                },
-                {
-                  name: 'dueDate',
-                  value: dueDate,
-                },
-              ],
-            },
-            {
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${API_KEY}`,
-              },
-            }
-          );
-            console.log('Message sent:', msg.data);
-          } catch (error) {
-            console.error('Error sending message:', error.response?.data || error.message);
-          }
-}
+        parameters: [
+          {
+            name: 'assignedTo',
+            value: assignedTo,
+          },
+          {
+            name: 'assignedBy',
+            value: assignedBy,
+          },
+          {
+            name: 'category',
+            value: category,
+          },
+          {
+            name: 'taskName',
+            value: taskName,
+          },
+          {
+            name: 'description',
+            value: description,
+          },
+          {
+            name: 'priority',
+            value: priority,
+          },
+          {
+            name: 'frequency',
+            value: frequency,
+          },
+          {
+            name: 'dueDate',
+            value: dueDate,
+          },
+        ],
+      },
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${API_KEY}`,
+        },
+      }
+    );
+    console.log('Message sent:', msg.data);
+  } catch (error) {
+    console.error(
+      'Error sending message:',
+      error.response?.data || error.message
+    );
+  }
+};
 
 const dueDateNotification = async () => {
   try {
@@ -180,23 +193,28 @@ const dueDateNotification = async () => {
 
     const tasks = await Task.find({
       isActive: true,
-      status : { $ne : "Complete" },
-      dueDate: { $gte: startOfDay, $lte: endOfDay }
+      status: { $ne: 'Complete' },
+      dueDate: { $gte: startOfDay, $lte: endOfDay },
     }).populate(['issueMember', 'assignedBy']);
 
     for (const task of tasks) {
       try {
-        const assignedTo = task.issueMember.name;
+        const assignedTo =
+          task.issueMember.firstname + ' ' + task.issueMember.lastname;
         const phone = task.issueMember.phone;
         const category = task.category;
         const taskName = task.title;
         const description = task.description;
         const priority = task.priority;
-        const frequency = task.repeat.repeatType === "norepeat" ? "Once" : task.repeat.repeatType;
+        const frequency =
+          task.repeat.repeatType === 'norepeat'
+            ? 'Once'
+            : task.repeat.repeatType;
         const dueDate = task.dueDate.toISOString().split('T')[0];
 
-        const assignedBy = task.assignedBy?.name || "Admin";
-
+        const assignedBy =
+          task.assignedBy?.firstname + ' ' + task.assignedBy?.lastname ||
+          'Admin';
         const msg = await axios.post(
           `${WATI_API_URL}?whatsappNumber=${phone}`,
           {
@@ -215,71 +233,98 @@ const dueDateNotification = async () => {
           {
             headers: {
               'Content-Type': 'application/json',
-              'Authorization': `Bearer ${API_KEY}`,
+              Authorization: `Bearer ${API_KEY}`,
             },
           }
         );
         console.log('Message sent:', msg.data);
       } catch (taskError) {
-        console.error(`Error sending message for task "${task.title}":`, taskError.response?.data || taskError.message);
+        console.error(
+          `Error sending message for task "${task.title}":`,
+          taskError.response?.data || taskError.message
+        );
       }
     }
   } catch (error) {
-    console.error('Error fetching tasks:', error.response?.data || error.message);
+    console.error(
+      'Error fetching tasks:',
+      error.response?.data || error.message
+    );
   }
 };
 
-const clientUpdate = async ({ phone, clientName, dueDate, taskName, status, remarks,issueMember }) => {
-  try{
+const clientUpdate = async ({
+  phone,
+  clientName,
+  dueDate,
+  taskName,
+  status,
+  remarks,
+  issueMember,
+}) => {
+  try {
     const msg = await axios.post(
-      `${WATI_API_URL}?whatsappNumber=${phone}`, 
+      `${WATI_API_URL}?whatsappNumber=${phone}`,
       {
         template_name: 'task_client_update',
         broadcast_name: 'task_client_update_060620251145',
-              parameters: [
-                {
-                  name: 'clientName',
-                  value: clientName,
-                },
-                {
-                  name: 'issueMember',
-                  value: issueMember,
-                },
-                {
-                  name: 'taskName',
-                  value: taskName,
-                },
-                {
-                  name: 'status',
-                  value: status,
-                },
-                {
-                  name: 'dueDate',
-                  value: dueDate,
-                },
-                {
-                  name: 'remarks',
-                  value: remarks,
-                },
-              ],
-            },
-            {
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${API_KEY}`,
-              },
-            }
-          );
-            console.log('Message sent:', msg.data);
-          } catch (error) {
-            console.error('Error sending message:', error.response?.data || error.message);
-          }
-}
+        parameters: [
+          {
+            name: 'clientName',
+            value: clientName,
+          },
+          {
+            name: 'issueMember',
+            value: issueMember,
+          },
+          {
+            name: 'taskName',
+            value: taskName,
+          },
+          {
+            name: 'status',
+            value: status,
+          },
+          {
+            name: 'dueDate',
+            value: dueDate,
+          },
+          {
+            name: 'remarks',
+            value: remarks,
+          },
+        ],
+      },
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${API_KEY}`,
+        },
+      }
+    );
+    console.log('Message sent:', msg.data);
+  } catch (error) {
+    console.error(
+      'Error sending message:',
+      error.response?.data || error.message
+    );
+  }
+};
 
-const teamUpdate = async ({ phone, assignedTo, assignedBy, category, taskName, description, priority, dueDate, frequency }) => {
-  try{
+const teamUpdate = async ({
+  phone,
+  assignedTo,
+  assignedBy,
+  category,
+  taskName,
+  description,
+  priority,
+  dueDate,
+  frequency,
+}) => {
+  try {
     const msg = await axios.post(
-      `${WATI_API_URL}?whatsappNumber=${phone}`, 
+      `${WATI_API_URL}?whatsappNumber=${phone}`,
       {
         template_name: 'team_update',
         broadcast_name: 'team_update_060620251754',
@@ -297,17 +342,26 @@ const teamUpdate = async ({ phone, assignedTo, assignedBy, category, taskName, d
       {
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${API_KEY}`,
+          Authorization: `Bearer ${API_KEY}`,
         },
-      });
-        console.log('Message sent:', msg.data);
-      } catch (error) {
-        console.error('Error sending message:', error.response?.data || error.message);
       }
-}
+    );
+    console.log('Message sent:', msg.data);
+  } catch (error) {
+    console.error(
+      'Error sending message:',
+      error.response?.data || error.message
+    );
+  }
+};
 
-module.exports = {sendWhatsAppMessage, assignedNotification, dueDateNotification, clientUpdate, teamUpdate};
-
+module.exports = {
+  sendWhatsAppMessage,
+  assignedNotification,
+  dueDateNotification,
+  clientUpdate,
+  teamUpdate,
+};
 
 // app.post('/send-message', async (req, res) => {
 //   try {

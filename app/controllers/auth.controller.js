@@ -163,8 +163,7 @@ exports.signinOtp = async (req, res) => {
 
   try {
     const user = await User.findOne({ [identifierType]: username }).populate(
-      'roles',
-      '-__v'
+      'roles'
     );
 
     if (!user) {
@@ -319,7 +318,7 @@ exports.createUser = async (req, res) => {
 
 exports.signin = async (req, res) => {
   try {
-    const { username, otp } = req.body;
+    const { username, otp, password } = req.body;
 
     const identifierType = helperFunction.checkEmailPhone(username);
     if (!identifierType) {
@@ -331,17 +330,24 @@ exports.signin = async (req, res) => {
     const user = await User.findOne({ [identifierType]: username }).populate(
       'roles'
     );
-
     if (!user) {
       return res.status(404).json({ message: 'User not found.' });
     }
 
-    if (user.loginOtp.toString() !== otp.toString()) {
-      return res.status(401).json({ message: 'Invalid OTP.' });
+    if (otp) {
+      if (user.loginOtp?.toString() !== otp.toString()) {
+        return res.status(401).json({ message: 'Invalid OTP.' });
+      }
+    } else if (password) {
+      const isMatch = await bcrypt.compare(password, user.password);
+      if (!isMatch) {
+        return res.status(401).json({ message: 'Invalid password.' });
+      }
+    } else {
+      return res.status(400).json({ message: 'OTP or password is required.' });
     }
 
     const token = signToken({ id: user._id }, process.env.SESSION_SECRET, {
-      // expiresIn: '2h',
       expiresIn: '7d',
     });
 
@@ -355,7 +361,6 @@ exports.signin = async (req, res) => {
       username: user.username,
       name: `${user.firstname} ${user.lastname}`,
       token,
-      // expiresIn: 7200, // 2 hours
       expiresIn: 604800,
       email: user.email,
       phone: user.phone,
@@ -365,10 +370,181 @@ exports.signin = async (req, res) => {
       state: user.state,
     });
   } catch (error) {
-    console.log(error);
+    console.error(error);
     return res
       .status(500)
       .json({ message: 'Internal server error', error: error.message });
+  }
+};
+
+// exports.updateUser = async (req, res) => {
+//   console.log(req.body);
+//   try {
+//     const {
+//       id,
+//       firstname,
+//       lastname,
+//       username,
+//       email,
+//       password,
+//       employeeID,
+//       phone,
+//       city,
+//       state,
+//       zipCode,
+//       userStatus,
+//       roles,
+//     } = req.body;
+
+//     const user = await User.findById(id);
+//     if (!user) {
+//       return res.status(404).json({ message: 'User not found' });
+//     }
+
+//     if (email && email !== user.email) {
+//       const emailTaken = await User.findOne({ email, _id: { $ne: id } });
+//       if (emailTaken) {
+//         return res.status(409).json({ message: 'Email already in use' });
+//       }
+//       user.email = email;
+//     }
+
+//     if (phone && phone !== user.phone) {
+//       const phoneTaken = await User.findOne({ phone, _id: { $ne: id } });
+//       if (phoneTaken) {
+//         return res.status(409).json({ message: 'Phone number already in use' });
+//       }
+//       user.phone = phone;
+//     }
+
+//     let images = [];
+//     if (req.files?.image?.length > 0) {
+//       try {
+//         const uploaded = await awsS3.uploadFiles(
+//           req.files.image,
+//           'profile_photo'
+//         );
+//         images = uploaded.map(
+//           file =>
+//             `https://thekedar-bucket.s3.us-east-1.amazonaws.com/${file.s3key}`
+//         );
+//         user.profileImage = images[0];
+//       } catch (uploadError) {
+//         return res.status(500).json({
+//           message: 'Failed to upload profile image.',
+//           reason: uploadError.message,
+//         });
+//       }
+//     }
+
+//     if (firstname) user.firstname = firstname;
+//     if (lastname) user.lastname = lastname;
+//     if (username) user.username = username;
+//     if (employeeID) user.employeeID = employeeID;
+//     if (city) user.city = city;
+//     if (state) user.state = state;
+//     if (zipCode) user.zipCode = zipCode;
+//     if (userStatus) user.userStatus = userStatus;
+//     if (roles) user.roles = roles;
+//     if (password) user.password = await bcrypt.hash(password, 10);
+
+//     await user.save();
+
+//     return res.status(200).json({ message: 'User updated successfully', user });
+//   } catch (err) {
+//     console.error('Error updating user:', err);
+//     return res
+//       .status(500)
+//       .json({ message: 'Server error', error: err.message });
+//   }
+// };
+
+const { uploadToS3AndExtractUrls } = require('../helper/s3Helpers');
+
+exports.updateUser = async (req, res) => {
+  try {
+    const {
+      id,
+      firstname,
+      lastname,
+      username,
+      email,
+      password,
+      employeeID,
+      phone,
+      city,
+      state,
+      zipCode,
+      userStatus,
+      roles,
+    } = req.body;
+
+    const user = await User.findById(id);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    const [emailTaken, phoneTaken] = await Promise.all([
+      email && email !== user.email
+        ? User.findOne({ email, _id: { $ne: id } })
+        : null,
+      phone && phone !== user.phone
+        ? User.findOne({ phone, _id: { $ne: id } })
+        : null,
+    ]);
+
+    if (emailTaken) {
+      return res.status(409).json({ message: 'Email already in use' });
+    }
+    if (phoneTaken) {
+      return res.status(409).json({ message: 'Phone number already in use' });
+    }
+
+    if (req.files?.image?.length > 0) {
+      try {
+        const [profileImage] = await uploadToS3AndExtractUrls(
+          req.files.image,
+          'profile_photo'
+        );
+        if (profileImage) {
+          user.profileImage = profileImage;
+        }
+      } catch (uploadError) {
+        return res.status(500).json({
+          message: 'Failed to upload profile image.',
+          reason: uploadError.message,
+        });
+      }
+    }
+
+    // Update fields
+    Object.assign(user, {
+      firstname: firstname ?? user.firstname,
+      lastname: lastname ?? user.lastname,
+      username: username ?? user.username,
+      email: email ?? user.email,
+      phone: phone ?? user.phone,
+      employeeID: employeeID ?? user.employeeID,
+      city: city ?? user.city,
+      state: state ?? user.state,
+      zipCode: zipCode ?? user.zipCode,
+      userStatus: userStatus ?? user.userStatus,
+      roles: roles ?? user.roles,
+    });
+
+    // Hash password if updated
+    if (password) {
+      user.password = await bcrypt.hash(password, 10);
+    }
+
+    await user.save();
+
+    return res.status(200).json({ message: 'User updated successfully', user });
+  } catch (err) {
+    console.error('Error updating user:', err);
+    return res
+      .status(500)
+      .json({ message: 'Server error', error: err.message });
   }
 };
 

@@ -84,20 +84,6 @@ exports.addTask = async (req, res) => {
 
     const savedTask = await Task.create(task);
 
-    console.log({
-      phone: issueMember.phone,
-      assignedTo: issueMember.firstname + ' ' + issueMember?.lastname,
-      assignedBy: assignedBy.firstname + ' ' + assignedBy?.lastname,
-      category: task.category,
-      taskName: task.title,
-      description: task.description,
-      priority: task.priority,
-      assignedOn: new Date(),
-      frequency:
-        task.repeat.repeatType === 'norepeat' ? 'Once' : task.repeat.repeatType,
-      dueDate: new Date(task.dueDate).toDateString(),
-    });
-
     assignedNotification({
       phone: issueMember.phone,
       assignedTo: issueMember.firstname + ' ' + issueMember?.lastname,
@@ -455,7 +441,7 @@ exports.getTaskByid = async (req, res) => {
         {
           path: 'comments',
           options: { sort: { createdAt: -1 } },
-          populate: { path: 'createdBy' },
+          populate: { path: 'createdBy', model: 'User' },
         },
       ])
       .exec();
@@ -652,7 +638,7 @@ exports.deleteTaskCommentImage = async (req, res) => {
     // Delete the image from S3
     const imagePath = imageUrlParts[1];
     try {
-      await awsS3.deleteFile(imagePath);
+      await awsS3.deleteFile(imagePath)
     } catch (s3Error) {
       console.error('S3 deletion error:', s3Error);
       return res
@@ -660,9 +646,10 @@ exports.deleteTaskCommentImage = async (req, res) => {
         .send({ message: 'Failed to delete image from S3' });
     }
 
-    // Remove the image reference from the comment
-    const update = { $pull: { images: imageUrl } };
-    const result = await TaskComment.updateOne({ _id: commentId }, update);
+    const result = await TaskComment.updateOne(
+      { _id: commentId },
+      { $pull: { images: imageUrl } }
+    );
 
     if (result.modifiedCount === 0) {
       return res.status(404).send({ message: 'Image not found in comment' });
@@ -707,7 +694,10 @@ exports.approveTaskComment = async (req, res) => {
     if (!commentId) {
       return res.status(400).send({ message: 'Missing commentId' });
     }
-    const comment = await TaskComment.findById(commentId).populate('createdBy');
+    const comment = await TaskComment.findById(commentId).populate({
+      path: 'createdBy',
+      model: User,
+    });
     if (!comment) {
       return res.status(404).send({ message: 'Comment not found' });
     }
@@ -734,7 +724,7 @@ exports.approveTaskComment = async (req, res) => {
       issueMember: comment.createdBy.name,
       taskName: task.title,
       status: task.status,
-      dueDate: task.dueDate.toDateString(),
+      dueDate: task.dueDate.toDateString() || task.createdAt.toDateString(),
       remarks: comment.comment,
     });
     res.status(200).send({ message: 'Comment approved successfully' });

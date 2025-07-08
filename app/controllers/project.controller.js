@@ -369,13 +369,15 @@ exports.getProjectByMember = (req, res) => {
           populate: [
             {
               path: 'issueMember',
-              select: '_id name role',
+              model: User,
+              select: '-password -token -refreshToken -loginOtp',
               populate: {
-                path: 'role',
+                path: 'roles',
               },
             },
             {
               path: 'assignedBy',
+              model: User,
               select: '-password -token -refreshToken -loginOtp',
               populate: {
                 path: 'roles',
@@ -1785,7 +1787,7 @@ exports.AddNewProjectPoint = async (req, res) => {
         checkListName: checkListName,
         checkListPoint: [],
       },
-      issueMember: issueMember._id,
+      issueMember: issueMember,
     };
 
     // If both index are found, proceed to insert the new object into the step array
@@ -2104,61 +2106,96 @@ exports.DeleteProjectPoint = async (req, res) => {
 
 exports.ProjectStepDelete = async (req, res) => {
   try {
-    const { id, name, project_step, userName, activeUser } = req.body;
+    const { id, name } = req.body;
 
-    // Combined update for project status and inspections
-    const updateResult = await Project.updateOne(
-      { siteID: id },
-      {
-        $pull: {
-          project_status: { name },
-          inspections: { checkListStep: name },
-        },
-      }
+    if (!id || !name) {
+      return res
+        .status(400)
+        .json({ message: 'Site ID and step name are required' });
+    }
+
+    const project = await Project.findOne({ siteID: id });
+    if (!project) {
+      return res.status(404).json({ message: 'Project not found' });
+    }
+
+    const stepIndex = project.project_status.findIndex(
+      step => step.name === name
     );
+    if (stepIndex === -1) {
+      return res.status(404).json({ message: 'Step not found in project' });
+    }
 
-    if (updateResult.modifiedCount === 1) {
-      // Create an array of titles and descriptions to delete
-      const tasksToDelete = project_step.map(step => ({
+    const stepToRemove = project.project_status[stepIndex];
+
+    // Safely map tasks to delete
+    if (Array.isArray(stepToRemove.step) && stepToRemove.step.length > 0) {
+      const tasksToDelete = stepToRemove.step.map(subStep => ({
         siteID: id,
-        title: step?.content,
-        description: step?.content,
+        title: subStep?.content,
+        description: subStep?.content,
         category: 'project',
       }));
 
-      // Batch delete tasks
       await Task.deleteMany({ $or: tasksToDelete });
-
-      // const logData = {
-      //   log: `<span style="color: black;">${name}</span> ->> <em style="color: #fec20e;">Delete</em>`,
-      //   file: [],
-      //   date: date,
-      //   siteID: id,
-      //   member: {
-      //     name: userName,
-      //     Id: activeUser,
-      //   },
-      // };
-      // const logSave = new ProjectLog(logData);
-      // await logSave.save();
-      return res.json({
-        status: 200,
-        message: 'Step removed successfully',
-      });
-    } else {
-      return res
-        .status(500)
-        .json({ message: 'No changes were made to the project' });
     }
+
+    project.project_status.splice(stepIndex, 1);
+    await project.save();
+
+    return res.status(200).json({ message: 'Step removed successfully' });
   } catch (error) {
-    console.error(error);
+    console.error('Error while removing step:', error);
     return res.status(500).json({
-      status: 500,
-      message: 'Error while removing step',
-      error: error.message, // Include error message for debugging
+      message: 'Internal server error while removing step',
+      error: error.message,
     });
   }
 };
+
+// exports.ProjectStepDelete = async (req, res) => {
+//   try {
+//     const { id, name, project_step, userName, activeUser } = req.body;
+
+//     // Combined update for project status and inspections
+//     const updateResult = await Project.updateOne(
+//       { siteID: id },
+//       {
+//         $pull: {
+//           project_status: { name },
+//           inspections: { checkListStep: name },
+//         },
+//       }
+//     );
+
+//     if (updateResult.modifiedCount === 1) {
+//       // Create an array of titles and descriptions to delete
+//       const tasksToDelete = project_step.map(step => ({
+//         siteID: id,
+//         title: step?.content,
+//         description: step?.content,
+//         category: 'project',
+//       }));
+
+//       await Task.deleteMany({ $or: tasksToDelete });
+//       return res.json({
+//         status: 200,
+//         message: 'Step removed successfully',
+//       });
+//     } else {
+//       return res
+//         .status(500)
+//         .json({ message: 'No changes were made to the project' });
+//     }
+//   } catch (error) {
+//     console.error(error);
+//     return res.status(500).json({
+//       status: 500,
+//       message: 'Error while removing step',
+//       error: error.message, // Include error message for debugging
+//     });
+//   }
+// };
 
 exports.TicketUpdateByMember = async (req, res) => {
   try {

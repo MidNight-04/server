@@ -532,9 +532,8 @@ exports.updateUser = async (req, res) => {
       roles: roles ?? user.roles,
     });
 
-    // Hash password if updated
     if (password) {
-      user.password = await bcrypt.hash(password, 10);
+      user.password = password;
     }
 
     await user.save();
@@ -616,32 +615,69 @@ exports.forgotPassword = async (req, res) => {
 
 exports.changePassword = async (req, res) => {
   try {
-    const { refreshToken, password } = req.body;
-    if (!refreshToken || !password) {
-      return res
-        .status(400)
-        .send({ message: 'Refresh token and password are required.' });
+    const { userId, currentPassword, newPassword, confirmPassword } = req.body;
+
+    if (!userId || !currentPassword || !newPassword || !confirmPassword) {
+      return res.status(400).json({ message: 'All fields are required.' });
     }
-    const hashedPassword = bcrypt.hashSync(password, 8);
-    const result = await User.updateOne(
-      { refreshToken },
-      {
-        $set: { password: hashedPassword, refreshToken: null },
-      }
-    );
-    if (result.modifiedCount === 0) {
-      return res
-        .status(404)
-        .send({ message: 'Invalid or expired reset token.' });
+
+    if (newPassword !== confirmPassword) {
+      return res.status(400).json({ message: 'New passwords do not match.' });
     }
-    return res
-      .status(200)
-      .send({ message: 'Password changed successfully.', status: 200 });
+
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ message: 'User not found.' });
+
+    const isMatch = await user.comparePassword(currentPassword);
+    if (!isMatch)
+      return res
+        .status(401)
+        .json({ message: 'Current password is incorrect.' });
+
+    user.password = newPassword;
+    await user.save();
+
+    res.status(200).json({ message: 'Password changed successfully.' });
   } catch (err) {
-    console.error('Change Password Error:', err);
-    return res
-      .status(500)
-      .send({ message: 'Internal server error.', error: err.message });
+    console.error('Error changing password:', err);
+    res.status(500).json({ message: 'Server error.' });
+  }
+};
+
+exports.changeProfileImage = async (req, res) => {
+  try {
+    const { userId } = req.body;
+
+    if (!userId) {
+      return res.status(400).json({ message: 'userId is required.' });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ message: 'User not found.' });
+
+    if (req.files?.image?.length > 0) {
+      try {
+        const [profileImage] = await uploadToS3AndExtractUrls(
+          req.files.image,
+          'profile_photo'
+        );
+        if (profileImage) {
+          user.profileImage = profileImage;
+        }
+      } catch (uploadError) {
+        return res.status(500).json({
+          message: 'Failed to upload profile image.',
+          reason: uploadError.message,
+        });
+      }
+    }
+
+    await user.save();
+
+    res.status(200).json({ message: 'Profile Image changed successfully.' });
+  } catch (err) {
+    console.error('Error changing Profile Image:', err);
+    res.status(500).json({ message: 'Server error.' });
   }
 };
 

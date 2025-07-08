@@ -91,7 +91,7 @@ module.exports = function (app) {
   app.post(
     '/api/task/taskaddcomment',
     verifyToken,
-    isSenior,
+    // isSenior,
     // uploadImage.fields([
     //   {
     //     name: 'image',

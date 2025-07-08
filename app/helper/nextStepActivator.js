@@ -1,5 +1,5 @@
 const Task = require('../models/task.model');
-const assignedNotification = require('./notification');
+const { assignedNotification } = require('./reminder');
 
 exports.activateNextSteps = async (task, project) => {
   const statuses = project.project_status;

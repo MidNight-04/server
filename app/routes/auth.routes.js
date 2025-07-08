@@ -34,6 +34,12 @@ module.exports = function (app) {
   app.put('/api/auth/updateuser', verifyToken, uploader, controller.updateUser);
   app.post('/api/auth/forgot-password', controller.forgotPassword);
   app.post('/api/auth/change-password', verifyToken, controller.changePassword);
+  app.post(
+    '/api/auth/change-profile-image',
+    verifyToken,
+    uploader,
+    controller.changeProfileImage
+  );
 
   app.post('/api/auth/signout', controller.signout);
 

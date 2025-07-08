@@ -24,13 +24,13 @@ app.use(express.urlencoded({ extended: true }));
 app.use(morgan(':method :url :status :res[content-length] - :response-time ms'));
 
 // Rate limiter
-app.use(rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 100,
-  message: 'Too many requests from this IP, please try again later.',
-  standardHeaders: true,
-  legacyHeaders: false,
-}));
+// app.use(rateLimit({
+//   windowMs: 15 * 60 * 1000,
+//   max: 100,
+//   message: 'Too many requests from this IP, please try again later.',
+//   standardHeaders: true,
+//   legacyHeaders: false,
+// }));
 
 // Session middleware
 app.use(sessionMiddleware);

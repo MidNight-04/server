@@ -9,7 +9,7 @@ exports.sendTeamNotification = async ({ recipient, sender, task }) => {
   await teamUpdate({
     phone: user.phone,
     assignedTo: user.firstname + ' ' + user.lastname,
-    assignedBy: sender.firstname,
+    assignedBy: sender,
     category: task.category,
     taskName: task.title,
     description: task.description,

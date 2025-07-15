@@ -8,7 +8,6 @@ const projectDocumentModel = mongoose.model(
         siteID:String,
         clientID:String,
         uploadingUser:String,
-        uploadingUserName:String,
         status:{
             type:String,
             default:"Pending"

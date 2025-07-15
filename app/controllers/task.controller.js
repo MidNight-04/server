@@ -638,7 +638,7 @@ exports.deleteTaskCommentImage = async (req, res) => {
     // Delete the image from S3
     const imagePath = imageUrlParts[1];
     try {
-      await awsS3.deleteFile(imagePath)
+      await awsS3.deleteFile(imagePath);
     } catch (s3Error) {
       console.error('S3 deletion error:', s3Error);
       return res
@@ -1476,6 +1476,204 @@ exports.customDashboardFilters = async (req, res) => {
   } catch (error) {
     console.error('Server error:', error);
     res.status(500).send({ message: 'Error while fetching tasks' });
+  }
+};
+
+// exports.delegatedTasks = async (req, res) => {
+//   try {
+//     const userId = req.body?.userId;
+//     const page = req.body?.page;
+//     const selectedCategory = req.body?.selectedCategory;
+//     const assignedBy = req.body?.assignedBy;
+//     const assignedTo = req.body?.assignedTo;
+//     const frequency = req.body?.frequency;
+//     const priority = req.body?.priority;
+//     const filter = req.body?.filter;
+//     const siteId = req.body?.siteId;
+//     const branch = req.body?.branch;
+
+//     let start;
+//     let end;
+
+//     switch (filter) {
+//       case 'Today':
+//         ({ start, end } = getTodayRange());
+//         break;
+//       case 'Yesterday':
+//         ({ start, end } = getYesterdayRange());
+//         break;
+//       case 'Tomorrow':
+//         ({ start, end } = getTomorrowRange());
+//         break;
+//       case 'This Week':
+//         ({ start, end } = getWeekRange());
+//         break;
+//       case 'Last Week':
+//         ({ start, end } = getWeekRange(-7));
+//         break;
+//       case 'Next Week':
+//         ({ start, end } = getWeekRange(7));
+//         break;
+//       case 'This Month':
+//         ({ start, end } = getMonthRange());
+//         break;
+//       case 'Last Month':
+//         ({ start, end } = getMonthRange(-1));
+//         break;
+//       case 'Next Month':
+//         ({ start, end } = getMonthRange(1));
+//         break;
+//       case 'This Year':
+//         ({ start, end } = getYearRange());
+//       default:
+//         ({ start, end } = getWeekRange());
+//     }
+
+//     const query = {
+//       isActive: true,
+//       dueDate: { $gte: start, $lte: end },
+//     };
+
+//     if (userId) {
+//       query.assignedBy = userId;
+//     }
+//     if (selectedCategory) {
+//       query.category = selectedCategory;
+//     }
+//     if (assignedBy) {
+//       query.assignedBy = assignedBy;
+//     }
+//     if (assignedTo) {
+//       query.issueMember = assignedTo;
+//     }
+//     if (frequency) {
+//       query['repeat.repeatType'] = frequency;
+//     }
+//     if (priority) {
+//       query.priority = priority;
+//     }
+//     if (siteId) {
+//       query.siteID = siteId;
+//     }
+
+//     if (branch) {
+//       query.branch = branch;
+//     }
+
+//     await fetchTasks(res, query, page);
+//   } catch (error) {
+//     console.error('Server error:', error);
+//     res.status(500).send({ message: 'Error while fetching tasks' });
+//   }
+// };
+
+const PAGE_SIZE = 10;
+
+exports.delegatedTasks = async (req, res) => {
+  try {
+    const {
+      userId,
+      page = 1,
+      selectedCategory,
+      assignedBy,
+      assignedTo,
+      frequency,
+      priority,
+      filter,
+      siteId,
+      branch,
+    } = req.body;
+
+    let start, end;
+
+    switch (filter) {
+      case 'Today':
+        ({ start, end } = getTodayRange());
+        break;
+      case 'Yesterday':
+        ({ start, end } = getYesterdayRange());
+        break;
+      case 'Tomorrow':
+        ({ start, end } = getTomorrowRange());
+        break;
+      case 'This Week':
+        ({ start, end } = getWeekRange());
+        break;
+      case 'Last Week':
+        ({ start, end } = getWeekRange(-7));
+        break;
+      case 'Next Week':
+        ({ start, end } = getWeekRange(7));
+        break;
+      case 'This Month':
+        ({ start, end } = getMonthRange());
+        break;
+      case 'Last Month':
+        ({ start, end } = getMonthRange(-1));
+        break;
+      case 'Next Month':
+        ({ start, end } = getMonthRange(1));
+        break;
+      case 'This Year':
+        ({ start, end } = getYearRange());
+        break;
+      default:
+        ({ start, end } = getWeekRange());
+    }
+
+    const query = {
+      isActive: true,
+      dueDate: { $gte: start, $lte: end },
+    };
+
+    if (userId) query.assignedBy = userId;
+    if (selectedCategory) query.category = selectedCategory;
+    if (assignedBy) query.assignedBy = assignedBy;
+    if (assignedTo) query.issueMember = assignedTo;
+    if (frequency) query['repeat.repeatType'] = frequency;
+    if (priority) query.priority = priority;
+    if (siteId) query.siteID = siteId;
+    if (branch) query.branch = branch;
+
+    const skip = (page - 1) * PAGE_SIZE;
+
+    const [tasks, total] = await Promise.all([
+      Task.find(query)
+        .sort({ dueDate: 1 })
+        .skip(skip)
+        .limit(PAGE_SIZE)
+        .populate([
+          {
+            path: 'assignedBy',
+            model: 'User',
+            select: '_id firstname lastname roles',
+          },
+          {
+            path: 'issueMember',
+            model: 'User',
+            select: '_id firstname lastname roles',
+          },
+          'comments',
+          {
+            path: 'comments',
+            populate: {
+              path: 'createdBy',
+            },
+          },
+        ]),
+      Task.countDocuments(query),
+    ]);
+
+    const hasMore = skip + tasks.length < total;
+
+    return res.status(200).json({
+      tasks,
+      hasMore,
+      page,
+    });
+  } catch (error) {
+    console.error('Server error:', error);
+    return res.status(500).json({ message: 'Error while fetching tasks' });
   }
 };
 

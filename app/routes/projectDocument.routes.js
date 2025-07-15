@@ -1,6 +1,6 @@
 const controller = require('../controllers/projectDocument.controller');
 const { uploadImage } = require('../middlewares/uploadImage');
-const fileUploader = require('../middlewares/fileUploader');
+const uploader = require('../middlewares/fileUploader');
 const { verifyToken, isSenior } = require('../middlewares/authJwt');
 
 module.exports = function (app) {
@@ -13,7 +13,7 @@ module.exports = function (app) {
     verifyToken,
     isSenior,
     // uploadImage.fields([{name: 'document', maxCount: 10 }]),
-    fileUploader,
+    uploader,
     controller.addProjectDocument
   );
   // app.post("/api/admin/category/update", uploadImage.fields([

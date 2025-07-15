@@ -115,28 +115,163 @@ exports.addProject = async (req, res) => {
     }
 
     const allSteps = await ConstructionStep.find();
-    const [floorType, floorCountStr] = data?.floor?.split('+');
-    const floorCount = parseInt(floorCountStr, 10);
+    // const [floorType, floorCountStr] = data?.floor?.split('+');
+    // const floorCount = parseInt(floorCountStr, 10);
+
+    // const projectStepArray = allSteps
+    //   .flatMap(step => {
+    //     if (step.priority === '2') {
+    //       return Array.from({ length: floorCount + 1 }, (_, j) => ({
+    //         name:
+    //           j === 0
+    //             ? floorType === 'S'
+    //               ? 'Stilt'
+    //               : 'Ground Floor'
+    //             : `Floor ${j}`,
+    //         priority: parseInt(step.priority) + j,
+    //         step: step.points,
+    //       }));
+    //     }
+
+    //     return [
+    //       {
+    //         name: step.name,
+    //         priority: step.priority === '1' ? 1 : floorCount + 3,
+    //         step: step.points,
+    //       },
+    //     ];
+    //   })
+    //   .sort((a, b) => a.priority - b.priority);
+
+    // const parseFloorStructure = floorStr => {
+    //   const parts = floorStr?.split('+') || [];
+    //   let basementCount = 0;
+    //   let floorType = 'G';
+    //   let floorCount = 0;
+
+    //   for (const part of parts) {
+    //     if (part.startsWith('B')) {
+    //       basementCount = parseInt(part.replace('B', ''), 10);
+    //     } else if (part === 'S' || part === 'G') {
+    //       floorType = part;
+    //     } else {
+    //       floorCount = parseInt(part, 10);
+    //     }
+    //   }
+
+    //   return { basementCount, floorType, floorCount };
+    // };
+
+    // const getFloorLabel = (floorType, index, basementCount) => {
+    //   if (index < basementCount) {
+    //     return `Basement ${basementCount - index}`;
+    //   }
+
+    //   const adjustedIndex = index - basementCount;
+
+    //   if (adjustedIndex === 0) {
+    //     return floorType === 'S' ? 'Stilt' : 'Ground Floor';
+    //   }
+
+    //   return `Floor ${adjustedIndex}`;
+    // };
+
+    // const { basementCount, floorType, floorCount } = parseFloorStructure(
+    //   data?.floor
+    // );
+
+    // const totalFloors = basementCount + 1 + floorCount;
+
+    // const projectStepArray = allSteps
+    //   .flatMap(step => {
+    //     if (step.priority === '2') {
+    //       return Array.from({ length: totalFloors }, (_, i) => ({
+    //         name: getFloorLabel(floorType, i, basementCount),
+    //         priority: parseInt(step.priority, 10) + i,
+    //         step: step.points,
+    //       }));
+    //     }
+
+    //     const defaultPriority =
+    //       step.priority === '1' ? 1 : parseInt(step.priority, 10) + totalFloors;
+    //     return [
+    //       {
+    //         name: step.name,
+    //         priority: defaultPriority,
+    //         step: step.points,
+    //       },
+    //     ];
+    //   })
+    //   .sort((a, b) => a.priority - b.priority);
+
+    const parseFloorStructure = (floorStr = '') => {
+      const parts = floorStr.split('+').filter(Boolean);
+
+      const basementLevels = [];
+      let groundType = 'G';
+      let floorCount = 0;
+
+      for (const part of parts) {
+        if (/^B\d+$/.test(part)) {
+          basementLevels.push(parseInt(part.replace('B', ''), 10));
+        } else if (part === 'S' || part === 'G') {
+          groundType = part;
+        } else if (!isNaN(Number(part))) {
+          floorCount = parseInt(part, 10);
+        }
+      }
+      basementLevels.sort((a, b) => b - a);
+
+      return { basementLevels, groundType, floorCount };
+    };
+
+    const generateFloorLabels = ({
+      basementLevels,
+      groundType,
+      floorCount,
+    }) => {
+      const labels = [];
+
+      for (const level of basementLevels) {
+        labels.push(`Basement ${level}`);
+      }
+
+      labels.push(groundType === 'S' ? 'Stilt' : 'Ground Floor');
+
+      for (let i = 1; i <= floorCount; i++) {
+        labels.push(`Floor ${i}`);
+      }
+
+      return labels;
+    };
+
+    const { basementLevels, groundType, floorCount } = parseFloorStructure(
+      data?.floor
+    );
+    const floorLabels = generateFloorLabels({
+      basementLevels,
+      groundType,
+      floorCount,
+    });
 
     const projectStepArray = allSteps
       .flatMap(step => {
         if (step.priority === '2') {
-          return Array.from({ length: floorCount + 1 }, (_, j) => ({
-            name:
-              j === 0
-                ? floorType === 'S'
-                  ? 'Stilt'
-                  : 'Ground Floor'
-                : `Floor ${j}`,
-            priority: parseInt(step.priority) + j,
+          return floorLabels.map((label, i) => ({
+            name: label,
+            priority: parseInt(step.priority, 10) + i,
             step: step.points,
           }));
         }
 
+        const defaultPriority =
+          step.priority === '1'
+            ? 1
+            : parseInt(step.priority, 10) + floorLabels.length;
         return [
           {
             name: step.name,
-            priority: step.priority === '1' ? 1 : floorCount + 3,
+            priority: defaultPriority,
             step: step.points,
           },
         ];
@@ -246,10 +381,11 @@ exports.addProject = async (req, res) => {
     };
 
     const paymentStages = await PaymentStages.findOne({
-      floor: data.floor,
+      floor: data.floor.toString(),
     });
 
     if (!paymentStages) {
+      console.log(`First create payment stage for ${data.floor} floor`);
       return res.status(204).json({
         message: `First create payment stage for ${data.floor} floor`,
       });

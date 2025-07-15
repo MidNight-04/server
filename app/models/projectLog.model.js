@@ -1,17 +1,20 @@
 const mongoose = require('mongoose');
 
 const logModel = mongoose.model(
-    'projectlogs',
-    new mongoose.Schema({
-        log: String,
-        file:[],
-        date:String,
-        siteID:String,
-        member:{
-            name:String,
-            Id:String
-        },
-    }, { timestamps: true })
+  'projectlogs',
+  new mongoose.Schema(
+    {
+      log: String,
+      date: { type: String, required: true, default: Date.now },
+      siteID: String,
+      userId: {
+        type: mongoose.Schema.Types.ObjectId,
+        required: true,
+        ref: 'User',
+      },
+    },
+    { timestamps: true }
+  )
 );
 
-module.exports = logModel
+module.exports = logModel;

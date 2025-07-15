@@ -192,6 +192,7 @@ module.exports = function (app) {
     controller.getThisYearTaskById
   );
   app.post('/api/task/customfilters', verifyToken, controller.customFilters);
+  app.post('/api/task/delegatedtasks', verifyToken, controller.delegatedTasks);
   app.get('/api/task/getTask', verifyToken, controller.getTask);
   app.post(
     '/api/task/customdashboardfilters',

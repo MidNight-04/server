@@ -114,7 +114,7 @@ exports.addProject = async (req, res) => {
         .send({ message: 'Project already exists with siteID' });
     }
 
-    const allSteps = await ConstructionStep.find();
+    const allSteps = await ConstructionStep.find().sort({ order: 1 }); // Ensure steps are sorted by order
     // const [floorType, floorCountStr] = data?.floor?.split('+');
     // const floorCount = parseInt(floorCountStr, 10);
 

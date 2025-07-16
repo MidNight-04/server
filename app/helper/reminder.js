@@ -1,8 +1,7 @@
 require('dotenv').config();
 const axios = require('axios');
 const Task = require('../models/task.model');
-const TeamMember = require('../models/teamMember.model');
-const { task } = require('../models');
+const User = require('../models/user.model');
 
 const WATI_API_URL =
   'https://live-mt-server.wati.io/15495/api/v1/sendTemplateMessage';
@@ -16,7 +15,7 @@ if (!API_KEY) {
 const sendWhatsAppMessage = async () => {
   try {
     const today = new Date();
-    const teammembers = await User.find();
+    const teammembers = await User.find({});
     const allPromises = [];
 
     const startOfWeek = new Date(today);
@@ -211,10 +210,6 @@ const dueDateNotification = async () => {
             ? 'Once'
             : task.repeat.repeatType;
         const dueDate = task.dueDate.toISOString().split('T')[0];
-
-        const assignedBy =
-          task.assignedBy?.firstname + ' ' + task.assignedBy?.lastname ||
-          'Admin';
         const msg = await axios.post(
           `${WATI_API_URL}?whatsappNumber=${phone}`,
           {

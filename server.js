@@ -48,15 +48,15 @@ db.mongoose
   });
 
 // Cron Jobs
-cron.schedule('0 9 * * *', async () => {
-  try {
-    console.log('⏳ Running daily 9 AM reminder...');
-    await sendWhatsAppMessage();
-    await dueDateNotification();
-  } catch (error) {
-    console.error('❌ Cron job error:', error);
-  }
-});
+// cron.schedule('0 9 * * *', async () => {
+//   try {
+//     console.log('⏳ Running daily 9 AM reminder...');
+//     await sendWhatsAppMessage();
+//     await dueDateNotification();
+//   } catch (error) {
+//     console.error('❌ Cron job error:', error);
+//   }
+// });
 
 cron.schedule('*/30 * * * *', async () => {
   try {

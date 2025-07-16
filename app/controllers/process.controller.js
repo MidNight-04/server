@@ -226,7 +226,7 @@ const xlsx = require('xlsx');
 
 exports.addConstructionStep = async (req, res) => {
   try {
-    const { name, priority } = req.body;
+    const { name, priority, order = 0 } = req.body;
     const existing = await ConstructionStep.findOne({ name: name.trim() });
 
     if (existing) {
@@ -273,6 +273,7 @@ exports.addConstructionStep = async (req, res) => {
     const newStep = new ConstructionStep({
       name,
       priority,
+      order: order,
       points: arraySave,
     });
     await newStep.save();

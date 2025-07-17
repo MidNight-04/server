@@ -17,4 +17,10 @@ module.exports = function (app) {
     verifyToken,
     controller.getTicketsByMemberId
   );
+
+  app.get(
+    '/api/tickets/getticketbysiteid/:siteId',
+    // verifyToken,
+    controller.getTicketBySiteId
+  );
 };

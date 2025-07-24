@@ -2,6 +2,7 @@
 
 const db = require('../models');
 const Project = db.projects;
+const Role = db.role;
 const Process = db.constructionsteps;
 const PaymentStages = db.paymentStages;
 const ProjectPaymentStages = db.projectPaymentStages;
@@ -2095,8 +2096,11 @@ exports.DeleteProjectPoint = async (req, res) => {
 
     let extension = 0;
 
-    if (!stepToRemove.forceMajeure) {
-      extension = Math.max(project.extension - duration, 0);
+    // if (!stepToRemove.forceMajeure) {
+    if (stepToRemove.taskId.forceMajeure) {
+      extension = Math.max(project.extension - duration, duration);
+      // extension = Math.max(project.extension - duration, 0);
+      console.log(project.extension, extension);
       if (extension < 0) {
         extension = 0;
       }
@@ -2313,9 +2317,10 @@ exports.TicketUpdateByMember = async (req, res) => {
 exports.changeIssueMember = async (req, res) => {
   try {
     const { userId, siteId, issue, newMember } = req.body;
+    const role = await Role.findById(issue);
     const proj = await Project.findOne({ siteID: siteId });
     const newM = await User.findById(newMember);
-    const user = await User.findById(userId);
+    // const u
 
     let issueMember;
     const issueMap = {
@@ -2327,7 +2332,8 @@ exports.changeIssueMember = async (req, res) => {
       Operations: 'operation',
       Sales: 'sales',
     };
-    issueMember = issueMap[issue] || null;
+    issueMember = issueMap[role.name] || null;
+
     if (!issueMember) {
       return res.status(400).json({
         status: 400,

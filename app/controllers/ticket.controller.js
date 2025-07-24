@@ -65,7 +65,7 @@ exports.getTicketBySiteId = async (req, res) => {
       });
     }
 
-    const tickets = await Ticket.find({ siteId }).populate({
+    const tickets = await Ticket.find({ siteID: siteId }).populate({
       path: 'assignMember',
       model: 'User',
       select: '-token -password -refreshToken -loginOtp',

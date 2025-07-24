@@ -20,7 +20,7 @@ module.exports = function (app) {
 
   app.get(
     '/api/tickets/getticketbysiteid/:siteId',
-    // verifyToken,
+    verifyToken,
     controller.getTicketBySiteId
   );
 };

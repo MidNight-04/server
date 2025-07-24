@@ -741,7 +741,7 @@ exports.reassignTask = async (req, res) => {
     const comment = await TaskComment.create({
       taskId,
       type: 'Task Updated',
-      comment: `Task reassigned to ${newAssignee.name}.`,
+      comment: `Task reassigned to ${newAssignee.firstname} ${newAssignee.lastname}.`,
       createdBy: userId,
     });
     await Task.updateOne(
@@ -1388,94 +1388,65 @@ exports.getTask = async (req, res) => {
 
 exports.customDashboardFilters = async (req, res) => {
   try {
-    const userId = req.body?.userId;
-    const page = req.body?.page;
-    const selectedCategory = req.body?.selectedCategory;
-    const assignedBy = req.body?.assignedBy;
-    const assignedTo = req.body?.assignedTo;
-    const frequency = req.body?.frequency;
-    const priority = req.body?.priority;
-    const filter = req.body?.filter;
-    const siteId = req.body?.siteId;
-    const branch = req.body?.branch;
+    const {
+      userId,
+      page = 1,
+      selectedCategory,
+      assignedBy,
+      assignedTo,
+      frequency,
+      priority,
+      filter,
+      siteId,
+      branch,
+    } = req.body || {};
 
-    let start;
-    let end;
-
-    switch (filter) {
-      case 'Today':
-        ({ start, end } = getTodayRange());
-        break;
-      case 'Yesterday':
-        ({ start, end } = getYesterdayRange());
-        break;
-      case 'Tomorrow':
-        ({ start, end } = getTomorrowRange());
-        break;
-      case 'This Week':
-        ({ start, end } = getWeekRange());
-        break;
-      case 'Last Week':
-        ({ start, end } = getWeekRange(-7));
-        break;
-      case 'Next Week':
-        ({ start, end } = getWeekRange(7));
-        break;
-      case 'This Month':
-        ({ start, end } = getMonthRange());
-        break;
-      case 'Last Month':
-        ({ start, end } = getMonthRange(-1));
-        break;
-      case 'Next Month':
-        ({ start, end } = getMonthRange(1));
-        break;
-      case 'This Year':
-        ({ start, end } = getYearRange());
-      default:
-        ({ start, end } = getWeekRange());
-    }
-
-    const query = {
-      isActive: true,
-      // status:"In Progress",
-      dueDate: { $gte: start, $lte: end },
-      siteID: { $exists: true },
+    // Helper to get date range
+    const getDateRange = filterType => {
+      const map = {
+        Today: getTodayRange,
+        Yesterday: getYesterdayRange,
+        Tomorrow: getTomorrowRange,
+        'This Week': () => getWeekRange(),
+        'Last Week': () => getWeekRange(-7),
+        'Next Week': () => getWeekRange(7),
+        'This Month': () => getMonthRange(),
+        'Last Month': () => getMonthRange(-1),
+        'Next Month': () => getMonthRange(1),
+        'This Year': () => getYearRange(),
+      };
+      return map[filterType]?.() || getWeekRange();
     };
 
-    if (userId) {
-      query.issueMember = userId;
-    }
-    if (selectedCategory) {
-      query.category = selectedCategory;
-    }
-    if (assignedBy) {
-      query.assignedBy = assignedBy;
-    }
-    if (assignedTo) {
-      query.issueMember = assignedTo;
-    }
-    if (frequency) {
-      query['repeat.repeatType'] = frequency;
-    }
-    if (priority) {
-      query.priority = priority;
-    }
-    // if (withComments) {
-    //   query.comments = { $exists: true, $not: { $size: 0 } };
-    // }
-    if (siteId) {
-      query.siteID = siteId;
-    }
+    const { start, end } = getDateRange(filter);
 
-    if (branch) {
-      query.branch = branch;
-    }
+    // Base query
+    const query = {
+      isActive: true,
+      dueDate: { $gte: start, $lte: end },
+      siteID: { $exists: true },
+      category: 'Project',
+    };
 
+    // Dynamically add filters
+    const filters = {
+      ...(userId && { issueMember: userId }),
+      ...(selectedCategory && { category: selectedCategory }),
+      ...(assignedBy && { assignedBy }),
+      ...(assignedTo && { issueMember: assignedTo }), // NOTE: overrides userId if both exist
+      ...(frequency && { 'repeat.repeatType': frequency }),
+      ...(priority && { priority }),
+      ...(siteId && { siteID: siteId }),
+      ...(branch && { branch }),
+    };
+
+    Object.assign(query, filters);
+
+    // Fetch filtered tasks
     await fetchTasks(res, query, page);
   } catch (error) {
     console.error('Server error:', error);
-    res.status(500).send({ message: 'Error while fetching tasks' });
+    res.status(500).json({ message: 'Error while fetching tasks' });
   }
 };
 
@@ -1853,5 +1824,332 @@ exports.manuallyCloseTask = async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).send({ message: 'Error while adding comment' });
+  }
+};
+
+// exports.testFilter = async (req, res) => {
+//   try {
+//     const projects = await Project.find().populate({
+//       path: 'project_status',
+//       populate: {
+//         path: 'step',
+//         populate: {
+//           path: 'taskId',
+//           populate: [
+//             {
+//               path: 'issueMember',
+//               model: 'User',
+//               select: '_id firstname lastname roles',
+//               populate: {
+//                 path: 'roles',
+//                 model: 'Role',
+//                 select: '_id name',
+//               },
+//             },
+//             {
+//               path: 'assignedBy',
+//               model: 'User',
+//               select: '_id firstname lastname roles',
+//               populate: {
+//                 path: 'roles',
+//                 model: 'Role',
+//                 select: '_id name',
+//               },
+//             },
+//             {
+//               path: 'comments',
+//               populate: {
+//                 path: 'createdBy',
+//                 model: 'User',
+//                 select: '_id firstname lastname roles',
+//                 populate: {
+//                   path: 'roles',
+//                   model: 'Role',
+//                   select: '_id name',
+//                 },
+//               },
+//             },
+//           ],
+//         },
+//       },
+//     });
+
+//     const groupedStatuses = projects.map(project => ({
+//       projectId: project.siteID,
+//       projectName: project.name,
+//       projectStatuses: project.project_status
+//         .filter(item => item.step.some(step => step.taskId.isActive))
+//         .map(item => ({
+//           name: item.name,
+//           step: item.step
+//             .filter(step => step.taskId.isActive)
+//             .map(step => ({
+//               projectId: project.siteID,
+//               stepName: item.name,
+//               taskId: step._id,
+//               taskName: step.taskId.name,
+//               taskDescription: step.taskId.description,
+//               taskDueDate: step.taskId.dueDate,
+//               taskStatus: step.taskId.status,
+//               taskIssueMember: step.taskId.issueMember,
+//               taskAssignedBy: step.taskId.assignedBy,
+//               taskComments: step.taskId.comments,
+//             })),
+//         })),
+//     }));
+
+//     res.status(200).json({ groupedStatuses });
+//   } catch (error) {
+//     console.error('Server error:', error);
+//     res.status(500).json({ message: 'Error while fetching tasks' });
+//   }
+// };
+
+// exports.testFilter = async (req, res) => {
+//   try {
+//     const projects = await Project.find()
+//       .select('siteID name project_status')
+//       .populate([
+//         {
+//           path: 'project_status',
+//           populate: {
+//             path: 'step',
+//             populate: {
+//               path: 'taskId',
+//               match: {
+//                 isActive: true,
+//                 status: { $ne: 'Complete' },
+//               },
+//               populate: [
+//                 {
+//                   path: 'issueMember',
+//                   model: 'User',
+//                   select: '_id firstname lastname roles',
+//                   populate: {
+//                     path: 'roles',
+//                     model: 'Role',
+//                     select: '_id name',
+//                   },
+//                 },
+//                 {
+//                   path: 'assignedBy',
+//                   model: 'User',
+//                   select: '_id firstname lastname roles',
+//                   populate: {
+//                     path: 'roles',
+//                     model: 'Role',
+//                     select: '_id name',
+//                   },
+//                 },
+//                 {
+//                   path: 'comments',
+//                   populate: {
+//                     path: 'createdBy',
+//                     model: 'User',
+//                     select: '_id firstname lastname roles',
+//                     populate: {
+//                       path: 'roles',
+//                       model: 'Role',
+//                       select: '_id name',
+//                     },
+//                   },
+//                 },
+//               ],
+//             },
+//           },
+//         },
+//       ])
+//       .lean();
+
+//     const groupedStatuses = projects.map(project => {
+//       const activeTasks = project.project_status.flatMap(status => {
+//         return (status.step || [])
+//           .filter(step => step?.taskId)
+//           .map(step => {
+//             const task = step.taskId;
+//             return {
+//               projectId: project.siteID,
+//               projectName: project.name,
+//               stepName: status.name,
+//               taskId: step._id,
+//               taskName: task.name || '',
+//               taskDescription: task.description || '',
+//               taskDueDate: task.dueDate || null,
+//               taskStatus: task.status || '',
+//               taskIssueMember: task.issueMember || [],
+//               taskAssignedBy: task.assignedBy || null,
+//               taskComments: task.comments || [],
+//             };
+//           });
+//       });
+
+//       return {
+//         projectId: project.siteID,
+//         projectName: project.name,
+//         activeTasks,
+//       };
+//     });
+
+//     res.status(200).json({ groupedStatuses });
+//   } catch (error) {
+//     console.error('Server error:', error);
+//     res.status(500).json({ message: 'Error while fetching tasks' });
+//   }
+// };
+
+exports.dashboardFilter = async (req, res) => {
+  try {
+    const {
+      userId,
+      page = 1,
+      selectedCategory,
+      assignedTo,
+      frequency,
+      priority,
+      filter,
+      siteId,
+      branch,
+      limit = 20,
+    } = req.body;
+
+    let start, end;
+    switch (filter) {
+      case 'Today':
+        ({ start, end } = getTodayRange());
+        break;
+      case 'Yesterday':
+        ({ start, end } = getYesterdayRange());
+        break;
+      case 'Tomorrow':
+        ({ start, end } = getTomorrowRange());
+        break;
+      case 'This Week':
+        ({ start, end } = getWeekRange());
+        break;
+      case 'Last Week':
+        ({ start, end } = getWeekRange(-7));
+        break;
+      case 'Next Week':
+        ({ start, end } = getWeekRange(7));
+        break;
+      case 'This Month':
+        ({ start, end } = getMonthRange());
+        break;
+      case 'Last Month':
+        ({ start, end } = getMonthRange(-1));
+        break;
+      case 'Next Month':
+        ({ start, end } = getMonthRange(1));
+        break;
+      case 'This Year':
+        ({ start, end } = getYearRange());
+        break;
+      default:
+        ({ start, end } = getWeekRange());
+    }
+
+    const projectQuery = {};
+    if (siteId) projectQuery.siteID = siteId;
+    if (branch) projectQuery.branch = branch;
+
+    const taskMatch = {
+      isActive: true,
+      status: { $ne: 'Complete' },
+    };
+
+    // if (start && end) {
+    //   taskMatch.dueDate = { $gte: start, $lte: end };
+    // }
+
+    if (userId) taskMatch.assignedBy = userId;
+    if (assignedTo) taskMatch.issueMember = assignedTo;
+    if (selectedCategory) taskMatch.category = selectedCategory;
+    if (frequency) taskMatch['repeat.repeatType'] = frequency;
+    if (priority) taskMatch.priority = priority;
+
+    const skip = (page - 1) * limit;
+
+    const projects = await Project.find(projectQuery)
+      .select('siteID name project_status branch')
+      .skip(skip)
+      .limit(limit)
+      .populate([
+        {
+          path: 'project_status',
+          populate: {
+            path: 'step',
+            populate: {
+              path: 'taskId',
+              match: taskMatch,
+              populate: [
+                {
+                  path: 'issueMember',
+                  model: 'User',
+                  select: '_id firstname lastname roles',
+                  populate: {
+                    path: 'roles',
+                    model: 'Role',
+                    select: '_id name',
+                  },
+                },
+                {
+                  path: 'comments',
+                  populate: {
+                    path: 'createdBy',
+                    model: 'User',
+                    // select: '_id firstname lastname roles',
+                    populate: {
+                      path: 'roles',
+                      model: 'Role',
+                      select: '_id name',
+                    },
+                  },
+                },
+              ],
+            },
+          },
+        },
+      ])
+      .lean();
+
+    const tasks = projects
+      .map(project => {
+        const activeTasks = project.project_status.flatMap(status => {
+          return (status.step || [])
+            .filter(step => step?.taskId)
+            .map(step => {
+              const task = step.taskId;
+              return {
+                branch: project.branch,
+                siteID: project.siteID,
+                stepName: status.name,
+                _id: task._id,
+                title: task.title || '',
+                description: task.description || '',
+                dueDate: task.dueDate || null,
+                status: task.status || '',
+                issueMember: task.issueMember || [],
+                comments: task.comments || [],
+              };
+            });
+        });
+
+        // return {
+        //   projectId: project.siteID,
+        //   activeTasks,
+        // };
+        return activeTasks;
+      })
+      .flat();
+
+    res.status(200).json({
+      page,
+      limit,
+      totalProjects: tasks.length,
+      tasks,
+    });
+  } catch (error) {
+    console.error('Server error:', error);
+    res.status(500).json({ message: 'Error while fetching tasks' });
   }
 };

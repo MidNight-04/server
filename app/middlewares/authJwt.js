@@ -116,6 +116,7 @@ const authJwt = {
     allow: [
       'CEO',
       'admin',
+      'Project Admin',
       'Site Admin',
       'Manager',
       'Sr. Engineer',

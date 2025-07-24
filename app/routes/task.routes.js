@@ -215,4 +215,5 @@ module.exports = function (app) {
     isSenior,
     controller.deleteChecklist
   );
+  app.post('/api/task/dashboardfilter', verifyToken, controller.dashboardFilter);
 };

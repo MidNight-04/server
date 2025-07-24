@@ -1,6 +1,7 @@
 const db = require('../models');
 const config = require('../config/auth.config');
 const Member = db.user;
+const User = db.user;
 const Role = db.role;
 const axios = require('axios');
 const helperFunction = require('../middlewares/helper');
@@ -385,8 +386,8 @@ exports.getTeammemberByRole = async (req, res) => {
   try {
     const { role } = req.body;
     const teammembers = await User.find({
-      role: mongoose.Types.ObjectId(role),
-    });
+      roles: mongoose.Types.ObjectId(role),
+    }).populate('roles');
     if (!teammembers || teammembers.length === 0) {
       return res
         .status(404)

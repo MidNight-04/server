@@ -331,6 +331,28 @@ exports.getAllClient = async (req, res) => {
   }
 };
 
+exports.getAllActiveClient = async (req, res) => {
+  try {
+    const role = await Role.findOne({ name: 'Client' });
+    if (!role) {
+      return res.status(404).send({ message: 'Client role not found' });
+    }
+
+    const clients = await User.find({ roles: role._id,   userStatus: 'active' });
+
+    return res.status(200).send({
+      message: 'List of clients fetched successfully',
+      data: clients,
+    });
+  } catch (error) {
+    console.error('Error fetching clients:', error);
+    return res.status(500).send({
+      message: 'There was a problem in getting the list of clients',
+      error: error.message,
+    });
+  }
+};
+
 exports.deleteClientById = (req, res) => {
   const id = req.params.id;
   User.deleteOne({ _id: id }, (err, dealer) => {

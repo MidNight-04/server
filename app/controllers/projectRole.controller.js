@@ -29,7 +29,7 @@ exports.addProjectRole = (req, res) => {
 };
 
 exports.getAllRole = (req, res) => { 
-    RoleModel.find({})
+    RoleModel.find({name: {$ne: 'admin'}})
       .then((role, err) => {
         if (err) {
           res

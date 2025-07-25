@@ -24,9 +24,10 @@ module.exports = function (app) {
 
     app.post("/api/client/add", controller.addClient);
     app.get("/api/client/getall", controller.getAllClient);
+    app.get("/api/client/getallactive", controller.getAllActiveClient);
     app.get("/api/client/databyid/:id", controller.getClientById);
     app.put("/api/client/updatebyid", controller.updateClientById);
-    app.delete("/api/client/delete/:id", controller.deleteClientById);
+    // app.delete("/api/client/delete/:id", controller.deleteClientById);
     app.post("/api/auth-client/signin-otp", controller.signinOtp);
     app.post("/api/auth-client/signin", controller.signin);
     app.post("/api/auth-client/signinwithpassword", controller.loginWithPassword);

@@ -27,6 +27,7 @@ exports.getAllUsers = async (req, res) => {
     const users = await User.find({
       roles: { $ne: role._id },
       isExist: false,
+      userStatus: 'active'
     })
       .populate({
         path: 'roles',
@@ -37,5 +38,34 @@ exports.getAllUsers = async (req, res) => {
     res.status(200).send(users);
   } catch (error) {
     res.status(500).send({ message: error.message });
+  }
+};
+
+exports.deactivateUserById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!id || !id.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({ message: 'Invalid user ID' });
+    }
+
+    const user = await User.findByIdAndUpdate(
+      id,
+      { userStatus: 'inactive' },
+      { new: true }
+    );
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    res.status(200).json({
+      message: 'User deactivated successfully',
+      user,
+    });
+  } catch (error) {
+    console.error('Error deactivating user:', error);
+    res
+      .status(500)
+      .json({ message: 'Failed to deactivate user', error: error.message });
   }
 };

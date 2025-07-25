@@ -11,6 +11,7 @@ module.exports = function (app) {
 
   // app.post('/api/teammember/add', verifyToken, isSenior, controller.addMember);
   app.get('/api/teammember/getall', verifyToken, controller.getAllMember);
+  app.get('/api/teammember/getallactive', verifyToken, controller.getAllActiveMember);
   app.get(
     '/api/teammember/databyid/:id',
     verifyToken,

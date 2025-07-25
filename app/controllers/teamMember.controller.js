@@ -272,6 +272,31 @@ exports.getAllMember = async (req, res) => {
   }
 };
 
+exports.getAllActiveMember = async (req, res) => {
+  try {
+    const roles = await Role.find({
+      name: { $in: ['user', 'Client'] },
+      userStatus: 'active',
+    }).select('_id');
+    const roleIds = roles.map(role => role._id);
+
+    const members = await Member.find({ roles: { $nin: roleIds } })
+      .populate('roles')
+      .sort({ employeeID: 1 });
+
+    return res.status(200).send({
+      message: 'List of members fetched successfully',
+      data: members,
+    });
+  } catch (error) {
+    console.error('Error fetching members:', error);
+    return res.status(500).send({
+      message: 'There was a problem in getting the list of members',
+      error: error.message,
+    });
+  }
+};
+
 exports.deleteMemberById = (req, res) => {
   const id = req.params.id;
   Member.deleteOne({ _id: id }, (err, dealer) => {

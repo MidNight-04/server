@@ -2,7 +2,7 @@ const Roles = require('../models/role.model');
 
 exports.getAllRoles = async (req, res) => {
   try {
-    const roles = await Roles.find().select('name _id').sort({ name: 1 });
+    const roles = await Roles.find({name: {$ne: 'admin'}}).select('name _id').sort({ name: 1 });
     res
       .status(200)
       .json({ message: 'Roles retrieved successfully', data: roles });

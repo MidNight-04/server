@@ -17,7 +17,7 @@ const {
 const { uploadToS3AndExtractUrls } = require('../helper/s3Helpers');
 const { sendTeamNotification } = require('../helper/notification');
 const { activateNextSteps } = require('../helper/nextStepActivator');
-const { createLogManually } = require('../middlewares/createlog');
+const { createLogManually } = require('../middlewares/createLog');
 
 let today = new Date();
 let yyyy = today.getFullYear();
@@ -1503,94 +1503,6 @@ exports.customDashboardFilters = async (req, res) => {
     res.status(500).json({ message: 'Error while fetching tasks' });
   }
 };
-
-// exports.delegatedTasks = async (req, res) => {
-//   try {
-//     const userId = req.body?.userId;
-//     const page = req.body?.page;
-//     const selectedCategory = req.body?.selectedCategory;
-//     const assignedBy = req.body?.assignedBy;
-//     const assignedTo = req.body?.assignedTo;
-//     const frequency = req.body?.frequency;
-//     const priority = req.body?.priority;
-//     const filter = req.body?.filter;
-//     const siteId = req.body?.siteId;
-//     const branch = req.body?.branch;
-
-//     let start;
-//     let end;
-
-//     switch (filter) {
-//       case 'Today':
-//         ({ start, end } = getTodayRange());
-//         break;
-//       case 'Yesterday':
-//         ({ start, end } = getYesterdayRange());
-//         break;
-//       case 'Tomorrow':
-//         ({ start, end } = getTomorrowRange());
-//         break;
-//       case 'This Week':
-//         ({ start, end } = getWeekRange());
-//         break;
-//       case 'Last Week':
-//         ({ start, end } = getWeekRange(-7));
-//         break;
-//       case 'Next Week':
-//         ({ start, end } = getWeekRange(7));
-//         break;
-//       case 'This Month':
-//         ({ start, end } = getMonthRange());
-//         break;
-//       case 'Last Month':
-//         ({ start, end } = getMonthRange(-1));
-//         break;
-//       case 'Next Month':
-//         ({ start, end } = getMonthRange(1));
-//         break;
-//       case 'This Year':
-//         ({ start, end } = getYearRange());
-//       default:
-//         ({ start, end } = getWeekRange());
-//     }
-
-//     const query = {
-//       isActive: true,
-//       dueDate: { $gte: start, $lte: end },
-//     };
-
-//     if (userId) {
-//       query.assignedBy = userId;
-//     }
-//     if (selectedCategory) {
-//       query.category = selectedCategory;
-//     }
-//     if (assignedBy) {
-//       query.assignedBy = assignedBy;
-//     }
-//     if (assignedTo) {
-//       query.issueMember = assignedTo;
-//     }
-//     if (frequency) {
-//       query['repeat.repeatType'] = frequency;
-//     }
-//     if (priority) {
-//       query.priority = priority;
-//     }
-//     if (siteId) {
-//       query.siteID = siteId;
-//     }
-
-//     if (branch) {
-//       query.branch = branch;
-//     }
-
-//     await fetchTasks(res, query, page);
-//   } catch (error) {
-//     console.error('Server error:', error);
-//     res.status(500).send({ message: 'Error while fetching tasks' });
-//   }
-// };
 
 const PAGE_SIZE = 10;
 

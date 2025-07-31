@@ -11,7 +11,7 @@ var jwt = require('jsonwebtoken');
 var bcrypt = require('bcryptjs');
 const { default: mongoose } = require('mongoose');
 const awsS3 = require('../middlewares/aws-s3');
-const { createLogManually } = require('../middlewares/createlog');
+const { createLogManually } = require('../middlewares/createLog');
 
 exports.signinOtp = (req, res) => {
   if (!helperFunction.checkEmailPhone(req.body.username)) {

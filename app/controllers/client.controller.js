@@ -9,7 +9,7 @@ const awsS3 = require('../middlewares/aws-s3');
 const bcrypt = require('bcryptjs');
 var jwt = require('jsonwebtoken');
 const Role = require('../models/role.model');
-const { createLogManually } = require('../middlewares/createlog');
+const { createLogManually } = require('../middlewares/createLog');
 
 exports.signinOtp = (req, res) => {
   if (!helperFunction.checkEmailPhone(req.body.username)) {

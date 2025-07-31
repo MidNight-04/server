@@ -3,7 +3,7 @@ const db = require('../models');
 const CheckList = db.checkList;
 const xlsx = require('xlsx');
 const axios = require('axios');
-const { createLogManually } = require('../middlewares/createlog');
+const { createLogManually } = require('../middlewares/createLog');
 
 exports.addCheckList = async (req, res) => {
   const { name, checkList } = req.body;

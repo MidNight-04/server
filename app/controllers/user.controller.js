@@ -1,5 +1,6 @@
 const Role = require('../models/role.model');
 const User = require('../models/user.model');
+const { createLogManually } = require('../middlewares/createLog');
 
 exports.allAccess = (req, res) => {
   res.status(200).send('Public Content.');
@@ -27,7 +28,7 @@ exports.getAllUsers = async (req, res) => {
     const users = await User.find({
       roles: { $ne: role._id },
       isExist: false,
-      userStatus: 'active'
+      userStatus: 'active',
     })
       .populate({
         path: 'roles',
@@ -57,6 +58,10 @@ exports.deactivateUserById = async (req, res) => {
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
+    await createLogManually(
+      req,
+      `Deactivated user ${user.firstname} ${user.lastname} with email ${user.email} and phone ${user.phone}`
+    );
 
     res.status(200).json({
       message: 'User deactivated successfully',

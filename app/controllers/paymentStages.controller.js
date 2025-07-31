@@ -1,24 +1,24 @@
-const config = require("../config/auth.config");
-const db = require("../models");
+const config = require('../config/auth.config');
+const db = require('../models');
 const PaymentStages = db.paymentStages;
-const xlsx = require("xlsx");
-const axios = require("axios");
+const xlsx = require('xlsx');
+const axios = require('axios');
 
 exports.addPaymentStages = async (req, res) => {
   const { floor } = req.body;
-  const f = floor.split("+");
+  const f = floor.split('+');
   const find = await PaymentStages.find({ floor: floor });
   if (find?.length > 0) {
     res.json({
       status: 200,
-      message: "Payment stages floor already exist",
+      message: 'Payment stages floor already exist',
     });
   } else {
     // const response = await axios.get(req.files.stages[0]?.location, {
     //   responseType: "arraybuffer",
     // });
     // Parse Excel file
-    const workbook = xlsx.readFile(req.files.file[0].path, { type: "buffer" });
+    const workbook = xlsx.readFile(req.files.file[0].path, { type: 'buffer' });
     // Access first sheet
     // const sheetName = workbook.SheetNames[0];
     // const sheet = workbook.Sheets[sheetName];
@@ -40,22 +40,26 @@ exports.addPaymentStages = async (req, res) => {
       });
       createData
         .save()
-        .then(() => {
+        .then(async () => {
+          await createLogManually(
+            req,
+            `Created payment stages for floor ${floor}.`
+          );
           res.json({
             status: 201,
-            message: "Record created successfully",
+            message: 'Record created successfully',
           });
         })
         .catch(err => {
           // console.error('Error saving data:', err);
           res.json({
             status: 400,
-            message: "Error while record create",
+            message: 'Error while record create',
           });
         });
     } else {
       res.json({
-        message: "No data present in file...",
+        message: 'No data present in file...',
         status: 400,
       });
     }
@@ -65,7 +69,7 @@ exports.getPaymentStages = (req, res) => {
   PaymentStages.find({}).then((stage, err) => {
     if (err) {
       res.status(500).send({
-        message: "Internal service error",
+        message: 'Internal service error',
       });
       return;
     }
@@ -79,43 +83,56 @@ exports.getPaymentStages = (req, res) => {
 };
 exports.deletePaymentStages = (req, res) => {
   const id = req.params.id;
-  PaymentStages.deleteOne({ _id: id }, (err, dealer) => {
+  PaymentStages.deleteOne({ _id: id }, async (err, dealer) => {
+    await createLogManually(
+      req,
+      `Deleted payment stages for floor ${dealer.floor}.`
+    );
     if (err) {
       res
         .status(500)
-        .send({ message: "The requested data could not be fetched" });
+        .send({ message: 'The requested data could not be fetched' });
       return;
     }
     res.status(200).send({
-      message: "Record delete successfully",
+      message: 'Record delete successfully',
       status: 200,
     });
     return;
   });
 };
+
 exports.updatePaymentStagePointById = async (req, res) => {
   const { id, prevPayment, prevStage, payment, stage } = req.body;
+  const paymentStagesData = await PaymentStages.findById(id);
+  if (!paymentStagesData) {
+    return res.status(404).json({ message: 'Payment stages not found' });
+  }
   await PaymentStages.updateOne(
-    { "_id": id, "stages.payment": prevPayment, "stages.stage": prevStage },
+    { _id: id, 'stages.payment': prevPayment, 'stages.stage': prevStage },
     {
       $set: {
-        "stages.$.payment": parseFloat(payment),
-        "stages.$.stage": stage,
+        'stages.$.payment': parseFloat(payment),
+        'stages.$.stage': stage,
       },
     }
   )
-    .then(() => {
+    .then(async () => {
+      await createLogManually(
+        req,
+        `Updated payment stage point for floor ${paymentStagesData.floor} from ${prevPayment} to ${payment} and from ${prevStage} to ${stage}.`
+      );
       res.json({
         status: 200,
-        message: "Payment stage update successfully",
+        message: 'Payment stage update successfully',
       });
     })
     .catch(err => {
       res.json({
         status: 400,
-        message: "Error on update payment stage",
+        message: 'Error on update payment stage',
       });
-      console.error("Error updating payment:", err);
+      console.error('Error updating payment:', err);
     });
 };
 exports.addNewPaymentStagePointById = async (req, res) => {
@@ -125,18 +142,22 @@ exports.addNewPaymentStagePointById = async (req, res) => {
     stage: stage,
   };
   await PaymentStages.updateOne({ _id: id }, { $push: { stages: newObj } })
-    .then(() => {
+    .then(async result => {
+      await createLogManually(
+        req,
+        `Added new payment stage point for floor ${result.floor}.`
+      );
       res.json({
         status: 200,
-        message: "New Payment stage add successfully",
+        message: 'New Payment stage add successfully',
       });
     })
     .catch(err => {
       res.json({
         status: 400,
-        message: "Error on add payment stage",
+        message: 'Error on add payment stage',
       });
-      console.error("Error add payment stage point:", err);
+      console.error('Error add payment stage point:', err);
     });
 };
 exports.deletePaymentStagePointById = async (req, res) => {
@@ -145,18 +166,26 @@ exports.deletePaymentStagePointById = async (req, res) => {
     payment: parseFloat(payment),
     stage: stage,
   };
+  const paymentStagesData = await PaymentStages.findById(id);
+  if (!paymentStagesData) {
+    return res.status(404).json({ message: 'Payment stages not found' });
+  }
   await PaymentStages.updateOne({ _id: id }, { $pull: { stages: delObj } })
-    .then(() => {
+    .then(async () => {
+      await createLogManually(
+        req,
+        `Deleted payment stage point for floor ${paymentStagesData.floor} from ${payment} to ${payment} and from ${stage} to ${stage}.`
+      );
       res.json({
         status: 200,
-        message: "Payment stage point deleted successfully",
+        message: 'Payment stage point deleted successfully',
       });
     })
     .catch(err => {
       res.json({
         status: 400,
-        message: "Error on delete payment stage point",
+        message: 'Error on delete payment stage point',
       });
-      console.error("Error deleting payment stage point:", err);
+      console.error('Error deleting payment stage point:', err);
     });
 };

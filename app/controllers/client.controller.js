@@ -9,6 +9,7 @@ const awsS3 = require('../middlewares/aws-s3');
 const bcrypt = require('bcryptjs');
 var jwt = require('jsonwebtoken');
 const Role = require('../models/role.model');
+const { createLogManually } = require('../middlewares/createlog');
 
 exports.signinOtp = (req, res) => {
   if (!helperFunction.checkEmailPhone(req.body.username)) {
@@ -246,12 +247,17 @@ exports.addClient = async (req, res) => {
     });
   } else {
     let user = new User(dataAdd);
-    user.save((err, result) => {
+    user.save(async (err, result) => {
       if (err) {
         res.status(500).send({ message: 'Could not create role' });
         return;
       } else {
         //   console.log(result)
+        await createLogManually(
+          req,
+          `Created client ${data.firstName} ${data.lastName} with email ${data.email} and phone ${data.phone}`,
+          data?.siteID
+        );
         res
           .status(201)
           .send({ message: 'Record created Successfuly', status: 201 });
@@ -297,6 +303,11 @@ exports.updateClientProfileById = async (req, res) => {
     );
 
     if (updateProfile.modifiedCount === 1) {
+      await createLogManually(
+        req,
+        `Updated client profile of ${findData[0].name} with email ${findData[0].email} and phone ${findData[0].phone}`,
+        findData[0]?.siteID
+      );
       res.json({
         status: 200,
         message: 'Profile Updated Successfuly',
@@ -338,7 +349,7 @@ exports.getAllActiveClient = async (req, res) => {
       return res.status(404).send({ message: 'Client role not found' });
     }
 
-    const clients = await User.find({ roles: role._id,   userStatus: 'active' });
+    const clients = await User.find({ roles: role._id, userStatus: 'active' });
 
     return res.status(200).send({
       message: 'List of clients fetched successfully',
@@ -353,15 +364,20 @@ exports.getAllActiveClient = async (req, res) => {
   }
 };
 
-exports.deleteClientById = (req, res) => {
+exports.deleteClientById = async (req, res) => {
   const id = req.params.id;
-  User.deleteOne({ _id: id }, (err, dealer) => {
+  User.deleteOne({ _id: id }, async (err, dealer) => {
     if (err) {
       res
         .status(500)
         .send({ message: 'The requested data could not be fetched' });
       return;
     }
+    await createLogManually(
+      req,
+      `Deleted client ${dealer.name} with email ${dealer.email} and phone ${dealer.phone}`,
+      dealer?.siteID
+    );
     res.status(200).send({
       message: 'Record delete successfully',
       status: 200,
@@ -393,13 +409,18 @@ exports.updateClientById = async (req, res) => {
     address: address,
     password: await bcrypt.hash('Password@1', 8),
   };
-  User.updateOne({ _id: id }, data, (err, updated) => {
+  User.updateOne({ _id: id }, data, async (err, updated) => {
     if (err) {
       //   console.log(err);
       res.status(500).send({ message: 'Could not find id to update details' });
       return;
     }
     if (updated) {
+      await createLogManually(
+        req,
+        `Updated client ${name} with email ${email} and phone ${phone}`,
+        siteID
+      );
       res.status(200).send({ message: 'Updated Successfuly' });
     }
   });

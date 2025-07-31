@@ -1,15 +1,12 @@
-const config = require("../config/auth.config");
-const db = require("../models");
+const db = require('../models');
 const PaymentStages = db.projectPaymentStages;
-const ProjectLog = db.projectlogs;
-const xlsx = require("xlsx");
-const axios = require("axios");
+const { createLogManually } = require('../middlewares/createLog');
 
 exports.getPaymentStages = (req, res) => {
   PaymentStages.find({}).then((stage, err) => {
     if (err) {
       res.status(500).send({
-        message: "Internal service error",
+        message: 'Internal service error',
       });
       return;
     }
@@ -27,7 +24,7 @@ exports.getPaymentStagesBySiteID = (req, res) => {
   PaymentStages.find({ siteID: id }).then((stage, err) => {
     if (err) {
       res.status(500).send({
-        message: "Internal service error",
+        message: 'Internal service error',
       });
       return;
     }
@@ -55,27 +52,32 @@ exports.updatePaymentStagesBySiteID = async (req, res) => {
       { siteID: id },
       {
         $set: {
-          "stages.$[elem].paymentStatus": status,
+          'stages.$[elem].paymentStatus': status,
         },
         $push: {
-          "stages.$[elem].installments": data,
+          'stages.$[elem].installments': data,
         },
       },
-      { arrayFilters: [{ "elem.stage": stage }], new: true }
+      { arrayFilters: [{ 'elem.stage': stage }], new: true }
     );
     if (!payment) {
       res.status(404).send({
-        message: "Payment stage not found",
+        message: 'Payment stage not found',
       });
       return;
     }
+    await createLogManually(
+      req,
+      `Updated payment stage ${stage} for siteID ${id}.`,
+      id
+    );
     res.status(200).send({
       data: payment,
     });
   } catch (err) {
-    console.error("Error updating payment stage:", err);
+    console.error('Error updating payment stage:', err);
     res.status(500).send({
-      message: "Internal service error",
+      message: 'Internal service error',
     });
   }
 };
@@ -85,7 +87,7 @@ exports.getPaymentStagesBySiteIDClientID = (req, res) => {
   PaymentStages.find({ siteID: siteID }).then((stage, err) => {
     if (err) {
       res.status(500).send({
-        message: "Internal service error",
+        message: 'Internal service error',
       });
       return;
     }
@@ -97,22 +99,32 @@ exports.getPaymentStagesBySiteIDClientID = (req, res) => {
   });
   return;
 };
-exports.deletePaymentStages = (req, res) => {
-  const id = req.params.id;
-  PaymentStages.deleteOne({ _id: id }, (err, dealer) => {
-    if (err) {
-      res
-        .status(500)
-        .send({ message: "The requested data could not be fetched" });
-      return;
+exports.deletePaymentStages = async (req, res) => {
+  try {
+    const id = req.params.id;
+    const stage = await PaymentStages.findById(id);
+    if (!stage) {
+      return res.status(404).send({ message: 'Payment stage not found' });
     }
-    res.status(200).send({
-      message: "Record delete successfully",
+    await PaymentStages.deleteOne({ _id: id });
+    await createLogManually(
+      req,
+      `Deleted payment stage for siteID ${stage.siteID}`,
+      stage.siteID
+    );
+
+    return res.status(200).send({
+      message: 'Record deleted successfully',
       status: 200,
     });
-    return;
-  });
+  } catch (err) {
+    console.error('Error deleting payment stage:', err);
+    return res.status(500).send({
+      message: 'The requested data could not be deleted',
+    });
+  }
 };
+
 exports.updatePaymentStagePointById = async (req, res) => {
   const {
     id,
@@ -125,107 +137,127 @@ exports.updatePaymentStagePointById = async (req, res) => {
     userName,
     activeUser,
   } = req.body;
-  await PaymentStages.updateOne(
-    { "_id": id, "stages.payment": prevPayment, "stages.stage": prevStage },
-    {
-      $set: {
-        "stages.$.payment": parseFloat(payment),
-        "stages.$.stage": stage,
+
+  try {
+    const updateResult = await PaymentStages.updateOne(
+      {
+        _id: id,
+        'stages.payment': prevPayment,
+        'stages.stage': prevStage,
       },
-    }
-  )
-    .then(async () => {
-      const logData = {
-        log: `<span style="color: black;">${stage} (${payment}%) payment stage</span> ->> <em style="color: green">update</em>`,
-        file: [],
-        date: date,
-        siteID: siteID,
-        member: {
-          name: userName,
-          Id: activeUser,
+      {
+        $set: {
+          'stages.$.payment': parseFloat(payment),
+          'stages.$.stage': stage,
         },
-      };
-      const logSave = new ProjectLog(logData);
-      await logSave.save();
-      res.json({
-        status: 200,
-        message: "Payment stage update successfully",
+      }
+    );
+
+    if (updateResult.modifiedCount === 0) {
+      return res.status(404).json({
+        status: 404,
+        message: 'No matching payment stage found to update',
       });
-    })
-    .catch(err => {
-      res.json({
-        status: 400,
-        message: "Error on update payment stage",
-      });
-      console.error("Error updating payment:", err);
+    }
+
+    await createLogManually(
+      req,
+      `Updated payment stage "${stage}" (was "${prevStage}") for siteID ${siteID}.`,
+      siteID
+    );
+
+    return res.status(200).json({
+      status: 200,
+      message: 'Payment stage updated successfully',
     });
+  } catch (err) {
+    console.error('Error updating payment stage:', err);
+    return res.status(500).json({
+      status: 500,
+      message: 'Error updating payment stage',
+    });
+  }
 };
+
 exports.addNewPaymentStagePointById = async (req, res) => {
   const { id, payment, stage, date, siteID, userName, activeUser } = req.body;
+
   const newObj = {
     payment: parseFloat(payment),
     stage: stage,
-    paymentStatus: "Not Due Yet",
-    paymentDueDate: "",
-    installments: []
-    };
-  await PaymentStages.updateOne({ _id: id }, { $push: { stages: newObj } })
-    .then(async () => {
-      // const logData = {
-      //   log: `<span style="color: black;">${stage} (${payment}%) payment stage</span> ->> <em style="color: green">added</em>`,
-      //   file: [],
-      //   date: date,
-      //   siteID: siteID,
-      //   member: {
-      //     name: userName,
-      //     Id: activeUser,
-      //   },
-      // };
-      // const logSave = new ProjectLog(logData);
-      // await logSave.save();
-      return res.json({
-        status: 200,
-        message: "New Payment stage add successfully",
+    paymentStatus: 'Not Due Yet',
+    paymentDueDate: '',
+    installments: [],
+  };
+
+  try {
+    const updateResult = await PaymentStages.updateOne(
+      { _id: id },
+      { $push: { stages: newObj } }
+    );
+
+    if (updateResult.modifiedCount === 0) {
+      return res.status(404).json({
+        status: 404,
+        message: 'No matching record found to update',
       });
-    })
-    .catch(err => {
-      res.json({
-        status: 400,
-        message: "Error on add payment stage",
-      });
-      console.error("Error add payment stage point:", err);
+    }
+
+    await createLogManually(
+      req,
+      `Added new payment stage point "${stage}" with amount ${payment} for siteID ${siteID}.`,
+      siteID
+    );
+
+    return res.status(200).json({
+      status: 200,
+      message: 'New payment stage added successfully',
     });
+  } catch (err) {
+    console.error('Error adding payment stage point:', err);
+    return res.status(500).json({
+      status: 500,
+      message: 'Error adding payment stage',
+    });
+  }
 };
+
 exports.deletePaymentStagePointById = async (req, res) => {
-  const { id, payment, stage, date, siteID, userName, activeUser } = req.body;
+  const { id, payment, stage, siteID } = req.body;
+
   const delObj = {
     payment: parseFloat(payment),
-    stage: stage,
+    stage,
   };
-  await PaymentStages.updateOne({ _id: id }, { $pull: { stages: delObj } })
-    .then(async () => {
-      const logData = {
-        log: `<span style="color: black;">${stage} (${payment}%) payment stage</span> ->> <em style="color: green">delete</em>`,
-        file: [],
-        date: date,
-        siteID: siteID,
-        member: {
-          name: userName,
-          Id: activeUser,
-        },
-      };
-      const logSave = new ProjectLog(logData);
-      await logSave.save();
-      return res.json({
-        status: 200,
-        message: "Payment stage point deleted successfully",
+
+  try {
+    const updateResult = await PaymentStages.updateOne(
+      { _id: id },
+      { $pull: { stages: delObj } }
+    );
+
+    if (updateResult.modifiedCount === 0) {
+      return res.status(404).json({
+        status: 404,
+        message: 'No matching payment stage point found to delete',
       });
-    })
-    .catch(err => {
-      res.json({
-        status: 400,
-        message: "Error on delete payment stage point",
-      });
-      console.error("Error deleting payment stage point:", err);
+    }
+
+    await createLogManually(
+      req,
+      `Deleted payment stage point "${stage}" with ${payment} for siteID ${siteID}.`,
+      siteID
+    );
+
+    return res.status(200).json({
+      status: 200,
+      message: 'Payment stage point deleted successfully',
     });
+  } catch (err) {
+    console.error('Error deleting payment stage point:', err);
+    return res.status(500).json({
+      status: 500,
+      message: 'Error deleting payment stage point',
+    });
+  }
 };

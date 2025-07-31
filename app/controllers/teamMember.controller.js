@@ -11,6 +11,7 @@ var jwt = require('jsonwebtoken');
 var bcrypt = require('bcryptjs');
 const { default: mongoose } = require('mongoose');
 const awsS3 = require('../middlewares/aws-s3');
+const { createLogManually } = require('../middlewares/createlog');
 
 exports.signinOtp = (req, res) => {
   if (!helperFunction.checkEmailPhone(req.body.username)) {
@@ -241,6 +242,10 @@ exports.addMember = async (req, res) => {
     }
     const member = new Member(dataAdd);
     await member.save();
+    await createLogManually(
+      req,
+      `Created team member ${data.name} with email ${data.email} and phone ${data.phone}`
+    );
     return res.status(201).send({ message: 'Record created successfully' });
   } catch (error) {
     console.log(error);
@@ -371,6 +376,10 @@ exports.updateMemberProfileById = async (req, res) => {
     );
     // console.log(updateProfile)
     if (updateProfile.modifiedCount === 1) {
+      await createLogManually(
+        req,
+        `Updated team member ${findData[0].name} with email ${findData[0].email} and phone ${findData[0].phone}`
+      );
       res.json({
         status: 200,
         message: 'Profile Updated Successfuly',

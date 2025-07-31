@@ -3,6 +3,7 @@ const db = require('../models');
 const CheckList = db.checkList;
 const xlsx = require('xlsx');
 const axios = require('axios');
+const { createLogManually } = require('../middlewares/createlog');
 
 exports.addCheckList = async (req, res) => {
   const { name, checkList } = req.body;
@@ -15,11 +16,12 @@ exports.addCheckList = async (req, res) => {
     res.status(200).send({ message: 'Record already exist' });
   } else {
     let Check = new CheckList(data);
-    Check.save((err, result) => {
+    Check.save(async (err, result) => {
       if (err) {
         res.status(500).send({ message: 'Could not create checklist' });
         return;
       } else {
+        await createLogManually(req, `Created checklist ${name}.`);
         console.log(result);
         res.status(201).send({ message: 'Record created Successfuly' });
       }
@@ -50,6 +52,11 @@ exports.addNewPointById = async (req, res) => {
       _id: id,
       name: name,
     };
+
+    const checkListData = await CheckList.findById(id);
+    if (!checkListData) {
+      return res.status(404).json({ message: 'Checklist not found' });
+    }
     // Construct the update operation to push a new point
     const updateOperation = {
       $push: {
@@ -60,6 +67,10 @@ exports.addNewPointById = async (req, res) => {
     const result = await CheckList.updateOne(filter, updateOperation);
     // console.log(result);
     if (result.modifiedCount === 1) {
+      await createLogManually(
+        req,
+        `Added new point ${name} to checklist ${checkListData.name}`
+      );
       res.json({
         status: 200,
         message: 'New point added successfully',
@@ -79,13 +90,17 @@ exports.addNewPointById = async (req, res) => {
 };
 exports.addNewExtraPointById = async (req, res) => {
   const { id, name, heading, point } = req.body;
-  console.log(req.body);
+
   try {
     const filter = {
       _id: id,
       name: name,
       'checkList.heading': heading,
     };
+    const checkListData = await CheckList.findById(id);
+    if (!checkListData) {
+      return res.status(404).json({ message: 'Checklist not found' });
+    }
     // Construct the update operation to push a new point
     const updateOperation = {
       $push: {
@@ -95,6 +110,10 @@ exports.addNewExtraPointById = async (req, res) => {
     // Perform the update
     const result = await CheckList.updateOne(filter, updateOperation);
     if (result.modifiedCount === 1) {
+      await createLogManually(
+        req,
+        `Added new point ${name} to checklist ${checkListData.name}`
+      );
       res.json({
         status: 200,
         message: 'New point added successfully',
@@ -121,6 +140,10 @@ exports.deletePointById = async (req, res) => {
       name: name,
       'checkList.heading': heading,
     };
+    const checkListData = await CheckList.findById(id);
+    if (!checkListData) {
+      return res.status(404).json({ message: 'Checklist not found' });
+    }
     // Construct the update operation to push a new point
     const updateOperation = {
       $pull: {
@@ -129,7 +152,11 @@ exports.deletePointById = async (req, res) => {
     };
     // Perform the update
     CheckList.updateOne(filter, updateOperation)
-      .then(result => {
+      .then(async result => {
+        await createLogManually(
+          req,
+          `Deleted point ${point} from checklist ${checkListData.name}`
+        );
         res.json({
           status: 200,
           message: 'New point deleted successfully',
@@ -160,10 +187,15 @@ exports.deletePointById = async (req, res) => {
     });
   }
 };
+
 exports.addNewHeadingById = async (req, res) => {
   const { id, name, newField } = req.body;
   // console.log(req.body);
   try {
+    const checkListData = await CheckList.findById(id);
+    if (!checkListData) {
+      return res.status(404).json({ message: 'Checklist not found' });
+    }
     const filter = {
       _id: id,
       name: name,
@@ -178,6 +210,10 @@ exports.addNewHeadingById = async (req, res) => {
     const result = await CheckList.updateOne(filter, updateOperation);
     // console.log(result);
     if (result.modifiedCount === 1) {
+      await createLogManually(
+        req,
+        `Added new heading ${newField} to checklist ${checkListData.name}`
+      );
       res.json({
         status: 200,
         message: 'New point added successfully',
@@ -195,9 +231,17 @@ exports.addNewHeadingById = async (req, res) => {
     });
   }
 };
-exports.deleteCheckListById = (req, res) => {
+exports.deleteCheckListById = async (req, res) => {
   const id = req.params.id;
-  CheckList.deleteOne({ _id: id }, (err, dealer) => {
+  const checkListData = await CheckList.findById(id);
+  if (!checkListData) {
+    return res.status(404).json({ message: 'Checklist not found' });
+  }
+  CheckList.deleteOne({ _id: id }, async (err, dealer) => {
+    await createLogManually(
+      req,
+      `Deleted checklist ${checkListData.name}.`
+    );
     if (err) {
       res
         .status(500)

@@ -118,7 +118,11 @@ module.exports = function (app) {
   app.get('/api/project/filterlist/member', controller.filterMemberData);
   app.post('/api/project/initiate-payment', controller.initiatePayment);
   app.post('/api/project/verify-payment', controller.verifyPayment);
-  app.put('/api/project/createnewpoint', controller.AddNewProjectPoint);
+  app.put(
+    '/api/project/createnewpoint',
+    verifyToken,
+    controller.AddNewProjectPoint
+  );
   app.put(
     '/api/project/deletepoint',
     verifyToken,
@@ -141,6 +145,7 @@ module.exports = function (app) {
     //     maxCount: 20,
     //   },
     // ]),
+    verifyToken,
     fileUploader,
     controller.TicketUpdateByMember
   );

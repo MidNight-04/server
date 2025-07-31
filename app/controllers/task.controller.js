@@ -17,6 +17,7 @@ const {
 const { uploadToS3AndExtractUrls } = require('../helper/s3Helpers');
 const { sendTeamNotification } = require('../helper/notification');
 const { activateNextSteps } = require('../helper/nextStepActivator');
+const { createLogManually } = require('../middlewares/createlog');
 
 let today = new Date();
 let yyyy = today.getFullYear();
@@ -97,6 +98,21 @@ exports.addTask = async (req, res) => {
         task.repeat.repeatType === 'norepeat' ? 'Once' : task.repeat.repeatType,
       dueDate: new Date(task.dueDate).toDateString(),
     });
+
+    await createLogManually(
+      req,
+      `Created task ${task.title}, ${task.description} assigned to ${
+        issueMember.firstname + ' ' + issueMember?.lastname
+      } with priority ${task.priority} and category ${
+        task.category
+      } and due date ${new Date(task.dueDate).toDateString({
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+      })}`,
+      task?.siteID,
+      savedTask?._id
+    );
 
     res.status(201).json({
       status: 201,
@@ -630,6 +646,11 @@ exports.deleteTaskCommentImage = async (req, res) => {
       return res.status(404).send({ message: 'Comment not found' });
     }
 
+    const task = await Task.findById(comment.taskId);
+    if (!task) {
+      return res.status(404).send({ message: 'Task not found' });
+    }
+
     const imageUrlParts = imageUrl.split('.com/');
     if (imageUrlParts.length < 2) {
       return res.status(400).send({ message: 'Invalid image URL format' });
@@ -655,6 +676,13 @@ exports.deleteTaskCommentImage = async (req, res) => {
       return res.status(404).send({ message: 'Image not found in comment' });
     }
 
+    await createLogManually(
+      req,
+      `Deleted task comment image of comment: ${comment.comment}  task name: ${task.title} project name: ${task.siteID}`,
+      task?.siteID,
+      task?._id
+    );
+
     res.status(200).send({ message: 'Comment image deleted successfully' });
   } catch (error) {
     console.error('Server error:', error);
@@ -672,6 +700,7 @@ exports.deleteTaskComment = async (req, res) => {
     if (!comment) {
       return res.status(404).send({ message: 'Comment not found' });
     }
+
     const result = await TaskComment.deleteOne({ _id: commentId });
     if (result.deletedCount === 0) {
       return res.status(404).send({ message: 'Comment not found' });
@@ -681,6 +710,12 @@ exports.deleteTaskComment = async (req, res) => {
       const update = { $pull: { comments: commentId } };
       await Task.updateOne({ _id: task._id }, update);
     }
+    await createLogManually(
+      req,
+      `Deleted task comment ${comment.comment} of task ${task.title} of project ${task.siteID}`,
+      task?.siteID,
+      task?._id
+    );
     res.status(200).send({ message: 'Comment deleted successfully' });
   } catch (error) {
     console.error('Server error:', error);
@@ -708,6 +743,9 @@ exports.approveTaskComment = async (req, res) => {
       .select('client')
       .populate('client');
     const task = await Task.findById(taskId);
+    if (!task) {
+      return res.status(404).send({ message: 'Task not found' });
+    }
     await TaskComment.updateOne(
       { _id: commentId },
       {
@@ -727,6 +765,12 @@ exports.approveTaskComment = async (req, res) => {
       dueDate: task.dueDate.toDateString() || task.createdAt.toDateString(),
       remarks: comment.comment,
     });
+    await createLogManually(
+      req,
+      `Approved task comment ${comment.comment} of task ${task.title} of project ${task.siteID}`,
+      task?.siteID,
+      task?._id
+    );
     res.status(200).send({ message: 'Comment approved successfully' });
   } catch (error) {
     console.error('Server error:', error);
@@ -737,6 +781,10 @@ exports.approveTaskComment = async (req, res) => {
 exports.reassignTask = async (req, res) => {
   try {
     const { taskId, userId, newAssigneeId } = req.body;
+    const task = await Task.findById(taskId);
+    if (!task) {
+      return res.status(404).send({ message: 'Task not found' });
+    }
     const newAssignee = await User.findById(newAssigneeId);
     const comment = await TaskComment.create({
       taskId,
@@ -758,6 +806,12 @@ exports.reassignTask = async (req, res) => {
           comments: comment._id,
         },
       }
+    );
+    await createLogManually(
+      req,
+      `Reassigned task ${task.title} of project ${task.siteID} to ${newAssignee.firstname} ${newAssignee.lastname} (${newAssignee.employeeID})`,
+      task?.siteID,
+      task?._id
     );
     res.status(200).send({ message: 'Task reassigned successfully' });
   } catch (error) {
@@ -1677,6 +1731,13 @@ exports.addChecklist = async (req, res) => {
       items: checklistItems,
     };
 
+    await createLogManually(
+      req,
+      `Added checklist ${checklist.name} to task ${task.title} of project ${task.siteID}`,
+      task?.siteID,
+      task?._id
+    );
+
     if (task.checkList.id === checklist._id) {
       return res
         .status(400)
@@ -1714,6 +1775,12 @@ exports.updateChecklistPoint = async (req, res) => {
         },
       }
     );
+    await createLogManually(
+      req,
+      `Updated checklist ${updatedChecklist.name} of task ${task.title} of project ${task.siteID}`,
+      task?.siteID,
+      task?._id
+    );
     res.send({ message: 'Checklist updated successfully' });
   } catch (error) {
     console.error('Error updating checklist:', error);
@@ -1735,6 +1802,12 @@ exports.deleteChecklist = async (req, res) => {
           checkList: {},
         },
       }
+    );
+    await createLogManually(
+      req,
+      `Deleted checklist of task ${task.title} of project ${task.siteID}`,
+      task?.siteID,
+      task?._id
     );
     res.send({ message: 'Checklist deleted successfully' });
   } catch (error) {
@@ -1820,6 +1893,12 @@ exports.manuallyCloseTask = async (req, res) => {
     task.status = 'Complete';
     task.updatedOn = new Date(date).toISOString();
     await task.save();
+    await createLogManually(
+      req,
+      `Manually closed task ${task.title} of project ${task.siteID}`,
+      task?.siteID,
+      task?._id
+    );
     res.status(200).send({ message: 'Task Closed successfully' });
   } catch (error) {
     console.error(error);

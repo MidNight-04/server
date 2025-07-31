@@ -22,6 +22,7 @@ const awsS3 = require('../middlewares/aws-s3');
 const dayjs = require('dayjs');
 const ConstructionStep = require('../models/ConstructionStep');
 const { updateTaskAndReschedule } = require('../helper/schedule');
+const { createLogManually } = require('../middlewares/createLog');
 
 let today = new Date();
 let yyyy = today.getFullYear();
@@ -83,6 +84,12 @@ exports.deleteStatusImage = async (req, res) => {
     ].finalStatus[0].image.splice(imageIndex, 1);
 
     await prod.save();
+
+    await createLogManually(
+      req,
+      `Deleted status image ${name} at point ${point} for content ${content} of project ${prod.project_name}`,
+      prod.siteID
+    );
 
     res.send({ message: 'Image removed successfully' });
   } catch (error) {
@@ -343,6 +350,12 @@ exports.addProject = async (req, res) => {
     const newProject = new Project(projectData);
     await newProject.save();
 
+    await createLogManually(
+      req,
+      `Created project ${projectData.project_name} with siteID ${projectData.siteID}`,
+      projectData.siteID
+    );
+
     res
       .status(201)
       .send({ message: 'Record created successfully', status: 201 });
@@ -525,6 +538,11 @@ exports.deleteProjectById = async (req, res) => {
       ProjectLog.deleteMany({ siteID: id }),
     ];
     await Promise.all(deleteOperations);
+    await createLogManually(
+      req,
+      `Deleted project ${project.project_name} with siteID ${project.siteID}`,
+      project.siteID
+    );
     res.status(200).send({
       message: 'Record deleted successfully',
       status: 200,
@@ -1127,6 +1145,11 @@ exports.updateImageStatus = async (req, res) => {
     project.markModified('project_status');
 
     await project.save();
+    await createLogManually(
+      req,
+      `Updated image status of ${name} at point ${point} for content ${content} of project ${project.project_name}`,
+      project.siteID
+    );
 
     return res.json({
       status: 200,
@@ -1275,20 +1298,13 @@ exports.addNewPointById = async (req, res) => {
     };
     // Perform the update
     const result = await Project.updateOne(filter, updateOperation);
+    await createLogManually(
+      req,
+      `Added new point ${name} to project ${siteID}`,
+      siteID
+    );
     // console.log(result);
     if (result.modifiedCount === 1) {
-      const logData = {
-        log: `<span style="color: black;">${name}</span> ->> <em style="color: green">added</em>`,
-        file: [],
-        date: date,
-        siteID: siteID,
-        member: {
-          name: userName,
-          Id: activeUser,
-        },
-      };
-      const logSave = new ProjectLog(logData);
-      await logSave.save();
       return res.json({
         status: 200,
         message: 'New point added successfully',
@@ -1389,6 +1405,11 @@ exports.addNewExtraPointById = async (req, res) => {
     };
     const logSave = new ProjectLog(logData);
     await logSave.save();
+    await createLogManually(
+      req,
+      `Added new extra point ${name} (${point}) to project ${siteID}`,
+      siteID
+    );
     return res.json({
       message: 'New extra point added successfully',
       status: 200,
@@ -1482,6 +1503,11 @@ exports.deleteExtraPointById = async (req, res) => {
     };
     const logSave = new ProjectLog(logData);
     await logSave.save();
+    await createLogManually(
+      req,
+      `Deleted extra point ${name} (${point}) from project ${siteID}`,
+      siteID
+    );
     return res.json({
       message: 'Point deleted successfully',
       status: 200,
@@ -1797,7 +1823,6 @@ exports.verifyPayment = (req, res) => {
     }
   );
 };
-
 exports.AddNewProjectPoint = async (req, res) => {
   const {
     id,
@@ -1813,147 +1838,277 @@ exports.AddNewProjectPoint = async (req, res) => {
   } = req.body;
 
   try {
-    const findData = await Project.find({ siteID: id });
+    const project = await Project.findOne({ siteID: id });
 
-    const targetProjectIndex = findData[0]?.project_status.findIndex(
+    if (!project) {
+      return res.status(404).json({ message: 'Project not found' });
+    }
+
+    const targetStatus = project.project_status.find(
       status => status.name === stepName
     );
+    if (!targetStatus) {
+      return res.status(404).json({ message: 'Project step not found' });
+    }
 
-    // Find the index of the step within the targeted project_status
-    const stepIndex =
-      targetProjectIndex !== -1
-        ? findData[0]?.project_status[targetProjectIndex]?.step?.findIndex(
-            obj => parseInt(obj.point) === parseInt(prevPoint)
-          )
-        : -1;
+    const stepIndex = targetStatus.step.findIndex(
+      s => parseInt(s.point) === parseInt(prevPoint)
+    );
 
-    const t = {
+    if (stepIndex === -1) {
+      return res
+        .status(404)
+        .json({ message: 'Previous point not found in step' });
+    }
+
+    const newTaskPayload = {
       title: pointName,
       description: pointName,
       assignedBy: activeUser,
-      duration: duration,
+      duration,
       siteID: id,
-      forceMajeure: forceMajeure.isForceMajeure
-        ? forceMajeure.isForceMajeure
-        : false,
+      forceMajeure: forceMajeure?.isForceMajeure || false,
       checkList: {
-        checkList: checkList === 'yes' ? true : false,
-        checkListName: checkListName,
+        checkList: checkList === 'yes',
+        checkListName,
         checkListPoint: [],
       },
-      issueMember: issueMember,
+      issueMember,
     };
 
-    // If both index are found, proceed to insert the new object into the step array
-    if (targetProjectIndex !== -1 && stepIndex !== -1) {
-      const newTask = await Task.create(t);
+    const newTask = await Task.create(newTaskPayload);
 
-      const obj = {
-        taskId: newTask._id,
-        point: parseInt(prevPoint) + 1,
-        duration: duration,
+    const newStepEntry = {
+      taskId: newTask._id,
+      point: parseInt(prevPoint) + 1,
+      duration,
+    };
+
+    targetStatus.step.splice(stepIndex + 1, 0, newStepEntry);
+    for (let i = stepIndex + 2; i < targetStatus.step.length; i++) {
+      targetStatus.step[i].point += 1;
+    }
+
+    const updateQuery = {
+      $set: {
+        'project_status.$.step': targetStatus.step,
+      },
+    };
+
+    if (forceMajeure?.isForceMajeure) {
+      updateQuery.$push = {
+        forceMajeure: {
+          reason: pointName,
+          duration,
+          startDate: forceMajeure.startDate,
+          endDate: forceMajeure.endDate,
+        },
       };
+      updateQuery.$inc = {
+        extension: duration,
+      };
+    }
 
-      // Insert newObj at stepIndex + 1 in the step array of the targeted project_status object
-      findData[0]?.project_status[targetProjectIndex]?.step?.splice(
-        stepIndex + 1,
-        0,
-        obj
-      );
-      // Update 'point' numbers starting from the newly inserted object
-      for (
-        var i = stepIndex + 2;
-        i < findData[0]?.project_status[targetProjectIndex]?.step?.length;
-        i++
-      ) {
-        findData[0].project_status[targetProjectIndex].step[i].point += 1;
-      }
-    } else {
+    const updateResult = await Project.updateOne(
+      { siteID: id, 'project_status.name': stepName },
+      updateQuery
+    );
+
+    if (updateResult.modifiedCount !== 1) {
       return res
-        .status(404)
-        .json({ message: 'Step or Project Status not found' });
+        .status(500)
+        .json({ message: 'No changes were made to the project' });
     }
 
-    let updateResult;
+    if (checkList?.toLowerCase() === 'yes') {
+      const checklistData = {
+        checkListStep: stepName,
+        name: checkListName,
+        checkListNumber: newStepEntry.point,
+        checkList: [],
+      };
+      await new CheckList(checklistData).save();
 
-    if (forceMajeure.isForceMajeure) {
-      updateResult = await Project.updateOne(
-        { siteID: id, 'project_status.name': stepName },
-        {
-          $set: {
-            'project_status.$.step':
-              findData[0].project_status[targetProjectIndex].step,
-          },
-          $push: {
-            forceMajeure: {
-              reason: pointName,
-              duration,
-              startDate: forceMajeure.startDate,
-              endDate: forceMajeure.endDate,
-            },
-          },
-          $inc: {
-            extension: duration,
-          },
-        }
-      );
-    } else {
-      updateResult = await Project.updateOne(
-        { siteID: id, 'project_status.name': stepName },
-        {
-          $set: {
-            'project_status.$.step':
-              findData[0].project_status[targetProjectIndex].step,
-          },
-          // $inc: {
-          //   extension: duration,
-          // },
-        }
+      await Project.updateOne(
+        { siteID: id },
+        { $push: { inspections: checklistData } }
       );
     }
 
-    if (updateResult.modifiedCount === 1) {
-      if (checkList?.toLowerCase() === 'yes') {
-        const dataUpload = {
-          checkListStep: stepName,
-          name: checkListName,
-          checkListNumber: t.point,
-          checkList: [],
-        };
-        let Check = new CheckList(dataUpload);
-        Check.save();
-      }
+    const logMessage = forceMajeure?.isForceMajeure
+      ? `Added new point (force majeure: ${duration} days) to ${stepName} - ${pointName} in project ${id}`
+      : `Added new point ${pointName} to ${stepName} in project ${id}`;
+    await createLogManually(req, logMessage, id);
 
-      if (checkList?.toLowerCase() === 'yes') {
-        await Project.updateOne(
-          { siteID: id },
-          {
-            $push: {
-              inspections: {
-                checkListStep: stepName,
-                name: checkListName,
-                checkListNumber: t.point,
-                checkList: [],
-              },
-            },
-          }
-        );
-      }
-      return res.json({
-        status: 200,
-        message: 'New Field added successfully',
-      });
-    } else {
-      res.status(500).json({ message: 'No changes were made to the project' });
-    }
+    return res.status(200).json({ message: 'New Field added successfully' });
   } catch (error) {
-    console.log(error);
-    res.json({
-      status: 400,
-      message: 'Error while add new point',
-    });
+    console.error('AddNewProjectPoint Error:', error);
+    res.status(400).json({ message: 'Error while adding new point' });
   }
 };
+
+// exports.AddNewProjectPoint = async (req, res) => {
+//   const {
+//     id,
+//     stepName,
+//     pointName,
+//     checkList,
+//     checkListName,
+//     forceMajeure,
+//     duration,
+//     issueMember,
+//     prevPoint,
+//     activeUser,
+//   } = req.body;
+
+//   try {
+//     const findData = await Project.find({ siteID: id });
+
+//     const targetProjectIndex = findData[0]?.project_status.findIndex(
+//       status => status.name === stepName
+//     );
+
+//     // Find the index of the step within the targeted project_status
+//     const stepIndex =
+//       targetProjectIndex !== -1
+//         ? findData[0]?.project_status[targetProjectIndex]?.step?.findIndex(
+//             obj => parseInt(obj.point) === parseInt(prevPoint)
+//           )
+//         : -1;
+
+//     const t = {
+//       title: pointName,
+//       description: pointName,
+//       assignedBy: activeUser,
+//       duration: duration,
+//       siteID: id,
+//       forceMajeure: forceMajeure.isForceMajeure
+//         ? forceMajeure.isForceMajeure
+//         : false,
+//       checkList: {
+//         checkList: checkList === 'yes' ? true : false,
+//         checkListName: checkListName,
+//         checkListPoint: [],
+//       },
+//       issueMember: issueMember,
+//     };
+
+//     // If both index are found, proceed to insert the new object into the step array
+//     if (targetProjectIndex !== -1 && stepIndex !== -1) {
+//       const newTask = await Task.create(t);
+
+//       const obj = {
+//         taskId: newTask._id,
+//         point: parseInt(prevPoint) + 1,
+//         duration: duration,
+//       };
+
+//       // Insert newObj at stepIndex + 1 in the step array of the targeted project_status object
+//       findData[0]?.project_status[targetProjectIndex]?.step?.splice(
+//         stepIndex + 1,
+//         0,
+//         obj
+//       );
+//       // Update 'point' numbers starting from the newly inserted object
+//       for (
+//         var i = stepIndex + 2;
+//         i < findData[0]?.project_status[targetProjectIndex]?.step?.length;
+//         i++
+//       ) {
+//         findData[0].project_status[targetProjectIndex].step[i].point += 1;
+//       }
+//     } else {
+//       return res
+//         .status(404)
+//         .json({ message: 'Step or Project Status not found' });
+//     }
+
+//     let updateResult;
+
+//     if (forceMajeure.isForceMajeure) {
+//       updateResult = await Project.updateOne(
+//         { siteID: id, 'project_status.name': stepName },
+//         {
+//           $set: {
+//             'project_status.$.step':
+//               findData[0].project_status[targetProjectIndex].step,
+//           },
+//           $push: {
+//             forceMajeure: {
+//               reason: pointName,
+//               duration,
+//               startDate: forceMajeure.startDate,
+//               endDate: forceMajeure.endDate,
+//             },
+//           },
+//           $inc: {
+//             extension: duration,
+//           },
+//         }
+//       );
+//     } else {
+//       updateResult = await Project.updateOne(
+//         { siteID: id, 'project_status.name': stepName },
+//         {
+//           $set: {
+//             'project_status.$.step':
+//               findData[0].project_status[targetProjectIndex].step,
+//           },
+//           // $inc: {
+//           //   extension: duration,
+//           // },
+//         }
+//       );
+//     }
+
+//     if (updateResult.modifiedCount === 1) {
+//       if (checkList?.toLowerCase() === 'yes') {
+//         const dataUpload = {
+//           checkListStep: stepName,
+//           name: checkListName,
+//           checkListNumber: t.point,
+//           checkList: [],
+//         };
+//         let Check = new CheckList(dataUpload);
+//         Check.save();
+//       }
+
+//       if (checkList?.toLowerCase() === 'yes') {
+//         await Project.updateOne(
+//           { siteID: id },
+//           {
+//             $push: {
+//               inspections: {
+//                 checkListStep: stepName,
+//                 name: checkListName,
+//                 checkListNumber: t.point,
+//                 checkList: [],
+//               },
+//             },
+//           }
+//         );
+//       }
+//       const logMessage = forceMajeure?.isForceMajeure
+//         ? `Added new point (force majeure: ${duration}) to ${stepName} - ${pointName} in project ${id}`
+//         : `Added new point ${pointName} to ${stepName} in project ${id}`;
+
+//       await createLogManually(req, logMessage, id);
+
+//       return res.json({
+//         status: 200,
+//         message: 'New Field added successfully',
+//       });
+//     } else {
+//       res.status(500).json({ message: 'No changes were made to the project' });
+//     }
+//   } catch (error) {
+//     console.log(error);
+//     res.json({
+//       status: 400,
+//       message: 'Error while add new point',
+//     });
+//   }
+// };
 
 // exports.DeleteProjectPoint = async (req, res) => {
 //   const { id, name, point, content, checkList, checkListName, duration } =
@@ -2150,7 +2305,11 @@ exports.DeleteProjectPoint = async (req, res) => {
       description: content,
       category: 'project',
     });
-
+    await createLogManually(
+      req,
+      `Deleted point ${stepToRemove.taskId.title} from ${point} of project ${id}`,
+      id
+    );
     res.json({ status: 200, message: 'Point removed successfully' });
   } catch (error) {
     console.error('Error while removing point:', error.stack);
@@ -2199,6 +2358,7 @@ exports.ProjectStepDelete = async (req, res) => {
 
     project.project_status.splice(stepIndex, 1);
     await project.save();
+    await createLogManually(req, `Deleted step ${name} from project ${id}`, id);
 
     return res.status(200).json({ message: 'Step removed successfully' });
   } catch (error) {
@@ -2294,6 +2454,11 @@ exports.TicketUpdateByMember = async (req, res) => {
         await ticket.updateOne({ $set: { status: type } });
         await ticket.updateOne({ $push: { comments: comments._id } });
       }
+      await createLogManually(
+        req,
+        `Updated ticket ${ticket.title} of project ${ticket.siteID} to ${type}`,
+        ticket.siteID
+      );
       res.json({
         status: 200,
         message: 'Ticket updated successfully',
@@ -2352,7 +2517,7 @@ exports.changeIssueMember = async (req, res) => {
       const taskComment = await TaskComment.create({
         taskId: taskItem._id,
         type: 'Task Updated',
-        comment: `Project ${issue} was changed to ${newM.name} which was last assigned to ${oldM.name}.`,
+        comment: `Project ${issue} was changed to ${newM.firstname} ${newM.lastname} which was last assigned to ${oldM.firstname} ${oldM.lastname}.`,
         createdBy: userId,
       });
 
@@ -2381,6 +2546,12 @@ exports.changeIssueMember = async (req, res) => {
         message: 'Project not found',
       });
     }
+
+    await createLogManually(
+      req,
+      `Changed issue member of project ${siteId} from ${oldM.firstname} ${oldM.lastname} to ${newM.firstname} ${newM.lastname}`,
+      siteId
+    );
 
     return res.status(200).json({
       status: 200,

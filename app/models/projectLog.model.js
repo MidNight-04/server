@@ -7,6 +7,10 @@ const logModel = mongoose.model(
       log: String,
       date: { type: String, required: true, default: Date.now },
       siteID: String,
+      taskId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Task',
+      },
       userId: {
         type: mongoose.Schema.Types.ObjectId,
         required: true,

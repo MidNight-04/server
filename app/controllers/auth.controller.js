@@ -26,6 +26,8 @@ var bcrypt = require('bcryptjs');
 const Brands = require('../models/brands.model');
 const cookie = require('cookie');
 const { signToken } = require('../middlewares/authJwt');
+const { uploadToS3AndExtractUrls } = require('../helper/s3Helpers');
+const { createLogManually } = require('../middlewares/createLog');
 
 exports.signup = async (req, res) => {
   try {
@@ -292,6 +294,7 @@ exports.createUser = async (req, res) => {
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
+    const role = await Role.findOne(roles);
 
     const user = await User.create({
       firstname,
@@ -308,6 +311,11 @@ exports.createUser = async (req, res) => {
       roles,
       profileImage: images[0] || null,
     });
+
+    await createLogManually(
+      req,
+      `User with name ${user.firstname} ${user.lastname} created with role ${role.name}`
+    );
 
     return res.status(201).json({ message: 'User created successfully', user });
   } catch (err) {
@@ -459,8 +467,6 @@ exports.signin = async (req, res) => {
 //   }
 // };
 
-const { uploadToS3AndExtractUrls } = require('../helper/s3Helpers');
-
 exports.updateUser = async (req, res) => {
   try {
     const {
@@ -517,6 +523,12 @@ exports.updateUser = async (req, res) => {
       }
     }
 
+    const role = await Role.findById(user.roles);
+    if (!role) {
+      return res.status(404).json({ message: 'Role not found' });
+    }
+    console.log(role);
+
     // Update fields
     Object.assign(user, {
       firstname: firstname ?? user.firstname,
@@ -537,6 +549,10 @@ exports.updateUser = async (req, res) => {
     }
 
     await user.save();
+    await createLogManually(
+      req,
+      `User with name ${user.firstname} ${user.lastname} updated with role ${role.name} and email ${user.email}`
+    );
 
     return res.status(200).json({ message: 'User updated successfully', user });
   } catch (err) {

@@ -85,15 +85,20 @@ exports.addProjectDocument = async (req, res) => {
         filesArray,
         'projectDocuments'
       );
+      await createLogManually(
+        req,
+        `Uploaded project ${
+          documentFiles.length + 1
+        } document ${name} with siteID ${siteID}.`,
+        siteID
+      );
     } catch (uploadErr) {
       console.error('S3 upload failed:', uploadErr);
-      return res
-        .status(500)
-        .json({
-          success: false,
-          message: 'File upload failed',
-          error: uploadErr.message,
-        });
+      return res.status(500).json({
+        success: false,
+        message: 'File upload failed',
+        error: uploadErr.message,
+      });
     }
 
     const projectDocument = new ProjectDocuments({
@@ -106,6 +111,11 @@ exports.addProjectDocument = async (req, res) => {
     });
 
     const savedDoc = await projectDocument.save();
+    await createLogManually(
+      req,
+      `Added project document ${name} with siteID ${siteID}.`,
+      siteID
+    );
 
     return res.status(201).json({
       success: true,
@@ -172,11 +182,20 @@ exports.getDocumentByID = async (req, res) => {
 };
 exports.updateDocumentStatusByClient = async (req, res) => {
   const { id, status } = req.body;
+  const projectDocument = await ProjectDocuments.findById(id);
+  if (!projectDocument) {
+    return res.status(404).json({ message: 'Project document not found' });
+  }
   const data = await ProjectDocuments.updateOne(
     { _id: id },
     { $set: { status: status } }
   );
   if (data.modifiedCount === 1) {
+    await createLogManually(
+      req,
+      `Updated document status to ${status} for project document ${projectDocument.name}.`,
+      projectDocument.siteID
+    );
     res.status(200).json({
       status: 200,
       message: 'Document status update by client',

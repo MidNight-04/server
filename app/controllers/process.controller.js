@@ -277,6 +277,10 @@ exports.addConstructionStep = async (req, res) => {
       points: arraySave,
     });
     await newStep.save();
+    await createLogManually(
+      req,
+      `Created construction step ${name} with priority ${priority}.`
+    );
 
     res.status(201).json({ message: 'Record created successfully' });
   } catch (err) {
@@ -300,7 +304,12 @@ exports.getConstructionStep = async (req, res) => {
 exports.deleteConstructionStepById = async (req, res) => {
   try {
     const { id } = req.params;
+    const step = await ConstructionStep.findOne({ _id: id });
     await ConstructionStep.deleteOne({ _id: id });
+    await createLogManually(
+      req,
+      `Deleted construction step ${step.name}.`
+    );
     res.status(200).json({ message: 'Record deleted successfully' });
   } catch (err) {
     console.error('Delete Error:', err);
@@ -344,6 +353,10 @@ exports.addNewFieldConstructionStepById = async (req, res) => {
     }
 
     await step.save();
+    await createLogManually(
+      req,
+      `Added new field ${newField} to construction step ${step.name}.`
+    );
     res.status(200).json({ message: 'New Field added successfully' });
   } catch (err) {
     console.error('Add Field Error:', err);
@@ -364,6 +377,10 @@ exports.deleteConstructionPointById = async (req, res) => {
     }
 
     await step.save();
+    await createLogManually(
+      req,
+      `Deleted field ${point} from construction step ${step.name}.`
+    );
     res.status(200).json({ message: 'Field deleted successfully' });
   } catch (err) {
     console.error('Delete Field Error:', err);
@@ -386,6 +403,10 @@ exports.reorderSteps = async (req, res) => {
     }));
 
     await ConstructionStep.bulkWrite(bulkOps);
+    await createLogManually(
+      req,
+      `Reordered construction steps.`
+    );
     res.status(200).json({ message: 'Steps reordered successfully' });
   } catch (err) {
     console.error('Reorder Error:', err);

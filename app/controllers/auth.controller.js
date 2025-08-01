@@ -268,7 +268,7 @@ exports.createUser = async (req, res) => {
       return res.status(400).json({ message: 'All fields are required' });
     }
 
-    const existingUser = await User.findOne({ email });
+    const existingUser = await User.findOne({ email: email.toLowerCase() });
     if (existingUser) {
       return res.status(409).json({ message: 'User already exists' });
     }
@@ -294,7 +294,7 @@ exports.createUser = async (req, res) => {
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
-    const role = await Role.findOne(roles);
+    const role = await Role.findById(roles);
 
     const user = await User.create({
       firstname,

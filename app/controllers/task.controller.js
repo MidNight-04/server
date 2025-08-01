@@ -606,6 +606,23 @@ exports.taskAddComment = async (req, res) => {
     task.comments.push(savedComment._id);
     task.updatedOn = new Date().toISOString();
     await task.save();
+    const logParts = [`Added New Comment ${comment}`];
+
+    if (images.length > 0) {
+      logParts.push(
+        `added ${images.length} image${images.length > 1 ? 's' : ''}`
+      );
+    }
+
+    if (files.length > 0) {
+      logParts.push(`added ${files.length} file${files.length > 1 ? 's' : ''}`);
+    }
+
+    if (audio) {
+      logParts.push('added audio');
+    }
+
+    createLogManually(req, logParts.join(', '), task.siteID, task._id);
 
     res.status(200).send({ message: 'Comment added successfully' });
   } catch (error) {

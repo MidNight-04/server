@@ -3,6 +3,7 @@ const db = require('../models');
 const PaymentStages = db.paymentStages;
 const xlsx = require('xlsx');
 const axios = require('axios');
+const { createLogManually } = require('../middlewares/createLog');
 
 exports.addPaymentStages = async (req, res) => {
   const { floor } = req.body;

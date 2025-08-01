@@ -1,5 +1,6 @@
 const db = require('../models');
 const FloorModel = db.floors;
+const { createLogManually } = require('../middlewares/createLog');
 
 exports.addProjectFloor = (req, res) => {
   let data = {
@@ -42,23 +43,32 @@ exports.getAllProjectFloor = (req, res) => {
   });
   return;
 };
-exports.deleteProjectFloorById = (req, res) => {
-  const id = req.params.id;
-  FloorModel.deleteOne({ _id: id }, async (err, dealer) => {
-    await createLogManually(req, `Deleted floor ${dealer.name}.`);
-    if (err) {
-      res
-        .status(500)
-        .send({ message: 'The requested data could not be fetched' });
-      return;
+
+exports.deleteProjectFloorById = async (req, res) => {
+  try {
+    const id = req.params.id;
+
+    const floor = await FloorModel.findById(id);
+    if (!floor) {
+      return res.status(404).send({ message: 'Floor not found' });
     }
-    res.status(200).send({
-      message: 'Record delete successfully',
+
+    await FloorModel.deleteOne({ _id: id });
+
+    await createLogManually(req, `Deleted floor ${floor.name}.`);
+
+    return res.status(200).send({
+      message: 'Record deleted successfully',
       status: 200,
     });
-    return;
-  });
+  } catch (err) {
+    console.error('Error deleting floor:', err);
+    return res.status(500).send({
+      message: 'An error occurred while deleting the floor',
+    });
+  }
 };
+
 exports.getProjectFloorById = (req, res) => {
   const id = req.params.id;
   FloorModel.findById(id, (err, data) => {
@@ -73,18 +83,23 @@ exports.getProjectFloorById = (req, res) => {
   });
 };
 
-exports.updateProjectFloorById = (req, res) => {
-  const { id, floor } = req.body;
-  const data = { name: floor };
-  FloorModel.updateOne({ _id: id }, data, async (err, updated) => {
+exports.updateProjectFloorById = async (req, res) => {
+  try {
+    const { id, floor } = req.body;
+
+    const updated = await FloorModel.updateOne({ _id: id }, { name: floor });
+
+    if (updated.matchedCount === 0) {
+      return res.status(404).send({ message: 'Floor not found' });
+    }
+
     await createLogManually(req, `Updated floor ${floor}.`);
-    if (err) {
-      //   console.log(err);
-      res.status(500).send({ message: 'Could not find id to update details' });
-      return;
-    }
-    if (updated) {
-      res.status(200).send({ message: 'Updated Successfuly' });
-    }
-  });
+
+    return res.status(200).send({ message: 'Updated successfully' });
+  } catch (err) {
+    console.error('Error updating floor:', err);
+    return res.status(500).send({
+      message: 'Could not update floor details',
+    });
+  }
 };

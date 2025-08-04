@@ -314,7 +314,7 @@ exports.createUser = async (req, res) => {
 
     await createLogManually(
       req,
-      `User with name ${user.firstname} ${user.lastname} created with role ${role.name}`
+      `Created new user ${user.firstname} ${user.lastname} as a ${role.name}`
     );
 
     return res.status(201).json({ message: 'User created successfully', user });

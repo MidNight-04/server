@@ -1,47 +1,11 @@
 const db = require('../models');
 const ProjectDocuments = db.projectDocument;
 const { uploadToS3AndExtractUrls } = require('../helper/s3Helpers');
+const { createLogManually } = require('../middlewares/createLog');
 
 // const fetch = require('node-fetch');
 const fetch = (...args) =>
   import('node-fetch').then(({ default: fetch }) => fetch(...args));
-
-// exports.addProjectDocument = async (req, res) => {
-//   try {
-//     if (!req.body.name || !req.files?.docs?.length) {
-//       return res.status(400).json({
-//         message: 'Name and at least one document are required',
-//       });
-//     }
-
-//     const documentFiles = await uploadToS3AndExtractUrls(
-//       req.files?.docs,
-//       'projectDocuments'
-//     );
-
-//     const projectDocument = new ProjectDocuments({
-//       name: req.body.name,
-//       siteID: req.body.siteID,
-//       clientID: req.body.client,
-//       uploadingUser: req.body.user,
-//       date: req.body.date,
-//       document: documentFiles,
-//     });
-
-//     const savedDoc = await projectDocument.save();
-
-//     res.status(200).send({
-//       message: 'Document uploaded successfully',
-//       data: savedDoc,
-//     });
-//   } catch (err) {
-//     console.error('Error while uploading project document:', err);
-//     res.status(500).send({
-//       message: 'Error while uploading the document',
-//       error: err.message,
-//     });
-//   }
-// };
 
 exports.addProjectDocument = async (req, res) => {
   try {

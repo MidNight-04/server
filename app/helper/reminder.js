@@ -350,12 +350,116 @@ const teamUpdate = async ({
   }
 };
 
+const updateTicketStatus = async ({ phone, name, teammember, id, title }) => {
+  try {
+    const msg = await axios.post(
+      `${WATI_API_URL}?whatsappNumber=${phone}`,
+      {
+        template_name: 'ticket_update',
+        broadcast_name: 'ticket_update_060820251648',
+        parameters: [
+          {
+            name: 'name',
+            value: name,
+          },
+          {
+            name: 'teammember',
+            value: teammember,
+          },
+          {
+            name: 'id',
+            value: id,
+          },
+          {
+            name: 'title',
+            value: title,
+          },
+        ],
+      },
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${API_KEY}`,
+        },
+      }
+    );
+    console.log('Message sent:', msg.data);
+  } catch (error) {
+    console.error(
+      'Error sending message:',
+      error.response?.data || error.message
+    );
+  }
+};
+
+const sendNewTicketUpdate = async ({
+  phone,
+  username,
+  id,
+  title,
+  siteId,
+  issueMember,
+  clientName,
+  step,
+  query,
+  date,
+}) => {
+  try {
+    // Log the payload for debugging
+    console.log('📢 Sending New Ticket Notification:', {
+      phone,
+      username,
+      id,
+      title,
+      siteId,
+      clientName,
+      step,
+      query,
+      date,
+    });
+
+    const response = await axios.post(
+      `${WATI_API_URL}?whatsappNumber=${phone}`,
+      {
+        template_name: 'ticket_raised', // <-- name in your WATI template
+        broadcast_name: 'ticket_raised_060820251802',
+        parameters: [
+          { name: 'issueMember', value: issueMember },
+          { name: 'username', value: username },
+          { name: 'id', value: id },
+          { name: 'title', value: title },
+          { name: 'siteId', value: siteId },
+          { name: 'clientName', value: clientName },
+          { name: 'step', value: step },
+          { name: 'query', value: query },
+          { name: 'date', value: date },
+        ],
+      },
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${API_KEY}`,
+        },
+      }
+    );
+
+    console.log('✅ New ticket notification sent:', response.data);
+  } catch (error) {
+    console.error(
+      '❌ Error sending new ticket notification:',
+      error.response?.data || error.message
+    );
+  }
+};
+
 module.exports = {
   sendWhatsAppMessage,
   assignedNotification,
   dueDateNotification,
   clientUpdate,
   teamUpdate,
+  updateTicketStatus,
+  sendNewTicketUpdate,
 };
 
 // app.post('/send-message', async (req, res) => {

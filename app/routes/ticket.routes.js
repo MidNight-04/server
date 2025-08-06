@@ -23,4 +23,10 @@ module.exports = function (app) {
     verifyToken,
     controller.getTicketBySiteId
   );
+  app.put(
+    '/api/tickets/changeissuemember',
+    verifyToken,
+    isSenior,
+    controller.changeIssueMember
+  );
 };

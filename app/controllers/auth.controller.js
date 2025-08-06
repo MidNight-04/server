@@ -376,6 +376,7 @@ exports.signin = async (req, res) => {
       country: user.country,
       city: user.city,
       state: user.state,
+      profileImage: user.profileImage,
     });
   } catch (error) {
     console.error(error);

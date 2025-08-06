@@ -156,4 +156,8 @@ module.exports = function (app) {
     controller.changeIssueMember
   );
   app.get('/api/project/getallsiteids', controller.getAllSiteIds);
+  app.get(
+    '/api/project/getallprojectissuemembers/:siteId',
+    controller.getAllProjectIssueMembers
+  );
 };

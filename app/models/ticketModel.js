@@ -28,11 +28,11 @@ const ticketSchema = new Schema(
     },
     assignMember: {
       type: Schema.Types.ObjectId,
-      refPath: 'User',
+      ref: 'User',
     },
     assignedBy: {
       type: Schema.Types.ObjectId,
-      refPath: 'User',
+      ref: 'User',
     },
     siteID: {
       type: String,

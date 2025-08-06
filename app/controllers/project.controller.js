@@ -23,6 +23,10 @@ const dayjs = require('dayjs');
 const ConstructionStep = require('../models/ConstructionStep');
 const { updateTaskAndReschedule } = require('../helper/schedule');
 const { createLogManually } = require('../middlewares/createLog');
+const {
+  ticketUpdateNotification,
+  sendNewTicketNotification,
+} = require('../helper/notification');
 
 let today = new Date();
 let yyyy = today.getFullYear();
@@ -1169,27 +1173,126 @@ exports.deleteImage = async (req, res) => {
   uploadImage.deleteFile(url).then(res => console.log(res));
 };
 
+// exports.clientQueryForProject = async (req, res) => {
+//   const {
+//     id,
+//     name,
+//     point,
+//     content,
+//     assignedBy,
+//     assignMember,
+//     status,
+//     log,
+//     date,
+//   } = req.body;
+//   let profileFiles = [];
+//   let mems = [];
+//   // Create a date object for September 28, 2024
+//   const dateTime = new Date(date);
+
+//   // Get the current time
+//   const now = new Date();
+
+//   // Set the hours, minutes, seconds, and milliseconds of the date object to match the current time
+//   dateTime.setHours(
+//     now.getHours(),
+//     now.getMinutes(),
+//     now.getSeconds(),
+//     now.getMilliseconds()
+//   );
+
+//   // if (req.files.image) {
+//   //   for (let i = 0; i < req.files.image.length; i++) {
+//   //     profileFiles.push(req.files.image[i].location);
+//   //   }
+//   // }
+
+//   if (req.files?.image?.length > 0) {
+//     await awsS3
+//       .uploadFiles(req.files?.image, `client_query`)
+//       .then(async data => {
+//         const images = data.map(file => {
+//           const url =
+//             'https://thekedar-bucket.s3.us-east-1.amazonaws.com/' + file.s3key;
+//           return url;
+//         });
+//         profileFiles.push(...images);
+//       });
+//   }
+
+//   try {
+//     const project = await Project.findOne({ siteID: id });
+//     if (!project) {
+//       res.json({
+//         status: 200,
+//         message: 'Project not found',
+//       });
+//     } else {
+//       const ticket = new Ticket({
+//         step: name,
+//         siteID: id,
+//         point,
+//         content,
+//         query: log,
+//         date: dateTime,
+//         work: status,
+//         assignedBy,
+//         assignMember,
+//         image: profileFiles,
+//       });
+
+//       await ticket
+//         .save()
+//         .then(result => {
+//           Project.updateOne(
+//             { siteID: id },
+//             {
+//               $push: {
+//                 openTicket: result._id,
+//               },
+//             }
+//           ).then(result => {
+//             res.json({
+//               status: 200,
+//               message: 'Client ticket raised successfully',
+//             });
+//           });
+//         })
+//         .catch(err => {
+//           console.log(err);
+//           res.json({
+//             status: 400,
+//             message: 'Error on raised ticket',
+//           });
+//         });
+//     }
+//   } catch (err) {
+//     console.log(err);
+//     res.json({
+//       status: 400,
+//       message: 'Error while raised ticket by client',
+//     });
+//   }
+// };
+
 exports.clientQueryForProject = async (req, res) => {
   const {
-    id,
-    name,
+    id, // siteID
+    name, // step
     point,
     content,
-    assignedBy,
-    assignMember,
+    assignedBy, // user ID of the person raising the ticket
+    assignMember, // user ID of the assignee
     status,
     log,
     date,
   } = req.body;
+
   let profileFiles = [];
-  let mems = [];
-  // Create a date object for September 28, 2024
+
+  // Preserve original ticket date but match current time
   const dateTime = new Date(date);
-
-  // Get the current time
   const now = new Date();
-
-  // Set the hours, minutes, seconds, and milliseconds of the date object to match the current time
   dateTime.setHours(
     now.getHours(),
     now.getMinutes(),
@@ -1197,77 +1300,72 @@ exports.clientQueryForProject = async (req, res) => {
     now.getMilliseconds()
   );
 
-  // if (req.files.image) {
-  //   for (let i = 0; i < req.files.image.length; i++) {
-  //     profileFiles.push(req.files.image[i].location);
-  //   }
-  // }
-
+  // Upload images if provided
   if (req.files?.image?.length > 0) {
-    await awsS3
-      .uploadFiles(req.files?.image, `client_query`)
-      .then(async data => {
-        const images = data.map(file => {
-          const url =
-            'https://thekedar-bucket.s3.us-east-1.amazonaws.com/' + file.s3key;
-          return url;
-        });
-        profileFiles.push(...images);
-      });
+    const uploaded = await awsS3.uploadFiles(req.files.image, `client_query`);
+    const images = uploaded.map(
+      file => `https://thekedar-bucket.s3.us-east-1.amazonaws.com/${file.s3key}`
+    );
+    profileFiles.push(...images);
   }
 
   try {
-    const project = await Project.findOne({ siteID: id });
+    const project = await Project.findOne({ siteID: id }).populate('client');
     if (!project) {
-      res.json({
-        status: 200,
-        message: 'Project not found',
-      });
-    } else {
-      const ticket = new Ticket({
-        step: name,
-        siteID: id,
-        point,
-        content,
-        query: log,
-        date: dateTime,
-        work: status,
-        assignedBy,
-        assignMember,
-        image: profileFiles,
-      });
-
-      await ticket
-        .save()
-        .then(result => {
-          Project.updateOne(
-            { siteID: id },
-            {
-              $push: {
-                openTicket: result._id,
-              },
-            }
-          ).then(result => {
-            res.json({
-              status: 200,
-              message: 'Client ticket raised successfully',
-            });
-          });
-        })
-        .catch(err => {
-          console.log(err);
-          res.json({
-            status: 400,
-            message: 'Error on raised ticket',
-          });
-        });
+      return res.json({ status: 404, message: 'Project not found' });
     }
-  } catch (err) {
-    console.log(err);
-    res.json({
-      status: 400,
-      message: 'Error while raised ticket by client',
+
+    // Create new ticket
+    const ticket = new Ticket({
+      step: name,
+      siteID: id,
+      point,
+      content,
+      query: log,
+      date: dateTime,
+      work: status,
+      assignedBy,
+      assignMember,
+      image: profileFiles,
     });
+
+    const savedTicket = await ticket.save();
+
+    // Add to project's open tickets
+    await Project.updateOne(
+      { siteID: id },
+      { $push: { openTicket: savedTicket._id } }
+    );
+
+    const user = await User.findById(assignedBy);
+
+    // Send WhatsApp notification to assignee
+    await sendNewTicketNotification({
+      recipient: assignMember, // ID of the person assigned
+      sender: `${user.firstname + ' ' + user.lastname}`.trim(),
+      id: savedTicket._id.toString().slice(0, 6),
+      title: content,
+      siteId: id,
+      clientName: project.client?.firstname + ' ' + project.client?.lastname,
+      step: name,
+      query: log,
+      date: dateTime.toLocaleString('en-IN', {
+        weekday: 'short',
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true,
+      }),
+    });
+
+    res.json({ status: 200, message: 'Client ticket raised successfully' });
+  } catch (err) {
+    console.error('❌ Error in clientQueryForProject:', err);
+    res
+      .status(400)
+      .json({ status: 400, message: 'Error while raising ticket by client' });
   }
 };
 
@@ -1823,6 +1921,7 @@ exports.verifyPayment = (req, res) => {
     }
   );
 };
+
 exports.AddNewProjectPoint = async (req, res) => {
   const {
     id,
@@ -1946,270 +2045,6 @@ exports.AddNewProjectPoint = async (req, res) => {
     res.status(400).json({ message: 'Error while adding new point' });
   }
 };
-
-// exports.AddNewProjectPoint = async (req, res) => {
-//   const {
-//     id,
-//     stepName,
-//     pointName,
-//     checkList,
-//     checkListName,
-//     forceMajeure,
-//     duration,
-//     issueMember,
-//     prevPoint,
-//     activeUser,
-//   } = req.body;
-
-//   try {
-//     const findData = await Project.find({ siteID: id });
-
-//     const targetProjectIndex = findData[0]?.project_status.findIndex(
-//       status => status.name === stepName
-//     );
-
-//     // Find the index of the step within the targeted project_status
-//     const stepIndex =
-//       targetProjectIndex !== -1
-//         ? findData[0]?.project_status[targetProjectIndex]?.step?.findIndex(
-//             obj => parseInt(obj.point) === parseInt(prevPoint)
-//           )
-//         : -1;
-
-//     const t = {
-//       title: pointName,
-//       description: pointName,
-//       assignedBy: activeUser,
-//       duration: duration,
-//       siteID: id,
-//       forceMajeure: forceMajeure.isForceMajeure
-//         ? forceMajeure.isForceMajeure
-//         : false,
-//       checkList: {
-//         checkList: checkList === 'yes' ? true : false,
-//         checkListName: checkListName,
-//         checkListPoint: [],
-//       },
-//       issueMember: issueMember,
-//     };
-
-//     // If both index are found, proceed to insert the new object into the step array
-//     if (targetProjectIndex !== -1 && stepIndex !== -1) {
-//       const newTask = await Task.create(t);
-
-//       const obj = {
-//         taskId: newTask._id,
-//         point: parseInt(prevPoint) + 1,
-//         duration: duration,
-//       };
-
-//       // Insert newObj at stepIndex + 1 in the step array of the targeted project_status object
-//       findData[0]?.project_status[targetProjectIndex]?.step?.splice(
-//         stepIndex + 1,
-//         0,
-//         obj
-//       );
-//       // Update 'point' numbers starting from the newly inserted object
-//       for (
-//         var i = stepIndex + 2;
-//         i < findData[0]?.project_status[targetProjectIndex]?.step?.length;
-//         i++
-//       ) {
-//         findData[0].project_status[targetProjectIndex].step[i].point += 1;
-//       }
-//     } else {
-//       return res
-//         .status(404)
-//         .json({ message: 'Step or Project Status not found' });
-//     }
-
-//     let updateResult;
-
-//     if (forceMajeure.isForceMajeure) {
-//       updateResult = await Project.updateOne(
-//         { siteID: id, 'project_status.name': stepName },
-//         {
-//           $set: {
-//             'project_status.$.step':
-//               findData[0].project_status[targetProjectIndex].step,
-//           },
-//           $push: {
-//             forceMajeure: {
-//               reason: pointName,
-//               duration,
-//               startDate: forceMajeure.startDate,
-//               endDate: forceMajeure.endDate,
-//             },
-//           },
-//           $inc: {
-//             extension: duration,
-//           },
-//         }
-//       );
-//     } else {
-//       updateResult = await Project.updateOne(
-//         { siteID: id, 'project_status.name': stepName },
-//         {
-//           $set: {
-//             'project_status.$.step':
-//               findData[0].project_status[targetProjectIndex].step,
-//           },
-//           // $inc: {
-//           //   extension: duration,
-//           // },
-//         }
-//       );
-//     }
-
-//     if (updateResult.modifiedCount === 1) {
-//       if (checkList?.toLowerCase() === 'yes') {
-//         const dataUpload = {
-//           checkListStep: stepName,
-//           name: checkListName,
-//           checkListNumber: t.point,
-//           checkList: [],
-//         };
-//         let Check = new CheckList(dataUpload);
-//         Check.save();
-//       }
-
-//       if (checkList?.toLowerCase() === 'yes') {
-//         await Project.updateOne(
-//           { siteID: id },
-//           {
-//             $push: {
-//               inspections: {
-//                 checkListStep: stepName,
-//                 name: checkListName,
-//                 checkListNumber: t.point,
-//                 checkList: [],
-//               },
-//             },
-//           }
-//         );
-//       }
-//       const logMessage = forceMajeure?.isForceMajeure
-//         ? `Added new point (force majeure: ${duration}) to ${stepName} - ${pointName} in project ${id}`
-//         : `Added new point ${pointName} to ${stepName} in project ${id}`;
-
-//       await createLogManually(req, logMessage, id);
-
-//       return res.json({
-//         status: 200,
-//         message: 'New Field added successfully',
-//       });
-//     } else {
-//       res.status(500).json({ message: 'No changes were made to the project' });
-//     }
-//   } catch (error) {
-//     console.log(error);
-//     res.json({
-//       status: 400,
-//       message: 'Error while add new point',
-//     });
-//   }
-// };
-
-// exports.DeleteProjectPoint = async (req, res) => {
-//   const { id, name, point, content, checkList, checkListName, duration } =
-//     req.body;
-
-//   try {
-//     const project = await Project.findOne({ siteID: id });
-
-//     if (!project) {
-//       return res.status(404).json({ message: "Project not found" });
-//     }
-
-//     const projectStatus = project.project_status.find(
-//       status => status.name === name
-//     );
-
-//     if (!projectStatus) {
-//       return res.status(404).json({ message: "Project Status not found" });
-//     }
-
-//     const stepIndex = projectStatus.step.findIndex(
-//       step => step.point === point
-//     );
-
-//     if (stepIndex === -1) {
-//       return res.status(404).json({ message: "Step not found" });
-//     }
-
-//     // Handle force majeure removal
-//     const stepToRemove = projectStatus.step[stepIndex];
-
-//     if (stepToRemove.forceMajeure) {
-//       const fMIndex = project.forceMajeure.findIndex(
-//         item => item.reason === stepToRemove.content
-//       );
-
-//       if (fMIndex !== -1) {
-//         project.forceMajeure.splice(fMIndex, 1);
-//       }
-//     }
-
-//     // Remove the step
-//     projectStatus.step.splice(stepIndex, 1);
-
-//     // Reorder points
-//     projectStatus.step.forEach((step, index) => {
-//       step.point = index + 1;
-//     });
-
-//     // MongoDB update
-//     const updatePayload = {
-//       $set: { "project_status.$.step": projectStatus.step },
-//       $inc: { extension: -duration },
-//     };
-
-//     if (checkList?.toLowerCase() === "yes") {
-//       updatePayload.$pull = {
-//         inspections: {
-//           checkListStep: name,
-//           name: checkListName,
-//           checkListNumber: point,
-//         },
-//       };
-//     }
-
-//     const updateResult = await Project.updateOne(
-//       { "siteID": id, "project_status.name": name },
-//       updatePayload
-//     );
-
-//     project.save();
-
-//     if (updateResult.modifiedCount === 0) {
-//       return res
-//         .status(500)
-//         .json({ message: "No changes were made to the project" });
-//     }
-
-//     if (checkList?.toLowerCase() === "yes") {
-//       await CheckList.deleteMany({
-//         checkListStep: name,
-//         name: checkListName,
-//         checkListNumber: point,
-//       });
-//     }
-
-//     await Task.deleteMany({
-//       siteID: id,
-//       title: content,
-//       description: content,
-//       category: "project",
-//     });
-
-//     res.json({ status: 200, message: "Point removed successfully" });
-//   } catch (error) {
-//     console.error("Error while removing point:", error);
-//     res
-//       .status(500)
-//       .json({ message: "Error while removing point", error: error.message });
-//   }
-// };
 
 exports.DeleteProjectPoint = async (req, res) => {
   const { id, name, point, content, checkList, checkListName, duration } =
@@ -2370,46 +2205,89 @@ exports.ProjectStepDelete = async (req, res) => {
   }
 };
 
-// exports.ProjectStepDelete = async (req, res) => {
+// exports.TicketUpdateByMember = async (req, res) => {
 //   try {
-//     const { id, name, project_step, userName, activeUser } = req.body;
+//     let profileFiles = [];
+//     const { userId, ticketId, type, comment } = req.body;
+//     // if (req.files && req.files.image) {
+//     //   for (let i = 0; i < req.files.image.length; i++) {
+//     //     profileFiles.push(req.files.image[i].location);
+//     //   }
+//     // }
+//     if (req.files?.image?.length > 0) {
+//       await awsS3
+//         .uploadFiles(req.files?.image, `client_query`)
+//         .then(async data => {
+//           const images = data.map(file => {
+//             const url =
+//               'https://thekedar-bucket.s3.us-east-1.amazonaws.com/' +
+//               file.s3key;
+//             return url;
+//           });
+//           profileFiles.push(...images);
+//         });
+//     }
+//     try {
+//       const createdBy = await User.findById(userId);
+//       const ticket = await Ticket.findById(ticketId).populate([
+//         'assignMember',
+//         'assignedBy',
+//       ]);
 
-//     // Combined update for project status and inspections
-//     const updateResult = await Project.updateOne(
-//       { siteID: id },
-//       {
-//         $pull: {
-//           project_status: { name },
-//           inspections: { checkListStep: name },
-//         },
+//       if (ticket.assignedBy.toString() === userId) {
+//         await ticketUpdateNotification({
+//           recipient: ticket.assignMember._id,
+//           sender: `${ticket.assignedBy.firstname} ${ticket.assignedBy.lastname}`,
+//           id: ticket._id,
+//           title: `${ticket.step} - ${ticket.content}`,
+//         });
 //       }
-//     );
+//       if (ticket.assignedBy.toString() !== userId) {
+//         await ticketUpdateNotification({
+//           recipient: ticket.assignedBy._id,
+//           sender: `${createdBy.firstname} ${createdBy.lastname}`,
+//           id: ticket._id,
+//           title: `${ticket.step} - ${ticket.content}`,
+//         });
+//       }
 
-//     if (updateResult.modifiedCount === 1) {
-//       // Create an array of titles and descriptions to delete
-//       const tasksToDelete = project_step.map(step => ({
-//         siteID: id,
-//         title: step?.content,
-//         description: step?.content,
-//         category: 'project',
-//       }));
-
-//       await Task.deleteMany({ $or: tasksToDelete });
-//       return res.json({
-//         status: 200,
-//         message: 'Step removed successfully',
+//       if (!ticket) {
+//         return res.status(404).json({ message: 'Ticket not found' });
+//       }
+//       const comments = await TaskComment.create({
+//         taskId: ticketId,
+//         type,
+//         comment,
+//         image: profileFiles,
+//         createdBy: userId,
 //       });
-//     } else {
-//       return res
-//         .status(500)
-//         .json({ message: 'No changes were made to the project' });
+//       if (type === 'Comment') {
+//         await ticket.updateOne({ $push: { comments: comments._id } });
+//       } else {
+//         await ticket.updateOne({ $set: { status: type } });
+//         await ticket.updateOne({ $push: { comments: comments._id } });
+//       }
+//       await createLogManually(
+//         req,
+//         `Updated ticket ${ticket.title} of project ${ticket.siteID} to ${type}`,
+//         ticket.siteID
+//       );
+//       res.json({
+//         status: 200,
+//         message: 'Ticket updated successfully',
+//       });
+//     } catch (error) {
+//       console.error(error);
+//       res.status(500).json({
+//         status: 500,
+//         message: 'Error while update ticket status',
+//       });
 //     }
 //   } catch (error) {
 //     console.error(error);
-//     return res.status(500).json({
+//     res.status(500).json({
 //       status: 500,
-//       message: 'Error while removing step',
-//       error: error.message, // Include error message for debugging
+//       message: 'Error while update ticket status',
 //     });
 //   }
 // };
@@ -2418,63 +2296,65 @@ exports.TicketUpdateByMember = async (req, res) => {
   try {
     let profileFiles = [];
     const { userId, ticketId, type, comment } = req.body;
-    // if (req.files && req.files.image) {
-    //   for (let i = 0; i < req.files.image.length; i++) {
-    //     profileFiles.push(req.files.image[i].location);
-    //   }
-    // }
+
     if (req.files?.image?.length > 0) {
-      await awsS3
-        .uploadFiles(req.files?.image, `client_query`)
-        .then(async data => {
-          const images = data.map(file => {
-            const url =
-              'https://thekedar-bucket.s3.us-east-1.amazonaws.com/' +
-              file.s3key;
-            return url;
-          });
-          profileFiles.push(...images);
-        });
-    }
-    try {
-      const ticket = await Ticket.findById(ticketId);
-      if (!ticket) {
-        return res.status(404).json({ message: 'Ticket not found' });
-      }
-      const comments = await TaskComment.create({
-        taskId: ticketId,
-        type,
-        comment,
-        image: profileFiles,
-        createdBy: userId,
-      });
-      if (type === 'Comment') {
-        await ticket.updateOne({ $push: { comments: comments._id } });
-      } else {
-        await ticket.updateOne({ $set: { status: type } });
-        await ticket.updateOne({ $push: { comments: comments._id } });
-      }
-      await createLogManually(
-        req,
-        `Updated ticket ${ticket.title} of project ${ticket.siteID} to ${type}`,
-        ticket.siteID
+      const uploaded = await awsS3.uploadFiles(req.files.image, 'client_query');
+      const images = uploaded.map(
+        file =>
+          `https://thekedar-bucket.s3.us-east-1.amazonaws.com/${file.s3key}`
       );
-      res.json({
-        status: 200,
-        message: 'Ticket updated successfully',
-      });
-    } catch (error) {
-      console.error(error);
-      res.status(500).json({
-        status: 500,
-        message: 'Error while update ticket status',
-      });
+      profileFiles.push(...images);
     }
+
+    const createdBy = await User.findById(userId);
+    const ticket = await Ticket.findById(ticketId).populate({
+      path: 'assignMember assignedBy',
+      select: 'firstname lastname',
+    });
+
+    if (!ticket) {
+      return res.status(404).json({ message: 'Ticket not found' });
+    }
+
+    const isAssignedByUser = ticket.assignedBy._id.toString() === userId;
+    await ticketUpdateNotification({
+      recipient: isAssignedByUser
+        ? ticket.assignMember._id
+        : ticket.assignedBy._id,
+      sender: `${createdBy.firstname} ${createdBy.lastname}`.trim(),
+      id: ticket._id.toString().slice(0, 6),
+      title: `${ticket.step}, ${ticket.content}`,
+    });
+
+    const commentDoc = await TaskComment.create({
+      taskId: ticketId,
+      type,
+      comment,
+      image: profileFiles,
+      createdBy: userId,
+    });
+
+    const updateData = { $push: { comments: commentDoc._id } };
+    if (type !== 'Comment') {
+      updateData.$set = { status: type };
+    }
+    await ticket.updateOne(updateData);
+
+    await createLogManually(
+      req,
+      `Updated ticket ${ticket.title} of project ${ticket.siteID} to ${type}`,
+      ticket.siteID
+    );
+
+    res.json({
+      status: 200,
+      message: 'Ticket updated successfully',
+    });
   } catch (error) {
-    console.error(error);
+    console.error('Error updating ticket:', error);
     res.status(500).json({
       status: 500,
-      message: 'Error while update ticket status',
+      message: 'Error while updating ticket status',
     });
   }
 };
@@ -2583,35 +2463,66 @@ exports.getAllSiteIds = async (req, res) => {
   }
 };
 
-// exports.addDailyUpdate = async (req, res) => {
-//   try {
-//     const {
-//       siteId,
-//       taskId = '67efe26e01b3fff2df3d0843',
-//       IssueMemberId,
-//       isWorking,
-//       workers,
-//       groupUpdate,
-//       materialAvailable,
-//     } = req.body;
+exports.getAllProjectIssueMembers = async (req, res) => {
+  try {
+    const { siteId } = req.params;
 
-//  const project = await Project.findOne({ siteID: siteId });
+    if (!siteId) {
+      return res.status(400).json({
+        status: 400,
+        message: 'Site ID is required',
+      });
+    }
 
-//  if(project){
-//   for (const step of project.project_status) {
-//     for(const stp of step.step){
-//       if(stp.taskId.toString() ===  taskId.toString()){
-//         console.log(stp)
-//       }
-//     }
-//   }
-// }
+    const memberRoles = [
+      'project_admin',
+      'sr_engineer',
+      'site_engineer',
+      'architect',
+      'accountant',
+      'operation',
+      'sales',
+    ];
 
-//   } catch (error) {
-//     console.error(error);
-//     res.status(500).json({
-//       status: 500,
-//       message: 'Error while adding Daily Update',
-//     });
-//   }
-// };
+    const populateOptions = memberRoles.map(role => ({
+      path: role,
+      model: 'User',
+      select: 'employeeID firstname lastname roles',
+      populate: {
+        path: 'roles',
+        model: 'Role',
+        select: 'name',
+      },
+    }));
+
+    const project = await Project.findOne({ siteID: siteId })
+      .populate(populateOptions)
+      .select(memberRoles.join(' '));
+
+    if (!project) {
+      return res.status(404).json({
+        status: 404,
+        message: 'Project not found',
+      });
+    }
+
+    const allMembers = memberRoles.reduce((acc, role) => {
+      if (Array.isArray(project[role])) {
+        return acc.concat(project[role]);
+      }
+      return acc;
+    }, []);
+
+    return res.status(200).json({
+      status: 200,
+      data: allMembers,
+    });
+  } catch (error) {
+    console.error('Error fetching project issue members:', error);
+    return res.status(500).json({
+      status: 500,
+      message: 'Internal Server Error while fetching project issue members',
+      error: error.message,
+    });
+  }
+};

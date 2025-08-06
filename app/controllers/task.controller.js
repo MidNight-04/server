@@ -357,50 +357,51 @@ exports.getAllProjectTickets = async (req, res) => {
 exports.getTicketByTicketId = async (req, res) => {
   try {
     const { id } = req.params;
-    const project = await Project.aggregate([
-      {
-        $match: {
-          openTicket: mongoose.Types.ObjectId(id),
-        },
-      },
-    ]);
+
     const ticket = await Ticket.findById(id)
-      .populate('assignMember')
+      .populate({
+        path: 'assignMember assignedBy',
+        select:
+          '-token -password -refreshToken -loginOtp -phone -email -country -city -state -userStatus -isExit',
+        populate: {
+          path: 'roles',
+          model: 'Role',
+          select: 'name',
+        },
+      })
       .populate({
         path: 'comments',
         model: 'TaskComment',
+        options: { sort: { createdAt: -1 } },
+        populate: {
+          path: 'createdBy',
+          model: 'User',
+          select:
+            '-token -password -refreshToken -loginOtp -phone -email -country -city -state -userStatus -isExit',
+        },
       })
-      .populate({
-        path: 'assignedBy',
-        model: 'clients',
-      });
+      .lean(); // improves performance if not modifying doc
 
     if (!ticket) {
-      return res.status(404).send({
+      return res.status(404).json({
+        status: 404,
         message: 'Ticket not found',
       });
     }
-    // Check if we found any tickets
-    if (ticket) {
-      res.json({
-        status: 200,
-        data: {
-          ticket,
-          siteId: project.siteID,
-        },
-      });
-    } else {
-      res.json({
-        status: 200,
-        message: 'No ticket found',
-        data: [],
-      });
-    }
+
+    return res.status(200).json({
+      status: 200,
+      data: {
+        ticket,
+        siteId: ticket.siteID,
+      },
+    });
   } catch (error) {
-    console.error(error); // Log the error for debugging
-    res.status(400).json({
-      status: 400,
+    console.error('Error fetching ticket:', error);
+    return res.status(500).json({
+      status: 500,
       message: 'Error while getting ticket',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined,
     });
   }
 };

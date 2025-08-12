@@ -83,7 +83,6 @@ exports.saveArchitectDetails = (req, res) => {
 
     const architectDetails = new ArchitectDetails(query);
     ArchitectDetails.findOne({ 'id': req.body.id }, (err, architect) => {
-        console.log(architect)
         if (err) {
             res.status(500).send({ message: "Internal Server Error" })
             return;

@@ -98,9 +98,12 @@ exports.addProjectDocument = async (req, res) => {
 
 exports.getDocumentBySiteID = async (req, res) => {
   let id = req.params.id;
-  const data = await ProjectDocuments.find({ siteID: id });
+  const data = await ProjectDocuments.find({ siteID: id }).populate({
+    path: 'uploadingUser',
+    select: 'firstname lastname profileImage',
+  });
   if (data?.length > 0) {
-    res.status(200).json({
+    res.status(200).json({  
       status: 200,
       data: data,
     });

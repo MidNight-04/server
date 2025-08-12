@@ -18,7 +18,6 @@ exports.createLog = logInput => async (req, res, next) => {
       date: new Date(),
     });
 
-    console.log(log);
 
     // await log.save();
     next();
@@ -44,8 +43,6 @@ exports.createLogManually = async (req, logMessage, siteId, taskId) => {
       taskId,
       date: new Date(),
     });
-
-    console.log(log);
 
     await log.save();
   } catch (error) {

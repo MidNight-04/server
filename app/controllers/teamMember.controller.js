@@ -180,7 +180,6 @@ exports.signin = async (req, res) => {
       .populate('role')
       .exec();
 
-    console.log(user.loginOtp !== req.body.otp);
 
     if (!user) {
       return res.status(404).send({ message: 'User Not found.' });
@@ -334,15 +333,7 @@ exports.getMemberById = (req, res) => {
 };
 
 exports.updateMemberProfileById = async (req, res) => {
-  // console.log("Upcoming data-", req.body);
-
   let profileFiles = [];
-
-  // if (req.files.profileImage) {
-  //   for (let i = 0; i < req.files.profileImage.length; i++) {
-  //     profileFiles.push(req.files.profileImage[i].location);
-  //   }
-  // }
 
   if (req.files?.image?.length > 0) {
     await awsS3

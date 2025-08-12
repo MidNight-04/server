@@ -93,7 +93,6 @@ exports.getAllLog = async (req, res) => {
       });
 
     const hasNextPage = skip + logs.length < total;
-    console.log(hasNextPage);
     return res.status(200).send({
       data: logs,
       nextPage: hasNextPage ? page + 1 : null,

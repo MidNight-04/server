@@ -44,7 +44,18 @@ exports.getTicketsByClientId = async (req, res) => {
     if (!id) {
       return res.status(400).send({ message: 'Client ID is required' });
     }
-    const tickets = await Ticket.find({ assignedBy: id });
+    const tickets = await Ticket.find({ assignedBy: id })
+      .populate({
+        path: 'assignMember assignedBy',
+        select:
+          '-token -password -refreshToken -loginOtp -phone -email -country -city -state -userStatus -isExit',
+        populate: {
+          path: 'roles',
+          model: 'Role',
+          select: 'name',
+        },
+      })
+      .lean();
     if (!tickets || tickets.length === 0) {
       return res
         .status(404)
@@ -64,7 +75,18 @@ exports.getTicketsByMemberId = async (req, res) => {
     if (!id) {
       return res.status(400).send({ message: 'Client ID is required' });
     }
-    const tickets = await Ticket.find({ assignMember: id });
+    const tickets = await Ticket.find({ assignMember: id })
+      .populate({
+        path: 'assignMember assignedBy',
+        select:
+          '-token -password -refreshToken -loginOtp -phone -email -country -city -state -userStatus -isExit',
+        populate: {
+          path: 'roles',
+          model: 'Role',
+          select: 'name',
+        },
+      })
+      .lean();
     if (!tickets || tickets.length === 0) {
       return res
         .status(404)
@@ -91,10 +113,9 @@ exports.getTicketBySiteId = async (req, res) => {
 
     const tickets = await Ticket.find({ siteID: siteId })
       .populate({
-        path: 'assignMember',
-        model: 'User',
-        select: '-token -password -refreshToken -loginOtp',
-        options: { lean: true },
+        path: 'assignMember assignedBy',
+        select:
+          '-token -password -refreshToken -loginOtp -phone -email -country -city -state -userStatus -isExit',
         populate: {
           path: 'roles',
           model: 'Role',
@@ -125,73 +146,6 @@ exports.getTicketBySiteId = async (req, res) => {
     });
   }
 };
-
-// exports.changeIssueMember = async (req, res) => {
-//   try {
-//     const { ticketId, newMemberId } = req.body;
-//     const userId = req.body?.userId || req.userId || req.user?._id;
-
-//     if (!ticketId || !newMemberId) {
-//       return res.status(400).json({
-//         success: false,
-//         message: 'Ticket ID and new member ID are required',
-//       });
-//     }
-
-//     const [ticket, newMember] = await Promise.all([
-//       Ticket.findById(ticketId),
-//       User.findById(newMemberId).lean(),
-//     ]);
-
-//     if (!ticket) {
-//       return res.status(404).json({
-//         success: false,
-//         message: `Ticket not found with ID: ${ticketId}`,
-//       });
-//     }
-
-//     if (!newMember) {
-//       return res.status(404).json({
-//         success: false,
-//         message: `New member not found with ID: ${newMemberId}`,
-//       });
-//     }
-
-//     ticket.assignMember = newMemberId;
-
-//     const str = `Ticket assigned to new member: ${newMember.firstname} ${newMember.lastname} (${newMember.employeeID})`;
-
-//     const newComment = {
-//       comment: str,
-//       type: 'Task Updated',
-//       createdBy: userId,
-//       taskId: ticketId,
-//     };
-
-//     const comment = new TaskComment(newComment);
-//     ticket.comments.push(comment._id);
-//     await ticket.save();
-
-//     await createLogManually(
-//       req,
-//       `Ticket assigned to new member: ${newMember.firstname} ${newMember.lastname} (${newMember.employeeID}) for Query: ${ticket.query} | Site ID: ${ticket.siteID}`,
-//       ticket.siteID
-//     );
-
-//     return res.status(200).json({
-//       success: true,
-//       message: 'Ticket assigned to new member successfully',
-//       data: ticket,
-//     });
-//   } catch (error) {
-//     console.error('Error changing issue member:', error);
-//     return res.status(500).json({
-//       success: false,
-//       message: 'Internal Server Error while changing issue member',
-//       error: error.message,
-//     });
-//   }
-// };
 
 exports.changeIssueMember = async (req, res) => {
   try {
@@ -239,7 +193,7 @@ exports.changeIssueMember = async (req, res) => {
       createdBy: userId,
       taskId: ticketId,
     }).save();
-    
+
     // Push comment to ticket
     ticket.comments.push(comment._id);
 

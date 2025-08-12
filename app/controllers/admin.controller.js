@@ -13,7 +13,6 @@ exports.approveApplicationArchitect = (req, res) => {
     approvalStatus: req.body.approvalStatus,
     comment: req.body.comment,
   };
-  console.log(req.body);
   ArchitectDetails.findOneAndUpdate(
     { id: req.body._id },
     {

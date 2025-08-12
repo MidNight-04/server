@@ -314,7 +314,6 @@ exports.addProject = async (req, res) => {
     });
 
     if (!paymentStages) {
-      console.log(`First create payment stage for ${data.floor} floor`);
       return res.status(204).json({
         message: `First create payment stage for ${data.floor} floor`,
       });
@@ -643,7 +642,6 @@ exports.addProjectMember = async (req, res) => {
 exports.deleteProjectMember = async (req, res) => {
   try {
     const { siteID, employeeID } = req.body;
-    console.log(siteID, employeeID);
     // Find the document with the given siteID
     const existingDocument = await Project.findOne({ siteID });
 
@@ -730,6 +728,10 @@ exports.getProjectById = (req, res) => {
           ],
         },
       },
+    })
+    .populate({
+      path: 'openTicket',
+      model: 'Tickets',
     })
     .then(data => {
       if (!data) {
@@ -2090,7 +2092,6 @@ exports.DeleteProjectPoint = async (req, res) => {
     if (stepToRemove.taskId.forceMajeure) {
       extension = Math.max(project.extension - duration, duration);
       // extension = Math.max(project.extension - duration, 0);
-      console.log(project.extension, extension);
       if (extension < 0) {
         extension = 0;
       }
@@ -2205,93 +2206,6 @@ exports.ProjectStepDelete = async (req, res) => {
   }
 };
 
-// exports.TicketUpdateByMember = async (req, res) => {
-//   try {
-//     let profileFiles = [];
-//     const { userId, ticketId, type, comment } = req.body;
-//     // if (req.files && req.files.image) {
-//     //   for (let i = 0; i < req.files.image.length; i++) {
-//     //     profileFiles.push(req.files.image[i].location);
-//     //   }
-//     // }
-//     if (req.files?.image?.length > 0) {
-//       await awsS3
-//         .uploadFiles(req.files?.image, `client_query`)
-//         .then(async data => {
-//           const images = data.map(file => {
-//             const url =
-//               'https://thekedar-bucket.s3.us-east-1.amazonaws.com/' +
-//               file.s3key;
-//             return url;
-//           });
-//           profileFiles.push(...images);
-//         });
-//     }
-//     try {
-//       const createdBy = await User.findById(userId);
-//       const ticket = await Ticket.findById(ticketId).populate([
-//         'assignMember',
-//         'assignedBy',
-//       ]);
-
-//       if (ticket.assignedBy.toString() === userId) {
-//         await ticketUpdateNotification({
-//           recipient: ticket.assignMember._id,
-//           sender: `${ticket.assignedBy.firstname} ${ticket.assignedBy.lastname}`,
-//           id: ticket._id,
-//           title: `${ticket.step} - ${ticket.content}`,
-//         });
-//       }
-//       if (ticket.assignedBy.toString() !== userId) {
-//         await ticketUpdateNotification({
-//           recipient: ticket.assignedBy._id,
-//           sender: `${createdBy.firstname} ${createdBy.lastname}`,
-//           id: ticket._id,
-//           title: `${ticket.step} - ${ticket.content}`,
-//         });
-//       }
-
-//       if (!ticket) {
-//         return res.status(404).json({ message: 'Ticket not found' });
-//       }
-//       const comments = await TaskComment.create({
-//         taskId: ticketId,
-//         type,
-//         comment,
-//         image: profileFiles,
-//         createdBy: userId,
-//       });
-//       if (type === 'Comment') {
-//         await ticket.updateOne({ $push: { comments: comments._id } });
-//       } else {
-//         await ticket.updateOne({ $set: { status: type } });
-//         await ticket.updateOne({ $push: { comments: comments._id } });
-//       }
-//       await createLogManually(
-//         req,
-//         `Updated ticket ${ticket.title} of project ${ticket.siteID} to ${type}`,
-//         ticket.siteID
-//       );
-//       res.json({
-//         status: 200,
-//         message: 'Ticket updated successfully',
-//       });
-//     } catch (error) {
-//       console.error(error);
-//       res.status(500).json({
-//         status: 500,
-//         message: 'Error while update ticket status',
-//       });
-//     }
-//   } catch (error) {
-//     console.error(error);
-//     res.status(500).json({
-//       status: 500,
-//       message: 'Error while update ticket status',
-//     });
-//   }
-// };
-
 exports.TicketUpdateByMember = async (req, res) => {
   try {
     let profileFiles = [];
@@ -2330,7 +2244,7 @@ exports.TicketUpdateByMember = async (req, res) => {
       taskId: ticketId,
       type,
       comment,
-      image: profileFiles,
+      images: profileFiles,
       createdBy: userId,
     });
 
@@ -2342,7 +2256,9 @@ exports.TicketUpdateByMember = async (req, res) => {
 
     await createLogManually(
       req,
-      `Updated ticket ${ticket.title} of project ${ticket.siteID} to ${type}`,
+      `Updated ticket ${ticket.step - ticket.content} of project ${
+        ticket.siteID
+      } to ${type}.`,
       ticket.siteID
     );
 
@@ -2359,15 +2275,110 @@ exports.TicketUpdateByMember = async (req, res) => {
   }
 };
 
+// exports.changeIssueMember = async (req, res) => {
+//   try {
+//     const { userId, siteId, issue, newMember } = req.body;
+//     const role = await Role.findById(issue);
+//     const proj = await Project.findOne({ siteID: siteId });
+//     const newM = await User.findById(newMember);
+//     // const u
+
+//     let issueMember;
+//     const issueMap = {
+//       Admin: 'project_admin',
+//       Manager: 'project_manager',
+//       'Sr. Engineer': 'sr_engineer',
+//       'Site Engineer': 'site_engineer',
+//       Accountant: 'accountant',
+//       Operations: 'operation',
+//       Sales: 'sales',
+//     };
+//     issueMember = issueMap[role.name] || null;
+
+//     if (!issueMember) {
+//       return res.status(400).json({
+//         status: 400,
+//         message: 'Invalid issue',
+//       });
+//     }
+//     const oldMember = proj[issueMember][0];
+//     const oldM = await User.findById(oldMember);
+//     const tasks = await Task.find({
+//       siteID: siteId,
+//       issueMember: oldMember,
+//       status: { $ne: 'Complete' },
+//     });
+
+//     for (const taskItem of tasks) {
+//       const taskComment = await TaskComment.create({
+//         taskId: taskItem._id,
+//         type: 'Task Updated',
+//         comment: `Project ${role.name} was changed to ${newM.firstname} ${newM.lastname} which was last assigned to ${oldM.firstname} ${oldM.lastname}.`,
+//         createdBy: userId,
+//       });
+
+//       await Task.updateOne(
+//         { _id: taskItem._id },
+//         {
+//           $set: { issueMember: newMember },
+//           $push: { comments: taskComment._id },
+//         }
+//       );
+//     }
+
+//     const project = await Project.findOneAndUpdate(
+//       {
+//         siteID: siteId,
+//       },
+//       {
+//         $set: { [issueMember]: newMember },
+//       },
+//       { new: true }
+//     );
+
+//     if (!project) {
+//       return res.status(404).json({
+//         status: 404,
+//         message: 'Project not found',
+//       });
+//     }
+
+//     await createLogManually(
+//       req,
+//       `Changed issue member of project ${siteId} from ${oldM.firstname} ${oldM.lastname} to ${newM.firstname} ${newM.lastname}`,
+//       siteId
+//     );
+
+//     return res.status(200).json({
+//       status: 200,
+//       message: 'Issue member changed successfully',
+//       data: project,
+//     });
+//   } catch (error) {
+//     console.error(error);
+//     res.status(500).json({
+//       status: 500,
+//       message: 'Error while changing issue member',
+//     });
+//   }
+// };
+
 exports.changeIssueMember = async (req, res) => {
   try {
-    const { userId, siteId, issue, newMember } = req.body;
-    const role = await Role.findById(issue);
-    const proj = await Project.findOne({ siteID: siteId });
-    const newM = await User.findById(newMember);
-    // const u
+    const { userId, siteId, issue: roleId, newMember } = req.body;
 
-    let issueMember;
+    if (!userId || !siteId || !roleId || !newMember) {
+      return res.status(400).json({
+        status: 400,
+        message: 'Missing required fields: userId, siteId, issue, newMember',
+      });
+    }
+
+    const role = await Role.findById(roleId);
+    if (!role) {
+      return res.status(404).json({ status: 404, message: 'Role not found' });
+    }
+
     const issueMap = {
       Admin: 'project_admin',
       Manager: 'project_manager',
@@ -2377,72 +2388,80 @@ exports.changeIssueMember = async (req, res) => {
       Operations: 'operation',
       Sales: 'sales',
     };
-    issueMember = issueMap[role.name] || null;
 
-    if (!issueMember) {
-      return res.status(400).json({
-        status: 400,
-        message: 'Invalid issue',
-      });
+    const issueMemberField = issueMap[role.name];
+    if (!issueMemberField) {
+      return res
+        .status(400)
+        .json({ status: 400, message: 'Invalid issue role' });
     }
-    const oldMember = proj[issueMember][0];
-    const oldM = await User.findById(oldMember);
-    const tasks = await Task.find({
-      siteID: siteId,
-      issueMember: oldMember,
-      status: { $ne: 'Complete' },
+
+    const proj = await Project.findOne({ siteID: siteId });
+    if (!proj) {
+      return res
+        .status(404)
+        .json({ status: 404, message: 'Project not found' });
+    }
+
+    const oldMemberId = proj[issueMemberField]?.[0];
+    if (!oldMemberId) {
+      return res
+        .status(404)
+        .json({ status: 404, message: 'Old member not found in project' });
+    }
+
+    const [oldMember, newMemberData] = await Promise.all([
+      User.findById(oldMemberId),
+      User.findById(newMember),
+    ]);
+
+    if (!newMemberData) {
+      return res
+        .status(404)
+        .json({ status: 404, message: 'New member not found' });
+    }
+
+    const comment = await TaskComment.create({
+      type: 'Task Updated',
+      comment: `Project ${role.name} was changed to ${newMemberData.firstname} ${newMemberData.lastname}, previously assigned to ${oldMember.firstname} ${oldMember.lastname}.`,
+      createdBy: userId,
     });
 
-    for (const taskItem of tasks) {
-      const taskComment = await TaskComment.create({
-        taskId: taskItem._id,
-        type: 'Task Updated',
-        comment: `Project ${issue} was changed to ${newM.firstname} ${newM.lastname} which was last assigned to ${oldM.firstname} ${oldM.lastname}.`,
-        createdBy: userId,
-      });
-
-      await Task.updateOne(
-        { _id: taskItem._id },
-        {
-          $set: { issueMember: newMember },
-          $push: { comments: taskComment._id },
-        }
-      );
-    }
-
-    const project = await Project.findOneAndUpdate(
+    await Task.updateMany(
       {
         siteID: siteId,
+        issueMember: oldMemberId,
+        status: { $ne: 'Complete' },
       },
       {
-        $set: { [issueMember]: newMember },
-      },
+        $set: { issueMember: newMember },
+        $push: { comments: comment._id },
+      }
+    );
+
+    const updatedProject = await Project.findOneAndUpdate(
+      { siteID: siteId },
+      { $set: { [issueMemberField]: newMember } },
       { new: true }
     );
 
-    if (!project) {
-      return res.status(404).json({
-        status: 404,
-        message: 'Project not found',
-      });
-    }
-
     await createLogManually(
       req,
-      `Changed issue member of project ${siteId} from ${oldM.firstname} ${oldM.lastname} to ${newM.firstname} ${newM.lastname}`,
+      `Changed issue member (${role.name}) of project ${siteId} from ${oldMember.firstname} ${oldMember.lastname} to ${newMemberData.firstname} ${newMemberData.lastname}`,
       siteId
     );
 
     return res.status(200).json({
       status: 200,
       message: 'Issue member changed successfully',
-      data: project,
+      data: updatedProject,
     });
   } catch (error) {
-    console.error(error);
+    console.error('Error in changeIssueMember:', error);
     res.status(500).json({
       status: 500,
       message: 'Error while changing issue member',
+      error: error.message,
     });
   }
 };

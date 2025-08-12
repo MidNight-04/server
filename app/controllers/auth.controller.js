@@ -528,7 +528,6 @@ exports.updateUser = async (req, res) => {
     if (!role) {
       return res.status(404).json({ message: 'Role not found' });
     }
-    console.log(role);
 
     // Update fields
     Object.assign(user, {

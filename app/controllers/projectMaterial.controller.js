@@ -236,7 +236,7 @@ exports.orderProjectMaterialRequestByAdmin = (req, res) => {
     adminApproval,
     approvalDate,
   } = req.body;
-  console.log(req.body)
+
   ProjectMaterial.updateOne(
     { _id: id },
     {

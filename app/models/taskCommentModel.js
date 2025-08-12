@@ -5,7 +5,7 @@ const taskCommentSchema = new Schema(
     taskId: {
       type: Schema.Types.ObjectId,
       ref: 'Tasks',
-      required: true,
+      // required: true,
       index: true,
     },
     type: {

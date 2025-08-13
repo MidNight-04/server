@@ -6,22 +6,50 @@ const {
 const User = require('../models/user.model');
 
 exports.sendTeamNotification = async ({ recipient, sender, task }) => {
-  if (!recipient || !sender || !task) return;
+  try {
+    // Validate required arguments
+    if (!recipient || !sender || !task) {
+      console.warn('sendTeamNotification: Missing required parameters.');
+      return;
+    }
 
-  const user = await User.findById(recipient);
+    // Fetch recipient details
+    const user = await User.findById(recipient).lean();
+    if (!user) {
+      console.warn(
+        `sendTeamNotification: User with ID ${recipient} not found.`
+      );
+      return;
+    }
 
-  await teamUpdate({
-    phone: user.phone,
-    assignedTo: user.firstname + ' ' + user.lastname,
-    assignedBy: sender,
-    category: task.category,
-    taskName: task.title,
-    description: task.description,
-    priority: task.priority,
-    frequency:
-      task.repeat.repeatType === 'norepeat' ? 'Once' : task.repeat.repeatType,
-    dueDate: task.dueDate.toDateString(),
-  });
+    // Prepare notification payload
+    const payload = {
+      phone: user.phone,
+      assignedTo: `${user.firstname || ''} ${user.lastname || ''}`.trim(),
+      assignedBy: sender,
+      category: task.category || 'Uncategorized',
+      taskName: task.title || 'Untitled Task',
+      description: task.description || '',
+      priority: task.priority || 'Normal',
+      frequency:
+        task?.repeat?.repeatType === 'norepeat'
+          ? 'Once'
+          : task?.repeat?.repeatType || 'Unknown',
+      dueDate: task.dueDate
+        ? new Date(task.dueDate).toLocaleDateString('en-IN', {
+            weekday: 'short',
+            day: '2-digit',
+            month: 'short',
+            year: 'numeric',
+          })
+        : 'No Due Date',
+    };
+
+    // Send team update notification
+    await teamUpdate(payload);
+  } catch (err) {
+    console.error('Error sending team notification:', err);
+  }
 };
 
 exports.ticketUpdateNotification = async ({ recipient, sender, id, title }) => {

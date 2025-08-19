@@ -21,7 +21,9 @@ const app = express();
 app.use(cors({ origin: '*' }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(morgan(':method :url :status :res[content-length] - :response-time ms'));
+app.use(
+  morgan(':method :url :status :res[content-length] - :response-time ms')
+);
 
 // Rate limiter
 // app.use(rateLimit({
@@ -126,6 +128,9 @@ registerRoutes([
   './app/routes/projectLog.routes',
   './app/routes/rolesRoutes',
   './app/routes/ticket.routes',
+  // './app/routes/materialRequest.routes',
+  './app/routes/vendor.routes',
+  './app/routes/material.routes',
 ]);
 
 // Fallback route

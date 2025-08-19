@@ -514,34 +514,47 @@ exports.searchTask = async (req, res) => {
 
 exports.taskAddComment = async (req, res) => {
   try {
-    const { taskId, type, comment, userId, isWorking, material, workers } =
-      req.body;
+    const {
+      taskId,
+      type,
+      comment = '',
+      userId,
+      isWorking,
+      material,
+      workers,
+    } = req.body;
 
-    if (!taskId || !type || !comment || !userId) {
+    if (!taskId || !type || !userId) {
       return res.status(400).send({ message: 'Required fields missing.' });
     }
 
     const task = await Task.findById(taskId).populate('issueMember');
     const member = await User.findById(userId);
-    if (!task || !member)
+    if (!task || !member) {
       return res.status(404).send({ message: 'Task or user not found' });
+    }
 
-    // Upload files
-    const images = await uploadToS3AndExtractUrls(req.files?.image);
-    const files = await uploadToS3AndExtractUrls(req.files?.docs);
-    const audio =
-      (await uploadToS3AndExtractUrls(req.files?.audio))?.[0] || null;
+    // Upload files if provided
+    const images = req.files?.image
+      ? await uploadToS3AndExtractUrls(req.files.image)
+      : [];
+    const files = req.files?.docs
+      ? await uploadToS3AndExtractUrls(req.files.docs)
+      : [];
+    const audio = req.files?.audio
+      ? (await uploadToS3AndExtractUrls(req.files.audio))?.[0]
+      : null;
 
-    // Notification logic
+    // 🔔 Notification logic
     if (task.category === 'Project') {
       const project = await Project.findOne({ siteID: task.siteID }).populate(
         'sr_engineer'
       );
       const sr = project?.sr_engineer?.[0];
-      if (sr && sr !== userId) {
+      if (sr && sr.toString() !== userId) {
         sendTeamNotification({
           recipient: sr,
-          sender: member.firstname + ' ' + member?.lastname,
+          sender: `${member.firstname} ${member.lastname || ''}`.trim(),
           task,
         });
       }
@@ -550,7 +563,7 @@ exports.taskAddComment = async (req, res) => {
       if (assignedBy && assignedBy._id.toString() !== userId) {
         sendTeamNotification({
           recipient: assignedBy,
-          sender: member.firstname + ' ' + member?.lastname,
+          sender: `${member.firstname} ${member.lastname || ''}`.trim(),
           task,
         });
       }
@@ -559,19 +572,59 @@ exports.taskAddComment = async (req, res) => {
       if (issueMember && issueMember._id.toString() !== userId) {
         sendTeamNotification({
           recipient: issueMember,
-          sender: member.firstname + ' ' + member?.lastname,
+          sender: `${member.firstname} ${member.lastname || ''}`.trim(),
           task,
         });
       }
     }
 
-    // Handle completion step progression
+    // ✅ Handle completion step progression (activate next 2 tasks)
     if (type === 'Complete') {
       const project = await Project.findOne({ siteID: task.siteID });
-      if (project) await activateNextSteps(task, project);
+
+      if (project) {
+        const today = new Date();
+
+        const activateTask = async tId => {
+          const taskToActivate = await Task.findById(tId);
+          if (taskToActivate && !taskToActivate.isActive) {
+            const dueDate = new Date(today);
+            dueDate.setDate(today.getDate() + taskToActivate.duration);
+
+            await Task.findByIdAndUpdate(
+              tId,
+              {
+                $set: {
+                  isActive: true,
+                  assignedOn: today,
+                  dueDate,
+                },
+              },
+              { new: true }
+            );
+          }
+        };
+
+        // Flatten steps in order
+        const allSteps = project.project_status.flatMap(ps => ps.step);
+
+        // Find current index
+        const currentIndex = allSteps.findIndex(
+          s => s.taskId.toString() === task._id.toString()
+        );
+
+        if (currentIndex !== -1) {
+          const nextSteps = allSteps.slice(currentIndex + 1, currentIndex + 3);
+          for (const step of nextSteps) {
+            if (step?.taskId) await activateTask(step.taskId);
+          }
+        }
+
+        task.completedOn = new Date();
+      }
     }
 
-    // Task status updates
+    // ✅ Task status updates
     if (type === 'Reopened') {
       task.status = 'In Progress';
     } else if (
@@ -581,9 +634,9 @@ exports.taskAddComment = async (req, res) => {
       task.status = type;
     }
 
-    // Create comment
+    // ✅ Create comment
     const newComment = {
-      comment,
+      comment: comment.trim(),
       type,
       createdBy: userId,
       taskId,
@@ -601,36 +654,150 @@ exports.taskAddComment = async (req, res) => {
     }
 
     const savedComment = await TaskComment.create(newComment);
-    if (!savedComment)
+    if (!savedComment) {
       return res.status(500).send({ message: 'Failed to save comment' });
+    }
 
+    // Link comment to task
     task.comments.push(savedComment._id);
-    task.updatedOn = new Date().toISOString();
+    task.updatedOn = new Date();
     await task.save();
-    const logParts = [`Added New Comment ${comment}`];
 
-    if (images.length > 0) {
-      logParts.push(
-        `added ${images.length} image${images.length > 1 ? 's' : ''}`
-      );
-    }
+    // ✅ Logging
+    const logParts = ['Added new comment'];
+    if (comment.trim()) logParts.push(`text: "${comment}"`);
+    if (images.length > 0) logParts.push(`+ ${images.length} image(s)`);
+    if (files.length > 0) logParts.push(`+ ${files.length} file(s)`);
+    if (audio) logParts.push(`+ audio`);
 
-    if (files.length > 0) {
-      logParts.push(`added ${files.length} file${files.length > 1 ? 's' : ''}`);
-    }
-
-    if (audio) {
-      logParts.push('added audio');
-    }
-
-    createLogManually(req, logParts.join(', '), task.siteID, task._id);
+    await createLogManually(req, logParts.join(', '), task.siteID, task._id);
 
     res.status(200).send({ message: 'Comment added successfully' });
   } catch (error) {
-    console.error(error);
+    console.error('Error adding comment:', error);
     res.status(500).send({ message: 'Error while adding comment' });
   }
 };
+
+// exports.taskAddComment = async (req, res) => {
+//   try {
+//     const { taskId, type, comment, userId, isWorking, material, workers } =
+//       req.body;
+
+//     if (!taskId || !type || !comment || !userId) {
+//       return res.status(400).send({ message: 'Required fields missing.' });
+//     }
+
+//     const task = await Task.findById(taskId).populate('issueMember');
+//     const member = await User.findById(userId);
+//     if (!task || !member)
+//       return res.status(404).send({ message: 'Task or user not found' });
+
+//     // Upload files
+//     const images = await uploadToS3AndExtractUrls(req.files?.image);
+//     const files = await uploadToS3AndExtractUrls(req.files?.docs);
+//     const audio =
+//       (await uploadToS3AndExtractUrls(req.files?.audio))?.[0] || null;
+
+//     // Notification logic
+//     if (task.category === 'Project') {
+//       const project = await Project.findOne({ siteID: task.siteID }).populate(
+//         'sr_engineer'
+//       );
+//       const sr = project?.sr_engineer?.[0];
+//       if (sr && sr !== userId) {
+//         sendTeamNotification({
+//           recipient: sr,
+//           sender: member.firstname + ' ' + member?.lastname,
+//           task,
+//         });
+//       }
+//     } else {
+//       const assignedBy = await User.findById(task.assignedBy);
+//       if (assignedBy && assignedBy._id.toString() !== userId) {
+//         sendTeamNotification({
+//           recipient: assignedBy,
+//           sender: member.firstname + ' ' + member?.lastname,
+//           task,
+//         });
+//       }
+
+//       const issueMember = task.issueMember;
+//       if (issueMember && issueMember._id.toString() !== userId) {
+//         sendTeamNotification({
+//           recipient: issueMember,
+//           sender: member.firstname + ' ' + member?.lastname,
+//           task,
+//         });
+//       }
+//     }
+
+//     // Handle completion step progression
+//     if (type === 'Complete') {
+//       const project = await Project.findOne({ siteID: task.siteID });
+//       if (project) await activateNextSteps(task, project);
+//     }
+
+//     // Task status updates
+//     if (type === 'Reopened') {
+//       task.status = 'In Progress';
+//     } else if (
+//       type === 'Complete' ||
+//       (type === 'In Progress' && task.status !== 'Overdue')
+//     ) {
+//       task.status = type;
+//     }
+
+//     // Create comment
+//     const newComment = {
+//       comment,
+//       type,
+//       createdBy: userId,
+//       taskId,
+//       images,
+//       audio,
+//       file: files,
+//     };
+
+//     if (type === 'In Progress') {
+//       newComment.siteDetails = {
+//         isWorking: isWorking === 'yes',
+//         materialAvailable: material === 'yes',
+//         workers,
+//       };
+//     }
+
+//     const savedComment = await TaskComment.create(newComment);
+//     if (!savedComment)
+//       return res.status(500).send({ message: 'Failed to save comment' });
+
+//     task.comments.push(savedComment._id);
+//     task.updatedOn = new Date().toISOString();
+//     await task.save();
+//     const logParts = [`Added New Comment ${comment}`];
+
+//     if (images.length > 0) {
+//       logParts.push(
+//         `added ${images.length} image${images.length > 1 ? 's' : ''}`
+//       );
+//     }
+
+//     if (files.length > 0) {
+//       logParts.push(`added ${files.length} file${files.length > 1 ? 's' : ''}`);
+//     }
+
+//     if (audio) {
+//       logParts.push('added audio');
+//     }
+
+//     createLogManually(req, logParts.join(', '), task.siteID, task._id);
+
+//     res.status(200).send({ message: 'Comment added successfully' });
+//   } catch (error) {
+//     console.error(error);
+//     res.status(500).send({ message: 'Error while adding comment' });
+//   }
+// };
 
 exports.editTask = async (req, res) => {
   try {
@@ -1751,260 +1918,81 @@ exports.manuallyCloseTask = async (req, res) => {
     const { taskId, date } = req.body;
 
     const task = await Task.findById(taskId);
+    if (!task) {
+      return res.status(404).json({ message: 'Task not found' });
+    }
 
     const project = await Project.findOne({ siteID: task.siteID });
-    if (project) {
-      const projectStatuses = project.project_status;
+    if (!project) {
+      return res.status(404).json({ message: 'Project not found for task' });
+    }
 
-      for (let i = 0; i < projectStatuses.length; i++) {
-        const projectStatus = projectStatuses[i];
+    const taskDate = new Date(date);
 
-        for (let j = 0; j < projectStatus.step.length; j++) {
-          const step = projectStatus.step[j];
+    let duration = 0;
+    const activateTask = async tId => {
+      const taskToActivate = await Task.findById(tId);
+      if (taskToActivate) {
+        const dueDate = new Date(today); // Ensure duration is set
+        duration = duration + taskToActivate.duration;
+        dueDate.setDate(taskDate.getDate() + duration);
 
-          if (step.taskId.toString() === task._id.toString()) {
-            const today = new Date();
+        await Task.findByIdAndUpdate(
+          tId,
+          {
+            $set: {
+              isActive: true,
+              assignedOn: taskDate,
+              dueDate,
+            },
+          },
+          { new: true }
+        );
+      }
+    };
 
-            const activateTask = async taskId => {
-              const taskToActivate = await Task.findById(taskId);
-              if (taskToActivate) {
-                const dueDate = new Date(today);
-                dueDate.setDate(today.getDate() + taskToActivate.duration);
-                await Task.findByIdAndUpdate(
-                  taskId,
-                  {
-                    $set: {
-                      isActive: true,
-                      assignedOn: today,
-                      dueDate: dueDate,
-                    },
-                  },
-                  { new: true }
-                );
-              }
-            };
+    // Flatten all steps across statuses in sequential order
+    const allSteps = project.project_status.flatMap(ps => ps.step);
 
-            // Find next steps
-            let nextStep = projectStatus.step[j + 1];
-            let nextNextStep = projectStatus.step[j + 2];
+    // Find current task index
+    const currentIndex = allSteps.findIndex(
+      s => s.taskId.toString() === task._id.toString()
+    );
 
-            // If no nextStep, try from next projectStatus
-            if (!nextStep && projectStatuses[i + 1]) {
-              nextStep = projectStatuses[i + 1].step[0];
-            }
-            // If no nextNextStep, try from next projectStatus
-            if (
-              projectStatus.step[j + 1] &&
-              !projectStatus.step[j + 2] &&
-              projectStatuses[i + 1]
-            ) {
-              nextNextStep = projectStatuses[i + 1].step[0];
-            }
+    if (currentIndex === -1) {
+      return res
+        .status(404)
+        .json({ message: 'Task not found in project steps' });
+    }
 
-            // If no nextNextStep, try second step from next projectStatus
-            if (!nextNextStep && projectStatuses[i + 1]) {
-              nextNextStep = projectStatuses[i + 1].step[1];
-            }
+    // Get next 2 steps if available
+    const nextSteps = allSteps.slice(currentIndex + 1, currentIndex + 3);
 
-            // Activate steps if available
-            if (nextStep?.taskId) {
-              await activateTask(nextStep.taskId);
-            }
-            if (nextNextStep?.taskId) {
-              await activateTask(nextNextStep.taskId);
-            }
-
-            break; // Found the task, no need to continue
-          }
-        }
+    for (const step of nextSteps) {
+      if (step?.taskId) {
+        await activateTask(step.taskId);
       }
     }
 
+    // Mark current task as complete
     task.status = 'Complete';
-    task.updatedOn = new Date(date).toISOString();
+    task.updatedOn = date ? new Date(date) : taskDate;
     await task.save();
+
+    // Log the action
     await createLogManually(
       req,
       `Manually closed task ${task.title} of project ${task.siteID}`,
-      task?.siteID,
-      task?._id
+      task.siteID,
+      task._id
     );
-    res.status(200).send({ message: 'Task Closed successfully' });
+
+    return res.status(200).json({ message: 'Task closed successfully' });
   } catch (error) {
-    console.error(error);
-    res.status(500).send({ message: 'Error while adding comment' });
+    console.error('Error closing task:', error);
+    return res.status(500).json({ message: 'Error while closing task' });
   }
 };
-
-// exports.testFilter = async (req, res) => {
-//   try {
-//     const projects = await Project.find().populate({
-//       path: 'project_status',
-//       populate: {
-//         path: 'step',
-//         populate: {
-//           path: 'taskId',
-//           populate: [
-//             {
-//               path: 'issueMember',
-//               model: 'User',
-//               select: '_id firstname lastname roles',
-//               populate: {
-//                 path: 'roles',
-//                 model: 'Role',
-//                 select: '_id name',
-//               },
-//             },
-//             {
-//               path: 'assignedBy',
-//               model: 'User',
-//               select: '_id firstname lastname roles',
-//               populate: {
-//                 path: 'roles',
-//                 model: 'Role',
-//                 select: '_id name',
-//               },
-//             },
-//             {
-//               path: 'comments',
-//               populate: {
-//                 path: 'createdBy',
-//                 model: 'User',
-//                 select: '_id firstname lastname roles',
-//                 populate: {
-//                   path: 'roles',
-//                   model: 'Role',
-//                   select: '_id name',
-//                 },
-//               },
-//             },
-//           ],
-//         },
-//       },
-//     });
-
-//     const groupedStatuses = projects.map(project => ({
-//       projectId: project.siteID,
-//       projectName: project.name,
-//       projectStatuses: project.project_status
-//         .filter(item => item.step.some(step => step.taskId.isActive))
-//         .map(item => ({
-//           name: item.name,
-//           step: item.step
-//             .filter(step => step.taskId.isActive)
-//             .map(step => ({
-//               projectId: project.siteID,
-//               stepName: item.name,
-//               taskId: step._id,
-//               taskName: step.taskId.name,
-//               taskDescription: step.taskId.description,
-//               taskDueDate: step.taskId.dueDate,
-//               taskStatus: step.taskId.status,
-//               taskIssueMember: step.taskId.issueMember,
-//               taskAssignedBy: step.taskId.assignedBy,
-//               taskComments: step.taskId.comments,
-//             })),
-//         })),
-//     }));
-
-//     res.status(200).json({ groupedStatuses });
-//   } catch (error) {
-//     console.error('Server error:', error);
-//     res.status(500).json({ message: 'Error while fetching tasks' });
-//   }
-// };
-
-// exports.testFilter = async (req, res) => {
-//   try {
-//     const projects = await Project.find()
-//       .select('siteID name project_status')
-//       .populate([
-//         {
-//           path: 'project_status',
-//           populate: {
-//             path: 'step',
-//             populate: {
-//               path: 'taskId',
-//               match: {
-//                 isActive: true,
-//                 status: { $ne: 'Complete' },
-//               },
-//               populate: [
-//                 {
-//                   path: 'issueMember',
-//                   model: 'User',
-//                   select: '_id firstname lastname roles',
-//                   populate: {
-//                     path: 'roles',
-//                     model: 'Role',
-//                     select: '_id name',
-//                   },
-//                 },
-//                 {
-//                   path: 'assignedBy',
-//                   model: 'User',
-//                   select: '_id firstname lastname roles',
-//                   populate: {
-//                     path: 'roles',
-//                     model: 'Role',
-//                     select: '_id name',
-//                   },
-//                 },
-//                 {
-//                   path: 'comments',
-//                   populate: {
-//                     path: 'createdBy',
-//                     model: 'User',
-//                     select: '_id firstname lastname roles',
-//                     populate: {
-//                       path: 'roles',
-//                       model: 'Role',
-//                       select: '_id name',
-//                     },
-//                   },
-//                 },
-//               ],
-//             },
-//           },
-//         },
-//       ])
-//       .lean();
-
-//     const groupedStatuses = projects.map(project => {
-//       const activeTasks = project.project_status.flatMap(status => {
-//         return (status.step || [])
-//           .filter(step => step?.taskId)
-//           .map(step => {
-//             const task = step.taskId;
-//             return {
-//               projectId: project.siteID,
-//               projectName: project.name,
-//               stepName: status.name,
-//               taskId: step._id,
-//               taskName: task.name || '',
-//               taskDescription: task.description || '',
-//               taskDueDate: task.dueDate || null,
-//               taskStatus: task.status || '',
-//               taskIssueMember: task.issueMember || [],
-//               taskAssignedBy: task.assignedBy || null,
-//               taskComments: task.comments || [],
-//             };
-//           });
-//       });
-
-//       return {
-//         projectId: project.siteID,
-//         projectName: project.name,
-//         activeTasks,
-//       };
-//     });
-
-//     res.status(200).json({ groupedStatuses });
-//   } catch (error) {
-//     console.error('Server error:', error);
-//     res.status(500).json({ message: 'Error while fetching tasks' });
-//   }
-// };
 
 exports.dashboardFilter = async (req, res) => {
   try {

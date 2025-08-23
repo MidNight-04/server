@@ -128,9 +128,10 @@ registerRoutes([
   './app/routes/projectLog.routes',
   './app/routes/rolesRoutes',
   './app/routes/ticket.routes',
-  // './app/routes/materialRequest.routes',
+  './app/routes/materialRequest.routes',
   './app/routes/vendor.routes',
   './app/routes/material.routes',
+  './app/routes/purpose.routes',
 ]);
 
 // Fallback route

@@ -43,6 +43,7 @@
     "otp-generator": "^4.0.1",
     "pdf-watermark": "^1.0.4",
     "pdfjs-dist": "^4.4.168",
+    "uuid": "^11.1.0",
     "web-vitals": "^2.1.4",
     "xlsx": "^0.18.5"
   },

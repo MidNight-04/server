@@ -3,10 +3,8 @@ const { Schema, model } = require('mongoose');
 const purposeSchema = new Schema({
   name: {
     type: String,
-    required: true,
+    required: [true, 'Purpose is required'],
   },
 });
 
-const Purpose = model('Purpose', purposeSchema);
-
-module.exports = Purpose;
+module.exports = model('Purpose', purposeSchema);

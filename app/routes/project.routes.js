@@ -1,7 +1,7 @@
 const controller = require('../controllers/project.controller');
 const { uploadImage } = require('../middlewares/uploadImage');
 const fileUploader = require('../middlewares/fileUploader');
-const { verifyToken, isSenior } = require('../middlewares/authJwt');
+const { verifyToken, isSenior, canCreate } = require('../middlewares/authJwt');
 
 module.exports = function (app) {
   app.use(function (req, res, next) {
@@ -16,7 +16,7 @@ module.exports = function (app) {
     fileUploader,
     controller.deleteStatusImage
   );
-  app.post('/api/project/add', verifyToken, isSenior, controller.addProject);
+  app.post('/api/project/add', verifyToken, canCreate, controller.addProject);
   app.get('/api/project/getall', verifyToken, controller.getAllProject);
   app.get(
     '/api/project/member/:id',

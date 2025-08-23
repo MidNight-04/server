@@ -47,6 +47,323 @@ const changeTime = () => {
   return final;
 };
 
+const roleMap = {
+  'Site Engineer': 'engineer',
+  'Sr. Engineer': 'sr_engineer',
+  Operations: 'operation',
+  'Site Manager': 'operation',
+  Sales: 'sales',
+  Accountant: 'accountant',
+  Architect: 'architect',
+  Admin: 'admin',
+  Contractor: 'contractor',
+  Client: 'client',
+};
+
+// -----------------------------
+// Helpers
+// -----------------------------
+function parseFloorStructure(floorStr = '') {
+  const parts = floorStr.split('+').filter(Boolean);
+
+  const basementLevels = [];
+  let groundType = 'G';
+  let floorCount = 0;
+
+  for (let part of parts) {
+    if (part === 'B') part = 'B1'; // default basement
+    if (/^B\d+$/.test(part)) {
+      basementLevels.push(parseInt(part.replace('B', ''), 10));
+    } else if (part === 'S' || part === 'G') {
+      groundType = part;
+    } else if (!isNaN(Number(part))) {
+      floorCount = parseInt(part, 10);
+    }
+  }
+
+  basementLevels.sort((a, b) => b - a);
+  return { basementLevels, groundType, floorCount };
+}
+
+function generateFloorLabels({ basementLevels, groundType, floorCount }) {
+  const labels = [];
+
+  if (basementLevels.length === 1) {
+    labels.push('Basement');
+  } else if (basementLevels.length > 1) {
+    for (const level of basementLevels) {
+      labels.push(`Basement ${level}`);
+    }
+  }
+
+  labels.push(groundType === 'S' ? 'Stilt' : 'Ground Floor');
+
+  for (let i = 1; i <= floorCount; i++) {
+    labels.push(`Floor ${i}`);
+  }
+
+  return labels;
+}
+
+function createProjectSteps(allSteps, floorLabels) {
+  return allSteps
+    .flatMap(step => {
+      if (step.priority === '2') {
+        return floorLabels.map((label, i) => ({
+          name: label,
+          priority: parseInt(step.priority, 10) + i,
+          step: step.points,
+        }));
+      }
+
+      const defaultPriority =
+        step.priority === '1'
+          ? 1
+          : parseInt(step.priority, 10) + floorLabels.length;
+
+      return [
+        {
+          name: step.name,
+          priority: defaultPriority,
+          step: step.points,
+        },
+      ];
+    })
+    .sort((a, b) => a.priority - b.priority);
+}
+
+function mapTaskChecklist(el, allChecklist) {
+  if (el.checkList?.toLowerCase() !== 'yes') return null;
+
+  const check = allChecklist.find(c => c.name === el.checkListName);
+  if (!check) return null;
+
+  const checklistItems = check.checkList.map(item => ({
+    heading: item.heading,
+    points: item.points.map(point => ({
+      ...point,
+      isChecked: null,
+      image: '',
+    })),
+  }));
+
+  return {
+    id: check._id,
+    step: check.checkListStep,
+    name: check.name,
+    number: check.checkListNumber,
+    items: checklistItems,
+  };
+}
+
+async function generateTasks(
+  projectStepArray,
+  allChecklist,
+  data,
+  assignedBy,
+  session
+) {
+  const taskIds = [];
+
+  for (let i = 0; i < projectStepArray.length; i++) {
+    const tasks = {
+      name: projectStepArray[i].name,
+      priority: projectStepArray[i].priority,
+      step: [],
+    };
+
+    const tasksToSave = projectStepArray[i].step.map((el, idx) => {
+      const checklistDetails = mapTaskChecklist(el, allChecklist);
+
+      const rawRole = el.issueMember?.[0];
+      const mappedRoleKey = roleMap[rawRole];
+      const memberId = data[mappedRoleKey];
+
+      return {
+        title: el.content,
+        branch: data.branch,
+        description: el.content,
+        stepName: projectStepArray[i].name,
+        assignedBy: assignedBy[0]._id,
+        duration: el.duration !== '' ? el.duration : 0,
+        point: idx,
+        dueDate: i === 0 && idx === 0 ? dayjs().add(el.duration, 'day') : null,
+        siteID: data.siteID,
+        isActive: i === 0 && idx === 0,
+        assignedOn: i === 0 && idx === 0 ? new Date() : null,
+        checkList: checklistDetails,
+        issueMember: memberId,
+      };
+    });
+
+    const savedTasks = await Task.insertMany(tasksToSave, { session });
+    tasks.step = savedTasks.map(task => ({
+      taskId: task._id,
+      point: task.point ?? null,
+      duration: task.duration,
+    }));
+    taskIds.push(tasks);
+  }
+
+  return taskIds;
+}
+
+async function savePaymentStages(paymentStages, data, session) {
+  const stages = paymentStages.stages.map(item => ({
+    ...item,
+    paymentStatus: 'Not Due Yet',
+    paymentDueDate: '',
+    installments: [],
+  }));
+
+  const paymentStageData = {
+    siteID: data.siteID,
+    clientID: data.client?.id,
+    floor: paymentStages.floor,
+    stages,
+  };
+
+  const payStage = new ProjectPaymentStages(paymentStageData);
+  await payStage.save({ session });
+}
+
+function buildInspections(projectStepArray) {
+  const inspections = [];
+
+  projectStepArray.forEach(project => {
+    project.step.forEach(el => {
+      if (el.checkList?.toLowerCase() === 'yes') {
+        inspections.push({
+          checkListStep: project.name,
+          name: el.checkListName,
+          checkListNumber: el.point,
+          checkList: [],
+          passed: false,
+        });
+      }
+    });
+  });
+
+  return inspections;
+}
+
+function buildProjectData(data, taskIds, inspections) {
+  return {
+    project_name: data.name,
+    siteID: data.siteID,
+    project_location: data.location,
+    branch: data.branch,
+    client: data.client,
+    floor: data.floor,
+    area: data.area,
+    cost: parseInt(data.cost, 10),
+    date: data.date,
+    duration: data.duration,
+    sr_engineer: data.sr_engineer,
+    site_engineer: data.engineer,
+    contractor: data.contractor,
+    operation: data.operation,
+    sales: data.sales,
+    project_admin: data.admin,
+    architect: data.architect,
+    accountant: data.accountant,
+    openTicket: [],
+    project_status: taskIds,
+    inspections,
+  };
+}
+
+// -----------------------------
+
+exports.addProject = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const { data } = req.body;
+
+    // Check if project with same siteID already exists
+    const existingProject = await Project.findOne({
+      siteID: data.siteID,
+    }).lean();
+    if (existingProject) {
+      await session.abortTransaction();
+      session.endSession();
+      return res
+        .status(409)
+        .json({ message: 'Project already exists with siteID' });
+    }
+
+    // Get admin role and assignedBy users
+    const role = await Role.findOne({ name: 'admin' }).lean();
+    const assignedBy = await User.find({ role: role._id }).select('_id').lean();
+    const allSteps = await ConstructionStep.find().sort({ order: 1 }).lean();
+    const allChecklist = await CheckList.find().lean();
+
+    // Floor parsing
+    const { basementLevels, groundType, floorCount } = parseFloorStructure(
+      data?.floor
+    );
+    const floorLabels = generateFloorLabels({
+      basementLevels,
+      groundType,
+      floorCount,
+    });
+
+    // Steps + Tasks
+    const projectStepArray = createProjectSteps(allSteps, floorLabels);
+    const taskIds = await generateTasks(
+      projectStepArray,
+      allChecklist,
+      data,
+      assignedBy,
+      session
+    );
+
+    // Payment Stages
+    const paymentStages = await PaymentStages.findOne({
+      floor: data.floor.toString(),
+    }).lean();
+    if (!paymentStages) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(400).json({
+        message: `First create payment stage for ${data.floor} floor`,
+      });
+    }
+    await savePaymentStages(paymentStages, data, session);
+
+    // Inspections
+    const inspections = buildInspections(projectStepArray);
+
+    // Project Document
+    const projectData = buildProjectData(data, taskIds, inspections);
+    const newProject = new Project(projectData);
+    await newProject.save({ session });
+
+    // Commit all changes
+    await session.commitTransaction();
+    session.endSession();
+
+    // Log after commit
+    await createLogManually(
+      req,
+      `Created project ${projectData.project_name} with siteID ${projectData.siteID}`,
+      projectData.siteID
+    );
+
+    res
+      .status(201)
+      .json({ message: 'Project created successfully', status: 201 });
+  } catch (error) {
+    // Rollback
+    await session.abortTransaction();
+    session.endSession();
+    console.error('Error creating project:', error);
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
+};
+
 exports.deleteStatusImage = async (req, res) => {
   try {
     const { _id, url, name, point, content } = req.body;
@@ -102,271 +419,275 @@ exports.deleteStatusImage = async (req, res) => {
   }
 };
 
-exports.addProject = async (req, res) => {
-  try {
-    const { data } = req.body;
-    const roleMap = {
-      'Site Engineer': 'engineer',
-      'Sr. Engineer': 'sr_engineer',
-      Operations: 'operation',
-      'Site Manager': 'operation',
-      Sales: 'sales',
-      Accountant: 'accountant',
-      Architect: 'architect',
-      Admin: 'admin',
-      Contractor: 'contractor',
-      Client: 'client',
-    };
-    const existingProject = await Project.findOne({
-      siteID: data.siteID,
-    });
-    if (existingProject) {
-      return res
-        .status(200)
-        .send({ message: 'Project already exists with siteID' });
-    }
+// exports.addProject = async (req, res) => {
+//   try {
+//     const { data } = req.body;
+//     const roleMap = {
+//       'Site Engineer': 'engineer',
+//       'Sr. Engineer': 'sr_engineer',
+//       Operations: 'operation',
+//       'Site Manager': 'operation',
+//       Sales: 'sales',
+//       Accountant: 'accountant',
+//       Architect: 'architect',
+//       Admin: 'admin',
+//       Contractor: 'contractor',
+//       Client: 'client',
+//     };
+//     const existingProject = await Project.findOne({
+//       siteID: data.siteID,
+//     });
+//     if (existingProject) {
+//       return res
+//       .status(200)
+//       .send({ message: 'Project already exists with siteID' });
+//     }
+//     const role = await Role.find({ name: 'admin' });
+//     const assignedBy = await User.find({role:role[0]._id}).select('_id');
 
-    const allSteps = await ConstructionStep.find().sort({ order: 1 });
+//     const allSteps = await ConstructionStep.find().sort({ order: 1 });
 
-    const parseFloorStructure = (floorStr = '') => {
-      const parts = floorStr.split('+').filter(Boolean);
+//     const parseFloorStructure = (floorStr = '') => {
+//       const parts = floorStr.split('+').filter(Boolean);
 
-      const basementLevels = [];
-      let groundType = 'G';
-      let floorCount = 0;
+//       const basementLevels = [];
+//       let groundType = 'G';
+//       let floorCount = 0;
 
-      for (let part of parts) {
-        if (part === 'B') part = 'B1'; // Default to B1 if just 'B' is provided
-        if (/^B\d+$/.test(part)) {
-          basementLevels.push(parseInt(part.replace('B', ''), 10));
-        } else if (part === 'S' || part === 'G') {
-          groundType = part;
-        } else if (!isNaN(Number(part))) {
-          floorCount = parseInt(part, 10);
-        }
-      }
-      basementLevels.sort((a, b) => b - a);
+//       for (let part of parts) {
+//         if (part === 'B') part = 'B1'; // Default to B1 if just 'B' is provided
+//         if (/^B\d+$/.test(part)) {
+//           basementLevels.push(parseInt(part.replace('B', ''), 10));
+//         } else if (part === 'S' || part === 'G') {
+//           groundType = part;
+//         } else if (!isNaN(Number(part))) {
+//           floorCount = parseInt(part, 10);
+//         }
+//       }
+//       basementLevels.sort((a, b) => b - a);
 
-      return { basementLevels, groundType, floorCount };
-    };
+//       return { basementLevels, groundType, floorCount };
+//     };
 
-    const generateFloorLabels = ({
-      basementLevels,
-      groundType,
-      floorCount,
-    }) => {
-      const labels = [];
+//     const generateFloorLabels = ({
+//       basementLevels,
+//       groundType,
+//       floorCount,
+//     }) => {
+//       const labels = [];
 
-      if (basementLevels.length === 1) {
-        labels.push('Basement');
-      } else if (basementLevels.length > 1) {
-        for (const level of basementLevels) {
-          labels.push(`Basement ${level}`);
-        }
-      }
+//       if (basementLevels.length === 1) {
+//         labels.push('Basement');
+//       } else if (basementLevels.length > 1) {
+//         for (const level of basementLevels) {
+//           labels.push(`Basement ${level}`);
+//         }
+//       }
 
-      labels.push(groundType === 'S' ? 'Stilt' : 'Ground Floor');
+//       labels.push(groundType === 'S' ? 'Stilt' : 'Ground Floor');
 
-      for (let i = 1; i <= floorCount; i++) {
-        labels.push(`Floor ${i}`);
-      }
+//       for (let i = 1; i <= floorCount; i++) {
+//         labels.push(`Floor ${i}`);
+//       }
 
-      return labels;
-    };
+//       return labels;
+//     };
 
-    const { basementLevels, groundType, floorCount } = parseFloorStructure(
-      data?.floor
-    );
-    const floorLabels = generateFloorLabels({
-      basementLevels,
-      groundType,
-      floorCount,
-    });
+//     const { basementLevels, groundType, floorCount } = parseFloorStructure(
+//       data?.floor
+//     );
+//     const floorLabels = generateFloorLabels({
+//       basementLevels,
+//       groundType,
+//       floorCount,
+//     });
 
-    const projectStepArray = allSteps
-      .flatMap(step => {
-        if (step.priority === '2') {
-          return floorLabels.map((label, i) => ({
-            name: label,
-            priority: parseInt(step.priority, 10) + i,
-            step: step.points,
-          }));
-        }
+//     const projectStepArray = allSteps
+//       .flatMap(step => {
+//         if (step.priority === '2') {
+//           return floorLabels.map((label, i) => ({
+//             name: label,
+//             priority: parseInt(step.priority, 10) + i,
+//             step: step.points,
+//           }));
+//         }
 
-        const defaultPriority =
-          step.priority === '1'
-            ? 1
-            : parseInt(step.priority, 10) + floorLabels.length;
-        return [
-          {
-            name: step.name,
-            priority: defaultPriority,
-            step: step.points,
-          },
-        ];
-      })
-      .sort((a, b) => a.priority - b.priority);
+//         const defaultPriority =
+//         step.priority === '1'
+//         ? 1
+//         : parseInt(step.priority, 10) + floorLabels.length;
+//         return [
+//           {
+//             name: step.name,
+//             priority: defaultPriority,
+//             step: step.points,
+//           },
+//         ];
+//       })
+//       .sort((a, b) => a.priority - b.priority);
 
-    const allChecklist = await CheckList.find();
+//       const allChecklist = await CheckList.find();
 
-    const taskIds = [];
+//     const taskIds = [];
 
-    for (let i = 0; i < projectStepArray.length; i++) {
-      const tasks = {
-        name: projectStepArray[i].name,
-        priority: projectStepArray[i].priority,
-        step: [],
-      };
-      const tasksToSave = projectStepArray[i].step.map((el, idx) => {
-        let checklistDetails = {};
-        if (el.checkList === 'Yes') {
-          const check = allChecklist.find(
-            checklist => checklist.name === el.checkListName
-          );
+//     for (let i = 0; i < projectStepArray.length; i++) {
+//       const tasks = {
+//         name: projectStepArray[i].name,
+//         priority: projectStepArray[i].priority,
+//         step: [],
+//       };
+//       const tasksToSave = projectStepArray[i].step.map((el, idx) => {
+//         let checklistDetails = {};
+//         if (el.checkList === 'Yes') {
+//           const check = allChecklist.find(
+//             checklist => checklist.name === el.checkListName
+//           );
 
-          if (check) {
-            const checklistItems = check.checkList.map(item => ({
-              heading: item.heading,
-              points: item.points.map(point => ({
-                ...point,
-                isChecked: null,
-                image: '',
-              })),
-            }));
+//           if (check) {
+//             const checklistItems = check.checkList.map(item => ({
+//               heading: item.heading,
+//               points: item.points.map(point => ({
+//                 ...point,
+//                 isChecked: null,
+//                 image: '',
+//               })),
+//             }));
 
-            checklistDetails = {
-              id: check._id,
-              step: check.checkListStep,
-              name: check.name,
-              number: check.checkListNumber,
-              items: checklistItems,
-            };
-          }
-        }
+//             checklistDetails = {
+//               id: check._id,
+//               step: check.checkListStep,
+//               name: check.name,
+//               number: check.checkListNumber,
+//               items: checklistItems,
+//             };
+//           }
+//         }
 
-        const rawRole = el.issueMember?.[0];
-        const mappedRoleKey = roleMap[rawRole];
-        const memberId = data[mappedRoleKey];
+//         const rawRole = el.issueMember?.[0];
+//         const mappedRoleKey = roleMap[rawRole];
+//         const memberId = data[mappedRoleKey];
 
-        return {
-          title: el.content,
-          branch: data.branch,
-          description: el.content,
-          stepName: projectStepArray[i].name,
-          assignedBy: data.assignedBy,
-          duration: el.duration !== '' ? el.duration : 0,
-          point: idx,
-          dueDate:
-            i === 0 && idx === 0 ? dayjs().add(el.duration, 'day') : null,
-          siteID: data.siteID,
-          isActive: i === 0 && idx === 0,
-          assignedOn: i === 0 && idx === 0 ? new Date() : null,
-          checkList: checklistDetails,
-          issueMember: memberId,
-        };
-      });
+//         return {
+//           title: el.content,
+//           branch: data.branch,
+//           description: el.content,
+//           stepName: projectStepArray[i].name,
+//           // assignedBy: data.assignedBy,
+//           assignedBy: assignedBy[0]._id,
+//           duration: el.duration !== '' ? el.duration : 0,
+//           point: idx,
+//           dueDate:
+//           i === 0 && idx === 0 ? dayjs().add(el.duration, 'day') : null,
+//           siteID: data.siteID,
+//           isActive: i === 0 && idx === 0,
+//           assignedOn: i === 0 && idx === 0 ? new Date() : null,
+//           checkList: checklistDetails,
+//           issueMember: memberId,
+//         };
+//       });
 
-      try {
-        const savedTasks = await Task.insertMany(tasksToSave);
-        savedTasks.forEach(async task => {
-          if (task.isActive) {
-            await updateTaskAndReschedule(task._id, { dueDate: task.dueDate });
-          }
-        });
-        tasks.step = savedTasks.map(task => ({
-          taskId: task._id,
-          point: task.point ?? null,
-          duration: task.duration,
-        }));
-        taskIds.push(tasks);
-      } catch (error) {
-        console.error('Error inserting tasks:', error);
-      }
-    }
+//       console.log('Adding project...', req.body);
+//       try {
+//         const savedTasks = await Task.insertMany(tasksToSave);
+//         // savedTasks.forEach(async task => {
+//         //   if (task.isActive) {
+//           //     await updateTaskAndReschedule(task._id, { dueDate: task.dueDate });
+//           //   }
+//           // });
+//         tasks.step = savedTasks.map(task => ({
+//           taskId: task._id,
+//           point: task.point ?? null,
+//           duration: task.duration,
+//         }));
+//         taskIds.push(tasks);
+//       } catch (error) {
+//         console.error('Error inserting tasks:', error);
+//       }
+//     }
 
-    const projectData = {
-      project_name: data.name,
-      siteID: data.siteID,
-      project_location: data.location,
-      branch: data.branch,
-      client: data.client,
-      floor: data.floor,
-      area: data.area,
-      cost: parseInt(data.cost, 10),
-      date: data.date,
-      duration: data.duration,
-      // project_manager: data.manager,
-      sr_engineer: data.sr_engineer,
-      site_engineer: data.engineer,
-      contractor: data.contractor,
-      operation: data.operation,
-      sales: data.sales,
-      project_admin: data.admin,
-      architect: data.architect,
-      accountant: data.accountant,
-      openTicket: [],
-      project_status: taskIds,
-      inspections: [],
-    };
+//     const projectData = {
+//       project_name: data.name,
+//       siteID: data.siteID,
+//       project_location: data.location,
+//       branch: data.branch,
+//       client: data.client,
+//       floor: data.floor,
+//       area: data.area,
+//       cost: parseInt(data.cost, 10),
+//       date: data.date,
+//       duration: data.duration,
+//       // project_manager: data.manager,
+//       sr_engineer: data.sr_engineer,
+//       site_engineer: data.engineer,
+//       contractor: data.contractor,
+//       operation: data.operation,
+//       sales: data.sales,
+//       project_admin: data.admin,
+//       architect: data.architect,
+//       accountant: data.accountant,
+//       openTicket: [],
+//       project_status: taskIds,
+//       inspections: [],
+//     };
 
-    const paymentStages = await PaymentStages.findOne({
-      floor: data.floor.toString(),
-    });
+//     const paymentStages = await PaymentStages.findOne({
+//       floor: data.floor.toString(),
+//     });
 
-    if (!paymentStages) {
-      return res.status(204).json({
-        message: `First create payment stage for ${data.floor} floor`,
-      });
-    }
+//     if (!paymentStages) {
+//       return res.status(204).json({
+//         message: `First create payment stage for ${data.floor} floor`,
+//       });
+//     }
 
-    const stages = paymentStages.stages.map(item => ({
-      ...item,
-      paymentStatus: 'Not Due Yet',
-      paymentDueDate: '',
-      installments: [],
-    }));
+//     const stages = paymentStages.stages.map(item => ({
+//       ...item,
+//       paymentStatus: 'Not Due Yet',
+//       paymentDueDate: '',
+//       installments: [],
+//     }));
 
-    const paymentStageData = {
-      siteID: data.siteID,
-      clientID: data.client?.id,
-      floor: paymentStages.floor,
-      stages,
-    };
+//     const paymentStageData = {
+//       siteID: data.siteID,
+//       clientID: data.client?.id,
+//       floor: paymentStages.floor,
+//       stages,
+//     };
 
-    const payStage = new ProjectPaymentStages(paymentStageData);
-    await payStage.save();
+//     const payStage = new ProjectPaymentStages(paymentStageData);
+//     await payStage.save();
 
-    projectStepArray.forEach(project => {
-      project.step.forEach(el => {
-        if (el.checkList === 'yes') {
-          projectData.inspections.push({
-            checkListStep: project.name,
-            name: el.checkListName,
-            checkListNumber: el.point,
-            checkList: [],
-            passed: false,
-          });
-        }
-      });
-    });
+//     projectStepArray.forEach(project => {
+//       project.step.forEach(el => {
+//         if (el.checkList === 'yes') {
+//           projectData.inspections.push({
+//             checkListStep: project.name,
+//             name: el.checkListName,
+//             checkListNumber: el.point,
+//             checkList: [],
+//             passed: false,
+//           });
+//         }
+//       });
+//     });
 
-    const newProject = new Project(projectData);
-    await newProject.save();
+//     const newProject = new Project(projectData);
+//     await newProject.save();
 
-    await createLogManually(
-      req,
-      `Created project ${projectData.project_name} with siteID ${projectData.siteID}`,
-      projectData.siteID
-    );
+//     await createLogManually(
+//       req,
+//       `Created project ${projectData.project_name} with siteID ${projectData.siteID}`,
+//       projectData.siteID
+//     );
 
-    res
-      .status(201)
-      .send({ message: 'Record created successfully', status: 201 });
-  } catch (error) {
-    console.error('Error creating project:', error);
-    res.status(500).send({ message: 'Internal Server Error' });
-  }
-};
+//     res
+//       .status(201)
+//       .send({ message: 'Record created successfully', status: 201 });
+//   } catch (error) {
+//     console.error('Error creating project:', error);
+//     res.status(500).send({ message: 'Internal Server Error' });
+//   }
+// };
 
 exports.getAllProject = async (req, res) => {
   try {

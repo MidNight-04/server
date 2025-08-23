@@ -134,6 +134,10 @@ const authJwt = {
       'Architect',
     ],
   }),
+  canCreate: checkRoles({
+    allow: ['CEO', 'admin', 'Project Admin', 'Operations', 'Sales'],
+    deny: ['user', 'Client', 'Accountant', 'Site Engineer', 'HR', 'Architect'],
+  }),
 };
 
 module.exports = authJwt;

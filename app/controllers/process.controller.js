@@ -223,6 +223,7 @@ const ConstructionStep = require('../models/ConstructionStep');
 const db = require('../models');
 const CheckList = db.checkList;
 const xlsx = require('xlsx');
+const { createLogManually } = require('../middlewares/createLog');
 
 exports.addConstructionStep = async (req, res) => {
   try {
@@ -306,10 +307,7 @@ exports.deleteConstructionStepById = async (req, res) => {
     const { id } = req.params;
     const step = await ConstructionStep.findOne({ _id: id });
     await ConstructionStep.deleteOne({ _id: id });
-    await createLogManually(
-      req,
-      `Deleted construction step ${step.name}.`
-    );
+    await createLogManually(req, `Deleted construction step ${step.name}.`);
     res.status(200).json({ message: 'Record deleted successfully' });
   } catch (err) {
     console.error('Delete Error:', err);
@@ -318,6 +316,51 @@ exports.deleteConstructionStepById = async (req, res) => {
       .json({ message: 'The requested data could not be deleted' });
   }
 };
+
+// exports.addNewFieldConstructionStepById = async (req, res) => {
+//   try {
+//     const {
+//       id,
+//       previousPoint,
+//       newField,
+//       checkList,
+//       checkListName,
+//       duration,
+//       issueMember,
+//     } = req.body;
+//     const step = await ConstructionStep.findOne({ _id: id });
+
+//     const newPoint = {
+//       point: parseInt(previousPoint) + 1,
+//       content: newField,
+//       duration,
+//       issueMember,
+//       checkList,
+//       checkListName,
+//       checkListPoint: [],
+//       finalStatus: [{ status: 'Pending', image: [], date: '' }],
+//       approvalTask: [],
+//       dailyTask: [],
+//     };
+
+//     const index = step.points.findIndex(p => p.point === previousPoint);
+//     step.points.splice(index + 1, 0, newPoint);
+
+//     for (let i = index + 2; i < step.points.length; i++) {
+//       step.points[i].point += 1;
+//     }
+
+//     await step.save();
+//     await createLogManually(
+//       req,
+//       `Added new field ${newField} to construction step ${step.name}.`
+//     );
+//     res.status(200).json({ message: 'New Field added successfully' });
+//   } catch (err) {
+//     console.error('Add Field Error:', err);
+//     res.status(400).json({ message: 'Error while adding field' });
+//   }
+// };
 
 exports.addNewFieldConstructionStepById = async (req, res) => {
   try {
@@ -330,10 +373,23 @@ exports.addNewFieldConstructionStepById = async (req, res) => {
       duration,
       issueMember,
     } = req.body;
-    const step = await ConstructionStep.findOne({ _id: id });
+
+    const step = await ConstructionStep.findById(id);
+    if (!step) {
+      return res.status(404).json({ message: 'Construction step not found' });
+    }
+
+    const prevPointNum = Number(previousPoint);
+    const index = step.points.findIndex(p => p.point === prevPointNum);
+
+    if (index === -1) {
+      return res
+        .status(400)
+        .json({ message: `Point ${previousPoint} not found in step` });
+    }
 
     const newPoint = {
-      point: parseInt(previousPoint) + 1,
+      point: prevPointNum + 1,
       content: newField,
       duration,
       issueMember,
@@ -345,22 +401,27 @@ exports.addNewFieldConstructionStepById = async (req, res) => {
       dailyTask: [],
     };
 
-    const index = step.points.findIndex(p => p.point === previousPoint);
+    // Insert new point
     step.points.splice(index + 1, 0, newPoint);
 
-    for (let i = index + 2; i < step.points.length; i++) {
-      step.points[i].point += 1;
-    }
+    // Reassign point numbers to keep them sequential
+    step.points.forEach((p, idx) => {
+      p.point = idx + 1;
+    });
 
     await step.save();
+
     await createLogManually(
       req,
-      `Added new field ${newField} to construction step ${step.name}.`
+      `Added new field "${newField}" to construction step "${step.name}".`
     );
-    res.status(200).json({ message: 'New Field added successfully' });
+
+    res.status(200).json({ message: 'New field added successfully' });
   } catch (err) {
     console.error('Add Field Error:', err);
-    res.status(400).json({ message: 'Error while adding field' });
+    res
+      .status(500)
+      .json({ message: 'Error while adding field', error: err.message });
   }
 };
 
@@ -403,10 +464,7 @@ exports.reorderSteps = async (req, res) => {
     }));
 
     await ConstructionStep.bulkWrite(bulkOps);
-    await createLogManually(
-      req,
-      `Reordered construction steps.`
-    );
+    await createLogManually(req, `Reordered construction steps.`);
     res.status(200).json({ message: 'Steps reordered successfully' });
   } catch (err) {
     console.error('Reorder Error:', err);

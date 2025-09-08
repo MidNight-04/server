@@ -45,8 +45,8 @@ module.exports = function (app) {
   app.post('/api/auth-member/signin', controller.signin);
   // app.post("/api/notification/createNotification", controller.createNotification);
   // app.post("/api/notification/updateNotification", controller.updateNotification);
-  app.post(
-    '/api/teammember/getTeammemberByRole',
+  app.get(
+    '/api/teammember/getTeammemberByRole/:role',
     verifyToken,
     controller.getTeammemberByRole
   );

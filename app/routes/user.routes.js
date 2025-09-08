@@ -24,5 +24,5 @@ module.exports = function (app) {
     controller.adminBoard
   );
   app.get('/api/user/getallusers', verifyToken, controller.getAllUsers);
-  app.get('/api/user/deactivate/:id', verifyToken, controller.deactivateUserById);
+  app.get('/api/user/toggleuserstatus/:id', verifyToken, controller.toggleUserStatusById);
 };

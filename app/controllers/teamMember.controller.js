@@ -180,7 +180,6 @@ exports.signin = async (req, res) => {
       .populate('role')
       .exec();
 
-
     if (!user) {
       return res.status(404).send({ message: 'User Not found.' });
     }
@@ -409,7 +408,7 @@ exports.updateMemberById = (req, res) => {
 
 exports.getTeammemberByRole = async (req, res) => {
   try {
-    const { role } = req.body;
+    const { role } = req.params;
     const teammembers = await User.find({
       roles: mongoose.Types.ObjectId(role),
     }).populate('roles');

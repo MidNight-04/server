@@ -41,6 +41,7 @@
     "nodemon": "^2.0.20",
     "npm": "^11.2.0",
     "otp-generator": "^4.0.1",
+    "p-limit": "^7.1.1",
     "pdf-watermark": "^1.0.4",
     "pdfjs-dist": "^4.4.168",
     "uuid": "^11.1.0",

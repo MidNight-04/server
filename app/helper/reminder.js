@@ -3,6 +3,7 @@ const axios = require('axios');
 const Task = require('../models/task.model');
 const User = require('../models/user.model');
 const Role = require('../models/role.model');
+const pLimit = require('p-limit');
 
 const WATI_API_URL =
   'https://live-mt-server.wati.io/15495/api/v1/sendTemplateMessage';
@@ -13,110 +14,232 @@ if (!API_KEY) {
   throw new Error('WATI_API_KEY is not set in the environment variables');
 }
 
+// const sendWhatsAppMessage = async () => {
+//   try {
+//     const today = new Date();
+//     const client = await Role.findOne({ name: 'Client' });
+//     const teammembers = await User.find({
+//       isActive: true,
+//       roles: { $ne: client._id }, // excludes users where roles contains client._id
+//       $and: [
+//         { dueDate: { $exists: true } }, // dueDate must exist
+//         { dueDate: { $ne: null } }, // dueDate not null
+//       ],
+//     });
+
+//     const allPromises = [];
+
+//     const startOfWeek = new Date(today);
+//     startOfWeek.setDate(today.getDate() - today.getDay()); // Sunday
+//     startOfWeek.setHours(0, 0, 0, 0);
+
+//     const endOfWeek = new Date(today);
+//     endOfWeek.setDate(today.getDate() + (6 - today.getDay())); // Saturday
+//     endOfWeek.setHours(23, 59, 59, 999);
+
+//     for (const member of teammembers) {
+//       const tasks = await Task.find({
+//         issueMember: member._id,
+//         isActive: true,
+//         status: { $ne: 'Complete' },
+//       });
+
+//       if (tasks.length > 0) {
+//         const overdueTasks = tasks.filter(
+//           task => task.status === 'Overdue'
+//         ).length;
+//         const pendingTasks = tasks.filter(
+//           task => task.status === 'Pending'
+//         ).length;
+//         const inProgressTasks = tasks.filter(
+//           task => task.status === 'In Progress'
+//         ).length;
+//         const thisWeekTasks = tasks
+//           .filter(task => task.status === 'This Week')
+//           .filter(task => {
+//             const endDate = new Date(task.dueDate);
+//             return endDate >= startOfWeek && endDate <= endOfWeek;
+//           }).length;
+
+//         if (member.phone) {
+//           const promise = axios.post(
+//             `${WATI_API_URL}?whatsappNumber=${member.phone}`,
+
+//             {
+//               template_name: 'morning_reminder',
+//               broadcast_name: 'morning_reminder_070420251410',
+//               parameters: [
+//                 {
+//                   name: 'user_name',
+//                   value: member.firstname + ' ' + member.lastname,
+//                 },
+//                 {
+//                   name: 'overdue',
+//                   value: overdueTasks,
+//                 },
+//                 {
+//                   name: 'inProgress',
+//                   value: inProgressTasks,
+//                 },
+//                 {
+//                   name: 'pending',
+//                   value: pendingTasks,
+//                 },
+//                 {
+//                   name: 'thisWeek',
+//                   value: thisWeekTasks,
+//                 },
+//               ],
+//             },
+//             {
+//               headers: {
+//                 'Content-Type': 'application/json',
+//                 Authorization: `Bearer ${API_KEY}`,
+//               },
+//             }
+//           );
+//           allPromises.push(promise);
+//         } else {
+//           console.warn(`No phone number found for member: ${member.name}`);
+//         }
+//       } else {
+//         console.log(`No active tasks found for ${member.name}`);
+//       }
+//     }
+
+//     const results = await Promise.allSettled(allPromises);
+
+//     results.forEach((result, index) => {
+//       if (result.status === 'fulfilled') {
+//         console.log(`Message sent successfully to ${teammembers[index].name}`);
+//       } else {
+//         console.error(
+//           `Failed to send message to ${teammembers[index].name}: ${result.reason}`
+//         );
+//       }
+//     });
+
+//     return results;
+//   } catch (error) {
+//     throw new Error(`Failed to send messages: ${error.message}`);
+//   }
+// };
+
+const limit = pLimit(10);
+
 const sendWhatsAppMessage = async () => {
   try {
     const today = new Date();
     const client = await Role.findOne({ name: 'Client' });
+
+    if (!client) {
+      console.warn('⚠️ Client role not found, skipping message sending.');
+      return [];
+    }
+
     const teammembers = await User.find({
-      roles: { $ne: client._id },
       isActive: true,
+      roles: { $ne: client._id },
+      dueDate: { $exists: true, $ne: null },
     });
 
-    const allPromises = [];
+    if (!teammembers.length) {
+      console.log('No active team members with due dates found.');
+      return [];
+    }
 
     const startOfWeek = new Date(today);
-    startOfWeek.setDate(today.getDate() - today.getDay()); // Sunday
+    startOfWeek.setDate(today.getDate() - today.getDay());
     startOfWeek.setHours(0, 0, 0, 0);
 
     const endOfWeek = new Date(today);
-    endOfWeek.setDate(today.getDate() + (6 - today.getDay())); // Saturday
+    endOfWeek.setDate(today.getDate() + (6 - today.getDay()));
     endOfWeek.setHours(23, 59, 59, 999);
 
-    for (const member of teammembers) {
-      const tasks = await Task.find({
-        issueMember: member._id,
-        isActive: true,
-        status: { $ne: 'Complete' },
-      });
+    const processMember = async member => {
+      try {
+        const tasks = await Task.find({
+          issueMember: member._id,
+          isActive: true,
+          status: { $ne: 'Complete' },
+        });
 
-      if (tasks.length > 0) {
-        const overdueTasks = tasks.filter(
-          task => task.status === 'Overdue'
-        ).length;
-        const pendingTasks = tasks.filter(
-          task => task.status === 'Pending'
-        ).length;
-        const inProgressTasks = tasks.filter(
-          task => task.status === 'In Progress'
-        ).length;
-        const thisWeekTasks = tasks
-          .filter(task => task.status === 'This Week')
-          .filter(task => {
-            const endDate = new Date(task.dueDate);
-            return endDate >= startOfWeek && endDate <= endOfWeek;
-          }).length;
-
-        if (member.phone) {
-          const promise = axios.post(
-            `${WATI_API_URL}?whatsappNumber=${member.phone}`,
-
-            {
-              template_name: 'morning_reminder',
-              broadcast_name: 'morning_reminder_070420251410',
-              parameters: [
-                {
-                  name: 'user_name',
-                  value: member.firstname + ' ' + member.lastname,
-                },
-                {
-                  name: 'overdue',
-                  value: overdueTasks,
-                },
-                {
-                  name: 'inProgress',
-                  value: inProgressTasks,
-                },
-                {
-                  name: 'pending',
-                  value: pendingTasks,
-                },
-                {
-                  name: 'thisWeek',
-                  value: thisWeekTasks,
-                },
-              ],
-            },
-            {
-              headers: {
-                'Content-Type': 'application/json',
-                Authorization: `Bearer ${API_KEY}`,
-              },
-            }
+        if (!tasks.length) {
+          console.log(
+            `No active tasks for ${member.firstname} ${member.lastname}`
           );
-          allPromises.push(promise);
-        } else {
-          console.warn(`No phone number found for member: ${member.name}`);
+          return { member, status: 'no-tasks' };
         }
-      } else {
-        console.log(`No active tasks found for ${member.name}`);
-      }
-    }
 
-    const results = await Promise.allSettled(allPromises);
+        const overdueTasks = tasks.filter(t => t.status === 'Overdue').length;
+        const pendingTasks = tasks.filter(t => t.status === 'Pending').length;
+        const inProgressTasks = tasks.filter(
+          t => t.status === 'In Progress'
+        ).length;
+        const thisWeekTasks = tasks.filter(t => {
+          const due = new Date(t.dueDate);
+          return (
+            t.status === 'This Week' && due >= startOfWeek && due <= endOfWeek
+          );
+        }).length;
 
-    results.forEach((result, index) => {
-      if (result.status === 'fulfilled') {
-        console.log(`Message sent successfully to ${teammembers[index].name}`);
-      } else {
-        console.error(
-          `Failed to send message to ${teammembers[index].name}: ${result.reason}`
+        if (!member.phone) {
+          console.warn(
+            `No phone number for ${member.firstname} ${member.lastname}`
+          );
+          return { member, status: 'no-phone' };
+        }
+
+        await axios.post(
+          `${WATI_API_URL}?whatsappNumber=${member.phone}`,
+          {
+            template_name: 'morning_reminder',
+            broadcast_name: 'morning_reminder_070420251410',
+            parameters: [
+              {
+                name: 'user_name',
+                value: `${member.firstname} ${member.lastname}`,
+              },
+              { name: 'overdue', value: overdueTasks },
+              { name: 'inProgress', value: inProgressTasks },
+              { name: 'pending', value: pendingTasks },
+              { name: 'thisWeek', value: thisWeekTasks },
+            ],
+          },
+          {
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${API_KEY}`,
+            },
+          }
         );
-      }
-    });
 
-    return results;
-  } catch (error) {
-    throw new Error(`Failed to send messages: ${error.message}`);
+        console.log(
+          `Message sent to ${member.firstname} ${member.lastname}`
+        );
+        return { member, status: 'sent' };
+      } catch (err) {
+        console.error(
+          `Error sending to ${member.firstname} ${member.lastname}:`,
+          err.message
+        );
+        return { member, status: 'failed', error: err.message };
+      }
+    };
+
+    // Use p-limit to control concurrency
+    const tasks = teammembers.map(member => limit(() => processMember(member)));
+
+    const results = await Promise.allSettled(tasks);
+
+    return results.map(res =>
+      res.status === 'fulfilled'
+        ? res.value
+        : { status: 'failed', error: res.reason?.message }
+    );
+  } catch (err) {
+    console.error('Fatal error in sendWhatsAppMessage:', err.message);
+    return [{ status: 'fatal', error: err.message }];
   }
 };
 
@@ -199,7 +322,10 @@ const dueDateNotification = async () => {
     const tasks = await Task.find({
       isActive: true,
       status: { $ne: 'Complete' },
-      dueDate: { $gte: startOfDay, $lte: endOfDay },
+      $and: [
+        { dueDate: { $exists: true } },
+        { dueDate: { $gte: startOfDay, $lte: endOfDay } },
+      ],
     }).populate(['issueMember', 'assignedBy']);
 
     for (const task of tasks) {

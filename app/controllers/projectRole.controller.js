@@ -1,5 +1,6 @@
 const db = require('../models');
 const RoleModel = db.role;
+const { createLogManually } = require('../middlewares/createLog');
 
 exports.addProjectRole = async (req, res) => {
   const { name } = req.body;

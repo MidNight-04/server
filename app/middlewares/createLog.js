@@ -18,7 +18,6 @@ exports.createLog = logInput => async (req, res, next) => {
       date: new Date(),
     });
 
-
     // await log.save();
     next();
   } catch (err) {
@@ -27,12 +26,42 @@ exports.createLog = logInput => async (req, res, next) => {
   }
 };
 
-exports.createLogManually = async (req, logMessage, siteId, taskId) => {
+// exports.createLogManually = async (req, logMessage, siteId, taskId) => {
+//   try {
+//     if (!logMessage) {
+//       console.warn('createLogManually: Missing logMessage.');
+//       return;
+//     }
+//     const userId = req.body?.userId || req.userId || req.user?._id;
+//     const siteID = siteId || req.body?.projectId || req.body?.siteID;
+
+//     const log = new Log({
+//       log: logMessage,
+//       userId,
+//       siteID,
+//       taskId,
+//       date: new Date(),
+//     });
+
+//     await log.save();
+//   } catch (error) {
+//     console.error('Error creating log:', error.message);
+//   }
+// };
+
+exports.createLogManually = async (
+  req,
+  logMessage,
+  siteId,
+  taskId,
+  session = null
+) => {
   try {
     if (!logMessage) {
       console.warn('createLogManually: Missing logMessage.');
       return;
     }
+
     const userId = req.body?.userId || req.userId || req.user?._id;
     const siteID = siteId || req.body?.projectId || req.body?.siteID;
 
@@ -44,8 +73,17 @@ exports.createLogManually = async (req, logMessage, siteId, taskId) => {
       date: new Date(),
     });
 
-    await log.save();
+    if (session) {
+      // Save within the transaction
+      await log.save({ session });
+    } else {
+      // Save normally
+      await log.save();
+    }
+
+    return log;
   } catch (error) {
     console.error('Error creating log:', error.message);
+    throw error; // bubble up so controller knows
   }
 };

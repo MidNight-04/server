@@ -1,11 +1,9 @@
-import dotenv from 'dotenv';
-import axios from 'axios';
-import Task from '../models/task.model.js';
-import User from '../models/user.model.js';
-import Role from '../models/role.model.js';
-import pLimit from 'p-limit';
-
-dotenv.config();
+require('dotenv').config();
+const axios = require('axios');
+const Task = require('../models/task.model');
+const User = require('../models/user.model');
+const Role = require('../models/role.model');
+const pLimit = require('p-limit');
 
 const WATI_API_URL =
   'https://live-mt-server.wati.io/15495/api/v1/sendTemplateMessage';
@@ -129,7 +127,7 @@ if (!API_KEY) {
 
 const limit = pLimit(10);
 
-export const sendWhatsAppMessage = async () => {
+const sendWhatsAppMessage = async () => {
   try {
     const today = new Date();
     const client = await Role.findOne({ name: 'Client' });
@@ -216,7 +214,9 @@ export const sendWhatsAppMessage = async () => {
           }
         );
 
-        console.log(`Message sent to ${member.firstname} ${member.lastname}`);
+        console.log(
+          `Message sent to ${member.firstname} ${member.lastname}`
+        );
         return { member, status: 'sent' };
       } catch (err) {
         console.error(
@@ -243,7 +243,7 @@ export const sendWhatsAppMessage = async () => {
   }
 };
 
-export const assignedNotification = async ({
+const assignedNotification = async ({
   phone,
   assignedTo,
   assignedBy,
@@ -311,7 +311,7 @@ export const assignedNotification = async ({
   }
 };
 
-export const dueDateNotification = async () => {
+const dueDateNotification = async () => {
   try {
     const startOfDay = new Date();
     startOfDay.setHours(0, 0, 0, 0);
@@ -380,7 +380,7 @@ export const dueDateNotification = async () => {
   }
 };
 
-export const clientUpdate = async ({
+const clientUpdate = async ({
   phone,
   clientName,
   dueDate,
@@ -438,7 +438,7 @@ export const clientUpdate = async ({
   }
 };
 
-export const teamUpdate = async ({
+const teamUpdate = async ({
   phone,
   assignedTo,
   assignedBy,
@@ -482,13 +482,7 @@ export const teamUpdate = async ({
   }
 };
 
-export const updateTicketStatus = async ({
-  phone,
-  name,
-  teammember,
-  id,
-  title,
-}) => {
+const updateTicketStatus = async ({ phone, name, teammember, id, title }) => {
   try {
     const msg = await axios.post(
       `${WATI_API_URL}?whatsappNumber=${phone}`,
@@ -530,7 +524,7 @@ export const updateTicketStatus = async ({
   }
 };
 
-export const sendNewTicketUpdate = async ({
+const sendNewTicketUpdate = async ({
   phone,
   username,
   id,
@@ -589,3 +583,28 @@ export const sendNewTicketUpdate = async ({
     );
   }
 };
+
+module.exports = {
+  sendWhatsAppMessage,
+  assignedNotification,
+  dueDateNotification,
+  clientUpdate,
+  teamUpdate,
+  updateTicketStatus,
+  sendNewTicketUpdate,
+};
+
+// app.post('/send-message', async (req, res) => {
+//   try {
+//     const { phoneNumber, message } = req.body;
+//     if (!phoneNumber || !message) {
+//       return res
+//         .status(400)
+//         .json({ error: 'phoneNumber and message are required' });
+//     }
+//     const response = await sendWhatsAppMessage(phoneNumber, message);
+//     res.json({ success: true, message: 'Message sent!', data: response });
+//   } catch (error) {
+//     res.status(500).json({ error: 'Failed to send message' });
+//   }
+// });

@@ -123,6 +123,7 @@ const authJwt = {
       'Operations',
       'Sr. Architect',
       'Site Supervisor',
+      'HR',
     ],
     deny: [
       'user',
@@ -130,7 +131,7 @@ const authJwt = {
       'Accountant',
       'Site Engineer',
       'Sales',
-      'HR',
+
       'Architect',
     ],
   }),

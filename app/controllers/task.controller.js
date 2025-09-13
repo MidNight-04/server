@@ -512,172 +512,180 @@ exports.searchTask = async (req, res) => {
   }
 };
 
-exports.taskAddComment = async (req, res) => {
-  try {
-    const {
-      taskId,
-      type,
-      comment = '',
-      userId,
-      isWorking,
-      material,
-      workers,
-    } = req.body;
+// exports.taskAddComment = async (req, res) => {
+//   try {
+//     const {
+//       taskId,
+//       type,
+//       comment = '',
+//       userId,
+//       isWorking,
+//       material,
+//       workers,
+//     } = req.body;
 
-    if (!taskId || !type || !userId) {
-      return res.status(400).send({ message: 'Required fields missing.' });
-    }
+//     if (!taskId || !type || !userId) {
+//       return res.status(400).send({ message: 'Required fields missing.' });
+//     }
 
-    const task = await Task.findById(taskId).populate('issueMember');
-    const member = await User.findById(userId);
-    if (!task || !member) {
-      return res.status(404).send({ message: 'Task or user not found' });
-    }
+//     const task = await Task.findById(taskId).populate('issueMember');
+//     const member = await User.findById(userId);
+//     if (!task || !member) {
+//       return res.status(404).send({ message: 'Task or user not found' });
+//     }
 
-    // Upload files if provided
-    const images = req.files?.image
-      ? await uploadToS3AndExtractUrls(req.files.image)
-      : [];
-    const files = req.files?.docs
-      ? await uploadToS3AndExtractUrls(req.files.docs)
-      : [];
-    const audio = req.files?.audio
-      ? (await uploadToS3AndExtractUrls(req.files.audio))?.[0]
-      : null;
+//     // Upload files if provided
+//     const images = req.files?.image
+//       ? await uploadToS3AndExtractUrls(req.files.image)
+//       : [];
+//     const files = req.files?.docs
+//       ? await uploadToS3AndExtractUrls(req.files.docs)
+//       : [];
+//     const audio = req.files?.audio
+//       ? (await uploadToS3AndExtractUrls(req.files.audio))?.[0]
+//       : null;
 
-    // 🔔 Notification logic
-    if (task.category === 'Project') {
-      const project = await Project.findOne({ siteID: task.siteID }).populate(
-        'sr_engineer'
-      );
-      const sr = project?.sr_engineer?.[0];
-      if (sr && sr.toString() !== userId) {
-        sendTeamNotification({
-          recipient: sr,
-          sender: `${member.firstname} ${member.lastname || ''}`.trim(),
-          task,
-        });
-      }
-    } else {
-      const assignedBy = await User.findById(task.assignedBy);
-      if (assignedBy && assignedBy._id.toString() !== userId) {
-        sendTeamNotification({
-          recipient: assignedBy,
-          sender: `${member.firstname} ${member.lastname || ''}`.trim(),
-          task,
-        });
-      }
+//     // 🔔 Notification logic
+//     if (task.category === 'Project') {
+//       const project = await Project.findOne({ siteID: task.siteID }).populate(
+//         'sr_engineer'
+//       );
+//       const sr = project?.sr_engineer?.[0];
+//       if (sr && sr.toString() !== userId) {
+//         sendTeamNotification({
+//           recipient: sr,
+//           sender: `${member.firstname} ${member.lastname || ''}`.trim(),
+//           task,
+//         });
+//       }
+//     } else {
+//       const assignedBy = await User.findById(task.assignedBy);
+//       if (assignedBy && assignedBy._id.toString() !== userId) {
+//         sendTeamNotification({
+//           recipient: assignedBy,
+//           sender: `${member.firstname} ${member.lastname || ''}`.trim(),
+//           task,
+//         });
+//       }
 
-      const issueMember = task.issueMember;
-      if (issueMember && issueMember._id.toString() !== userId) {
-        sendTeamNotification({
-          recipient: issueMember,
-          sender: `${member.firstname} ${member.lastname || ''}`.trim(),
-          task,
-        });
-      }
-    }
+//       const issueMember = task.issueMember;
+//       if (issueMember && issueMember._id.toString() !== userId) {
+//         sendTeamNotification({
+//           recipient: issueMember,
+//           sender: `${member.firstname} ${member.lastname || ''}`.trim(),
+//           task,
+//         });
+//       }
+//     }
 
-    // ✅ Handle completion step progression (activate next 2 tasks)
-    if (type === 'Complete') {
-      const project = await Project.findOne({ siteID: task.siteID });
+//     // ✅ Handle completion step progression (activate next 2 tasks)
+//     if (type === 'Complete') {
+//       const project = await Project.findOne({ siteID: task.siteID });
 
-      if (project) {
-        const today = new Date();
+//       if (project) {
+//         const today = new Date();
 
-        const activateTask = async tId => {
-          const taskToActivate = await Task.findById(tId);
-          if (taskToActivate && !taskToActivate.isActive) {
-            const dueDate = new Date(today);
-            dueDate.setDate(today.getDate() + taskToActivate.duration);
+//         const activateTask = async tId => {
+//           const taskToActivate = await Task.findById(tId);
+//           if (taskToActivate && !taskToActivate.isActive) {
+//             const dueDate = new Date(today);
+//             dueDate.setDate(today.getDate() + taskToActivate.duration);
 
-            await Task.findByIdAndUpdate(
-              tId,
-              {
-                $set: {
-                  isActive: true,
-                  assignedOn: today,
-                  dueDate,
-                },
-              },
-              { new: true }
-            );
-          }
-        };
+//             await Task.findByIdAndUpdate(
+//               tId,
+//               {
+//                 $set: {
+//                   isActive: true,
+//                   assignedOn: today,
+//                   dueDate,
+//                 },
+//               },
+//               { new: true }
+//             );
+//           }
+//         };
 
-        // Flatten steps in order
-        const allSteps = project.project_status.flatMap(ps => ps.step);
+//         // Flatten steps in order
+//         const allSteps = project.project_status.flatMap(ps => ps.step);
 
-        // Find current index
-        const currentIndex = allSteps.findIndex(
-          s => s.taskId.toString() === task._id.toString()
-        );
+//         // Find current index
+//         const currentIndex = allSteps.findIndex(
+//           s => s.taskId.toString() === task._id.toString()
+//         );
 
-        if (currentIndex !== -1) {
-          const nextSteps = allSteps.slice(currentIndex + 1, currentIndex + 3);
-          for (const step of nextSteps) {
-            if (step?.taskId) await activateTask(step.taskId);
-          }
-        }
+//         if (currentIndex !== -1) {
+//           const nextSteps = allSteps.slice(currentIndex + 1, currentIndex + 3);
+//           for (const step of nextSteps) {
+//             if (step?.taskId) await activateTask(step.taskId);
+//           }
+//         }
 
-        task.completedOn = new Date();
-      }
-    }
+//         task.completedOn = new Date();
+//       }
+//     }
 
-    // ✅ Task status updates
-    if (type === 'Reopened') {
-      task.status = 'In Progress';
-    } else if (
-      type === 'Complete' ||
-      (type === 'In Progress' && task.status !== 'Overdue')
-    ) {
-      task.status = type;
-    }
+//     // ✅ Task status updates
+//     if (type === 'Reopened') {
+//       task.status = 'In Progress';
+//     } else if (
+//       type === 'Complete' ||
+//       (type === 'In Progress' && task.status !== 'Overdue')
+//     ) {
+//       task.status = type;
+//     }
 
-    // ✅ Create comment
-    const newComment = {
-      comment: comment.trim(),
-      type,
-      createdBy: userId,
-      taskId,
-      images,
-      audio,
-      file: files,
-    };
+//     // ✅ Create comment
+//     const newComment = {
+//       comment: comment.trim(),
+//       type,
+//       createdBy: userId,
+//       taskId,
+//       images,
+//       audio,
+//       file: files,
+//     };
 
-    if (type === 'In Progress') {
-      newComment.siteDetails = {
-        isWorking: isWorking === 'yes',
-        materialAvailable: material === 'yes',
-        workers,
-      };
-    }
+//     if (type === 'In Progress') {
+//       if (!task.isActive) {
+//         task.isActive = true;
+//         task.assignedOn = new Date();
+//         const due = new Date();
+//         const day = due.getDate() + task.duration;
+//         due.setDate(day);
+//         task.dueDate = due;
+//       }
+//       newComment.siteDetails = {
+//         isWorking: isWorking === 'yes',
+//         materialAvailable: material === 'yes',
+//         workers,
+//       };
+//     }
 
-    const savedComment = await TaskComment.create(newComment);
-    if (!savedComment) {
-      return res.status(500).send({ message: 'Failed to save comment' });
-    }
+//     const savedComment = await TaskComment.create(newComment);
+//     if (!savedComment) {
+//       return res.status(500).send({ message: 'Failed to save comment' });
+//     }
 
-    // Link comment to task
-    task.comments.push(savedComment._id);
-    task.updatedOn = new Date();
-    await task.save();
+//     // Link comment to task
+//     task.comments.push(savedComment._id);
+//     task.updatedOn = new Date();
+//     await task.save();
 
-    // ✅ Logging
-    const logParts = ['Added new comment'];
-    if (comment.trim()) logParts.push(`text: "${comment}"`);
-    if (images.length > 0) logParts.push(`+ ${images.length} image(s)`);
-    if (files.length > 0) logParts.push(`+ ${files.length} file(s)`);
-    if (audio) logParts.push(`+ audio`);
+//     // ✅ Logging
+//     const logParts = ['Added new comment'];
+//     if (comment.trim()) logParts.push(`text: "${comment}"`);
+//     if (images.length > 0) logParts.push(`+ ${images.length} image(s)`);
+//     if (files.length > 0) logParts.push(`+ ${files.length} file(s)`);
+//     if (audio) logParts.push(`+ audio`);
 
-    await createLogManually(req, logParts.join(', '), task.siteID, task._id);
+//     await createLogManually(req, logParts.join(', '), task.siteID, task._id);
 
-    res.status(200).send({ message: 'Comment added successfully' });
-  } catch (error) {
-    console.error('Error adding comment:', error);
-    res.status(500).send({ message: 'Error while adding comment' });
-  }
-};
+//     res.status(200).send({ message: 'Comment added successfully' });
+//   } catch (error) {
+//     console.error('Error adding comment:', error);
+//     res.status(500).send({ message: 'Error while adding comment' });
+//   }
+// };
 
 // exports.taskAddComment = async (req, res) => {
 //   try {
@@ -798,6 +806,280 @@ exports.taskAddComment = async (req, res) => {
 //     res.status(500).send({ message: 'Error while adding comment' });
 //   }
 // };
+
+// controllers/taskController.js
+const Joi = require('joi');
+
+// Validation schema (Joi)
+const commentSchema = Joi.object({
+  taskId: Joi.string().required(),
+  type: Joi.string().valid('In Progress', 'Complete', 'Reopened').required(),
+  comment: Joi.string().allow('').optional(),
+  userId: Joi.string().required(),
+  isWorking: Joi.string().valid('yes', 'no').optional(),
+  material: Joi.string().valid('yes', 'no').optional(),
+  workers: Joi.number().min(0).optional(),
+});
+
+// Allowed mimetypes
+const IMAGE_MIMES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+const DOC_MIMES = [
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'text/plain',
+  'application/zip',
+];
+
+// File helpers
+function normalizeAndFilterFiles(fileItem) {
+  if (!fileItem) return [];
+  return Array.isArray(fileItem) ? fileItem : [fileItem];
+}
+function filterImages(files) {
+  return normalizeAndFilterFiles(files).filter(f =>
+    IMAGE_MIMES.includes(f.mimetype)
+  );
+}
+function filterDocs(files) {
+  return normalizeAndFilterFiles(files).filter(f =>
+    DOC_MIMES.includes(f.mimetype)
+  );
+}
+function filterAudio(files) {
+  return normalizeAndFilterFiles(files).filter(f =>
+    f.mimetype?.startsWith('audio/')
+  );
+}
+
+exports.taskAddComment = async (req, res) => {
+  let session;
+  try {
+    // ✅ Validate body with Joi
+    const { error, value } = commentSchema.validate(req.body, {
+      abortEarly: false,
+      stripUnknown: true,
+    });
+
+    if (error) {
+      return res.status(400).send({
+        message: 'Validation error',
+        errors: error.details.map(d => d.message),
+      });
+    }
+
+    const {
+      taskId,
+      type,
+      comment = '',
+      userId,
+      isWorking,
+      material,
+      workers,
+    } = value;
+
+    // Ensure task & user exist
+    const task = await Task.findById(taskId).populate('issueMember');
+    const member = await User.findById(userId);
+    if (!task || !member) {
+      return res.status(404).send({ message: 'Task or user not found' });
+    }
+
+    // ---- File upload (validate + upload) ----
+    const imageFiles = filterImages(req.files?.image);
+    const docFiles = filterDocs(req.files?.docs);
+    const audioFiles = filterAudio(req.files?.audio);
+
+    const images =
+      imageFiles.length > 0 ? await uploadToS3AndExtractUrls(imageFiles) : [];
+    const files =
+      docFiles.length > 0 ? await uploadToS3AndExtractUrls(docFiles) : [];
+    const audio =
+      audioFiles.length > 0
+        ? (await uploadToS3AndExtractUrls(audioFiles))?.[0] ?? null
+        : null;
+
+    const senderName = `${member.firstname || ''} ${
+      member.lastname || ''
+    }`.trim();
+
+    // Queue notifications (send after commit)
+    const notificationQueue = [];
+
+    if (task.category === 'Project') {
+      const project = await Project.findOne({ siteID: task.siteID }).populate(
+        'sr_engineer'
+      );
+      const sr = project?.sr_engineer?.[0];
+      if (sr && sr.toString() !== userId) {
+        notificationQueue.push({
+          recipient: sr,
+          sender: senderName,
+          taskId: task._id,
+        });
+      }
+    } else {
+      if (task.assignedBy) {
+        const assignedBy = await User.findById(task.assignedBy);
+        if (assignedBy && assignedBy._id.toString() !== userId) {
+          notificationQueue.push({
+            recipient: assignedBy._id,
+            sender: senderName,
+            taskId: task._id,
+          });
+        }
+      }
+      if (task.issueMember && task.issueMember._id.toString() !== userId) {
+        notificationQueue.push({
+          recipient: task.issueMember._id,
+          sender: senderName,
+          taskId: task._id,
+        });
+      }
+    }
+
+    // ---- Transaction ----
+    session = await mongoose.startSession();
+    session.startTransaction();
+
+    const taskInSession = await Task.findById(taskId).session(session);
+    if (!taskInSession) {
+      await session.abortTransaction();
+      session.endSession();
+      return res
+        .status(404)
+        .send({ message: 'Task not found (during transaction)' });
+    }
+
+    // ✅ Handle completion progression
+    if (type === 'Complete') {
+      const project = await Project.findOne({
+        siteID: taskInSession.siteID,
+      }).session(session);
+      if (project) {
+        const allSteps = project.project_status.flatMap(ps => ps.step || []);
+        const idx = allSteps.findIndex(
+          s => s.taskId?.toString() === taskInSession._id.toString()
+        );
+
+        if (idx !== -1) {
+          const nextSteps = allSteps.slice(idx + 1, idx + 3);
+          const today = new Date();
+          for (const step of nextSteps) {
+            if (!step?.taskId) continue;
+            const t = await Task.findById(step.taskId).session(session);
+            if (t && !t.isActive) {
+              const dueDate = new Date(today);
+              dueDate.setDate(today.getDate() + (t.duration || 0));
+              await Task.findByIdAndUpdate(
+                step.taskId,
+                { $set: { isActive: true, assignedOn: today, dueDate } },
+                { session }
+              );
+            }
+          }
+        }
+        taskInSession.completedOn = new Date();
+      }
+    }
+
+    // ✅ Task status updates
+    if (type === 'Reopened') {
+      taskInSession.status = 'In Progress';
+    } else if (
+      type === 'Complete' ||
+      (type === 'In Progress' && taskInSession.status !== 'Overdue')
+    ) {
+      taskInSession.status = type;
+    }
+
+    // ✅ Build comment
+    const newCommentObj = {
+      comment: comment.trim(),
+      type,
+      createdBy: userId,
+      taskId,
+      images,
+      audio,
+      file: files,
+    };
+
+    if (type === 'In Progress') {
+      if (!taskInSession.isActive) {
+        taskInSession.isActive = true;
+        taskInSession.assignedOn = new Date();
+        const due = new Date();
+        due.setDate(due.getDate() + (taskInSession.duration || 0));
+        taskInSession.dueDate = due;
+      }
+      newCommentObj.siteDetails = {
+        isWorking: isWorking === 'yes',
+        materialAvailable: material === 'yes',
+        workers: workers ?? null,
+      };
+    }
+
+    const createdComment = await TaskComment.create([newCommentObj], {
+      session,
+    });
+    const savedComment = createdComment[0];
+
+    taskInSession.comments.push(savedComment._id);
+    taskInSession.updatedOn = new Date();
+    await taskInSession.save({ session });
+
+    // ✅ Logging
+    const logParts = ['Added new comment'];
+    if (comment.trim()) logParts.push(`text: "${comment}"`);
+    if (images.length > 0) logParts.push(`+ ${images.length} image(s)`);
+    if (files.length > 0) logParts.push(`+ ${files.length} file(s)`);
+    if (audio) logParts.push(`+ audio`);
+
+    await createLogManually(req, logParts.join(', '), task.siteID, task._id);
+
+    await session.commitTransaction();
+    session.endSession();
+
+    // ✅ Send notifications after commit
+    for (const n of notificationQueue) {
+      try {
+        await sendTeamNotification({
+          recipient: n.recipient,
+          sender: n.sender,
+          task: taskInSession,
+        });
+      } catch (err) {
+        console.error('Notification error (post-commit):', err);
+      }
+    }
+
+    res.status(200).send({
+      message: 'Comment added successfully',
+      comment: savedComment,
+      task: {
+        _id: taskInSession._id,
+        status: taskInSession.status,
+        isActive: taskInSession.isActive,
+        assignedOn: taskInSession.assignedOn,
+        dueDate: taskInSession.dueDate,
+        updatedOn: taskInSession.updatedOn,
+      },
+    });
+  } catch (error) {
+    console.error('Error adding comment:', error);
+    try {
+      if (session && session.inTransaction()) {
+        await session.abortTransaction();
+        session.endSession();
+      }
+    } catch (abortErr) {
+      console.error('Error aborting transaction:', abortErr);
+    }
+    res
+      .status(500)
+      .send({ message: 'Error while adding comment', error: error.message });
+  }
+};
 
 exports.editTask = async (req, res) => {
   try {

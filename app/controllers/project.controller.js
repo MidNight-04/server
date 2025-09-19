@@ -22,7 +22,10 @@ const awsS3 = require('../middlewares/aws-s3');
 const dayjs = require('dayjs');
 const ConstructionStep = require('../models/ConstructionStep');
 const { updateTaskAndReschedule } = require('../helper/schedule');
-const { createLogManually } = require('../middlewares/createLog');
+const {
+  createLogManually,
+  createLogManual,
+} = require('../middlewares/createLog');
 const { deleteProjectPoint } = require('../services/projectService');
 const {
   ticketUpdateNotification,
@@ -219,7 +222,7 @@ async function savePaymentStages(paymentStages, data, session) {
 
   const paymentStageData = {
     siteID: data.siteID,
-    clientID: data.client?.id,
+    clientID: data.client,
     floor: paymentStages.floor,
     stages,
   };
@@ -794,6 +797,7 @@ exports.getProjectById = (req, res) => {
         res.status(404).send({ message: 'Project not found' });
         return;
       }
+      console.log(data);
       res.status(200).send({ data: data, status: 200 });
     })
     .catch(err => {
@@ -801,7 +805,64 @@ exports.getProjectById = (req, res) => {
       res.status(500).send({ message: 'Could not find id to get details' });
     });
 };
-``;
+
+// exports.getProjectById = async (req, res) => {
+//   try {
+//     const id = req.params.id;
+//     mongoose.set('strictPopulate', false);
+
+//     // Find a single project by siteID
+//     const project = await Project.findOne({ siteID: id })
+//       .populate({
+//         path: 'project_admin site_engineer accountant sr_engineer sales operation architect',
+//         model: 'User',
+//         populate: {
+//           path: 'role',
+//           model: 'projectroles',
+//         },
+//       })
+//       .populate({
+//         path: 'project_status',
+//         populate: {
+//           path: 'step',
+//           populate: {
+//             path: 'taskId',
+//             model: 'Tasks',
+//             populate: [
+//               {
+//                 path: 'issueMember',
+//                 model: 'User',
+//                 select: '-password -token -refreshToken -loginOtp',
+//                 populate: { path: 'roles' },
+//               },
+//               {
+//                 path: 'assignedBy',
+//                 model: 'User',
+//                 select: '-password -token -refreshToken -loginOtp',
+//                 populate: { path: 'roles' },
+//               },
+//             ],
+//           },
+//         },
+//       })
+//       .populate({
+//         path: 'openTicket',
+//         model: 'Tickets',
+//       });
+
+//     if (!project) {
+//       return res.status(404).send({ message: 'Project not found' });
+//     }
+
+//     res.status(200).send({ data: project, status: 200 });
+//   } catch (err) {
+//     console.error(err);
+//     res.status(500).send({
+//       message: 'Could not find id to get details',
+//       error: err.message,
+//     });
+//   }
+// };
 
 exports.updateProjectById = (req, res) => {
   const { id, name, role, phone, address } = req.body;
@@ -1239,9 +1300,8 @@ exports.clientQueryForProject = async (req, res) => {
     content,
     assignedBy, // user ID of the person raising the ticket
     assignMember, // user ID of the assignee
-    status,
+    work,
     query,
-    date,
   } = req.body;
 
   let profileFiles = [];
@@ -1278,7 +1338,7 @@ exports.clientQueryForProject = async (req, res) => {
       point,
       content,
       query,
-      work: status,
+      work,
       assignedBy,
       assignMember,
       image: profileFiles,
@@ -2109,31 +2169,93 @@ exports.ProjectStepDelete = async (req, res) => {
   }
 };
 
-exports.TicketUpdateByMember = async (req, res) => {
-  try {
-    let profileFiles = [];
-    const { userId, ticketId, type, comment } = req.body;
+exports.updateTicket = async (req, res) => {
+  const session = await Ticket.startSession();
+  let ticket, createdBy; // declare outside so available later
 
-    if (req.files?.image?.length > 0) {
-      const uploaded = await awsS3.uploadFiles(req.files.image, 'client_query');
-      const images = uploaded.map(
+  try {
+    await session.withTransaction(async () => {
+      const userId = req.user?._id || req.userId || req.body?.userId;
+      const { ticketId } = req.params;
+      const { type, comment } = req.body;
+
+      // --- Upload files first (outside transaction is safer) ---
+      const uploadPromises = [
+        req.files?.image?.length
+          ? awsS3.uploadFiles(req.files.image, 'client_query')
+          : [],
+        req.files?.docs?.length
+          ? awsS3.uploadFiles(req.files.docs, 'client_query')
+          : [],
+        req.files?.audio?.length
+          ? awsS3.uploadFiles(req.files.audio, 'client_query')
+          : [],
+      ];
+
+      const [imagesUploaded, docsUploaded, audioUploaded] = await Promise.all(
+        uploadPromises
+      );
+
+      const uploadedImages = imagesUploaded.map(
         file =>
           `https://thekedar-bucket.s3.us-east-1.amazonaws.com/${file.s3key}`
       );
-      profileFiles.push(...images);
-    }
+      const uploadedDocs = docsUploaded.map(
+        file =>
+          `https://thekedar-bucket.s3.us-east-1.amazonaws.com/${file.s3key}`
+      );
+      const uploadedAudio = audioUploaded[0]
+        ? `https://thekedar-bucket.s3.us-east-1.amazonaws.com/${audioUploaded[0].s3key}`
+        : null;
 
-    const createdBy = await User.findById(userId);
-    const ticket = await Ticket.findById(ticketId).populate({
-      path: 'assignMember assignedBy',
-      select: 'firstname lastname',
+      // --- Fetch ticket + creator ---
+      ticket = await Ticket.findById(ticketId).session(session);
+      if (!ticket) throw new Error('Ticket not found');
+
+      await ticket.populate({
+        path: 'assignMember assignedBy',
+        select: 'firstname lastname',
+      });
+
+      createdBy = await User.findById(userId).session(session);
+
+      // --- Create comment ---
+      const [commentDoc] = await TaskComment.create(
+        [
+          {
+            taskId: ticketId,
+            type,
+            comment,
+            images: uploadedImages,
+            file: uploadedDocs,
+            audio: uploadedAudio,
+            createdBy: userId,
+          },
+        ],
+        { session }
+      );
+
+      // --- Update ticket ---
+      const updateData = { $push: { comments: commentDoc._id } };
+      if (type !== 'Comment' && type !== ticket.status) {
+        updateData.$set = { status: type };
+      }
+      await Ticket.updateOne({ _id: ticketId }, updateData, { session });
+
+      // --- Log (ensure session is used inside createLogManually) ---
+      await createLogManual({
+        req,
+        logMessage: `Updated ticket ${ticket.step} - ${ticket.content} of project ${ticket.siteID} to ${type}.`,
+        siteId: ticket.siteID,
+        ticketId: ticket._id,
+        session,
+      });
     });
 
-    if (!ticket) {
-      return res.status(404).json({ message: 'Ticket not found' });
-    }
-
+    // --- Notifications (outside transaction) ---
+    const userId = req.user?._id || req.userId || req.body?.userId;
     const isAssignedByUser = ticket.assignedBy._id.toString() === userId;
+
     await ticketUpdateNotification({
       recipient: isAssignedByUser
         ? ticket.assignMember._id
@@ -2143,38 +2265,16 @@ exports.TicketUpdateByMember = async (req, res) => {
       title: `${ticket.step}, ${ticket.content}`,
     });
 
-    const commentDoc = await TaskComment.create({
-      taskId: ticketId,
-      type,
-      comment,
-      images: profileFiles,
-      createdBy: userId,
-    });
-
-    const updateData = { $push: { comments: commentDoc._id } };
-    if (type !== 'Comment') {
-      updateData.$set = { status: type };
-    }
-    await ticket.updateOne(updateData);
-
-    await createLogManually(
-      req,
-      `Updated ticket ${ticket.step - ticket.content} of project ${
-        ticket.siteID
-      } to ${type}.`,
-      ticket.siteID
-    );
-
-    res.json({
-      status: 200,
-      message: 'Ticket updated successfully',
-    });
+    return res.json({ status: 200, message: 'Ticket updated successfully' });
   } catch (error) {
     console.error('Error updating ticket:', error);
-    res.status(500).json({
+    return res.status(500).json({
       status: 500,
       message: 'Error while updating ticket status',
+      error: error.message,
     });
+  } finally {
+    session.endSession();
   }
 };
 
@@ -2200,6 +2300,7 @@ exports.changeIssueMember = async (req, res) => {
       'Sr. Engineer': 'sr_engineer',
       'Site Engineer': 'site_engineer',
       Accountant: 'accountant',
+      Architect: 'architect',
       Operations: 'operation',
       Sales: 'sales',
     };

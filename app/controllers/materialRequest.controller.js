@@ -2,47 +2,6 @@ const MaterialRequest = require('../models/materialRequest.model.js');
 const Material = require('../models/material.model.js');
 const mongoose = require('mongoose');
 
-// exports.createMaterialRequest = async (req, res) => {
-//   try {
-//     const { siteId, purpose, priority, materials, date } = req.body;
-//     const requestedBy = req.body?.userId || req.userId || req.user?._id;
-
-//     if (!siteId || !purpose || !priority || !materials?.length) {
-//       return res.status(400).json({
-//         message:
-//           'siteId, purpose, priority, and at least one ordered item are required.',
-//       });
-//     }
-
-//     const formattedMaterials = materials.map(m => ({
-//       item: m.materialId,
-//       quantity: m.quantity,
-//       unit: m.unit,
-//     }));
-
-//     const newRequest = new MaterialRequest({
-//       site: siteId,
-//       purpose,
-//       priority,
-//       materials: formattedMaterials,
-//       requiredBefore: date,
-//       requestedBy,
-//     });
-
-//     const savedRequest = await newRequest.save();
-
-//     res.status(201).json({
-//       message: 'Material request created successfully.',
-//       request: savedRequest,
-//     });
-//   } catch (error) {
-//     console.error('Error creating material request:', error);
-//     res
-//       .status(500)
-//       .json({ message: 'Server error creating material request.' });
-//   }
-// };
-
 exports.createMaterialRequest = async (req, res) => {
   try {
     const { siteId, purpose, priority, materials, date } = req.body;
@@ -104,460 +63,6 @@ exports.createMaterialRequest = async (req, res) => {
     });
   }
 };
-
-exports.getAllMaterialRequests = async (req, res) => {
-  try {
-    const { status, siteId, page = 1, limit = 20, sort = -1 } = req.query;
-
-    const match = {};
-    if (status) match.status = status;
-    if (siteId) match.site = new mongoose.Types.ObjectId(siteId);
-
-    const pipeline = [
-      { $match: match },
-
-      // Lookup materials.item -> Material
-      {
-        $lookup: {
-          from: 'materials',
-          localField: 'materials.item',
-          foreignField: '_id',
-          as: 'materialsData',
-        },
-      },
-
-      // Merge looked-up materials into materials array
-      {
-        $addFields: {
-          materials: {
-            $map: {
-              input: '$materials',
-              as: 'm',
-              in: {
-                quantity: '$$m.quantity',
-                unit: '$$m.unit',
-                vendor: '$$m.vendor',
-                material: {
-                  $arrayElemAt: [
-                    {
-                      $filter: {
-                        input: '$materialsData',
-                        as: 'md',
-                        cond: { $eq: ['$$md._id', '$$m.item'] },
-                      },
-                    },
-                    0,
-                  ],
-                },
-              },
-            },
-          },
-        },
-      },
-      { $project: { materialsData: 0 } },
-
-      // Lookup receivedItems.item -> Material
-      {
-        $lookup: {
-          from: 'materials',
-          localField: 'receivedItems.item',
-          foreignField: '_id',
-          as: 'receivedMaterialsData',
-        },
-      },
-      {
-        $addFields: {
-          receivedItems: {
-            $map: {
-              input: '$receivedItems',
-              as: 'ri',
-              in: {
-                quantity: '$$ri.quantity',
-                receivedAt: '$$ri.receivedAt',
-                remarks: '$$ri.remarks',
-                receivedBy: '$$ri.receivedBy',
-                material: {
-                  $arrayElemAt: [
-                    {
-                      $filter: {
-                        input: '$receivedMaterialsData',
-                        as: 'rmd',
-                        cond: { $eq: ['$$rmd._id', '$$ri.item'] },
-                      },
-                    },
-                    0,
-                  ],
-                },
-              },
-            },
-          },
-        },
-      },
-      { $project: { receivedMaterialsData: 0 } },
-
-      // Lookup receivedItems.receivedBy -> User
-      {
-        $lookup: {
-          from: 'users',
-          localField: 'receivedItems.receivedBy',
-          foreignField: '_id',
-          as: 'receivedUsers',
-        },
-      },
-      {
-        $addFields: {
-          receivedItems: {
-            $map: {
-              input: '$receivedItems',
-              as: 'ri',
-              in: {
-                quantity: '$$ri.quantity',
-                receivedAt: '$$ri.receivedAt',
-                remarks: '$$ri.remarks',
-                material: '$$ri.material',
-                receivedBy: {
-                  $arrayElemAt: [
-                    {
-                      $filter: {
-                        input: '$receivedUsers',
-                        as: 'ru',
-                        cond: { $eq: ['$$ru._id', '$$ri.receivedBy'] },
-                      },
-                    },
-                    0,
-                  ],
-                },
-              },
-            },
-          },
-        },
-      },
-      { $project: { receivedUsers: 0 } },
-
-      // Lookup requestedBy
-      {
-        $lookup: {
-          from: 'users',
-          localField: 'requestedBy',
-          foreignField: '_id',
-          as: 'requestedBy',
-        },
-      },
-      { $unwind: { path: '$requestedBy', preserveNullAndEmptyArrays: true } },
-
-      // Lookup site
-      {
-        $lookup: {
-          from: 'projects',
-          localField: 'site',
-          foreignField: '_id',
-          as: 'site',
-        },
-      },
-      { $unwind: { path: '$site', preserveNullAndEmptyArrays: true } },
-
-      // Final projection
-      {
-        $project: {
-          createdAt: 1,
-          updatedAt: 1,
-          status: 1,
-          purpose: 1,
-          priority: 1,
-          requiredBefore: 1,
-
-          // site info
-          'site._id': 1,
-          'site.siteID': 1,
-          'site.name': 1,
-
-          // requestedBy info
-          'requestedBy._id': 1,
-          'requestedBy.firstname': 1,
-          'requestedBy.lastname': 1,
-          'requestedBy.employeeId': 1,
-          'requestedBy.email': 1,
-          'requestedBy.phone': 1,
-          'requestedBy.profileImage': 1,
-          'requestedBy.roles': 1,
-
-          // materials info
-          'materials.quantity': 1,
-          'materials.unit': 1,
-          'materials.vendor': 1,
-          'materials.material._id': 1,
-          'materials.material.name': 1,
-          'materials.material.unit': 1,
-          'materials.material.price': 1,
-
-          // receivedItems info
-          'receivedItems.quantity': 1,
-          'receivedItems.receivedAt': 1,
-          'receivedItems.remarks': 1,
-          'receivedItems.material._id': 1,
-          'receivedItems.material.name': 1,
-          'receivedItems.material.unit': 1,
-          'receivedItems.material.price': 1,
-          'receivedItems.receivedBy._id': 1,
-          'receivedItems.receivedBy.firstname': 1,
-          'receivedItems.receivedBy.lastname': 1,
-        },
-      },
-
-      // Sort & paginate
-      { $sort: { createdAt: sort === 'asc' ? 1 : -1 } },
-      { $skip: (page - 1) * parseInt(limit) },
-      { $limit: parseInt(limit) },
-    ];
-
-    const orders = await MaterialRequest.aggregate(pipeline);
-
-    // Total count
-    const total = await MaterialRequest.countDocuments(match);
-
-    res.status(200).json({
-      data: orders,
-      meta: {
-        total,
-        page: Number(page),
-        limit: Number(limit),
-        totalPages: Math.ceil(total / limit),
-      },
-    });
-  } catch (error) {
-    console.error('Error fetching orders:', error);
-    res
-      .status(500)
-      .json({ message: error.message || 'Server error fetching orders.' });
-  }
-};
-
-// exports.getAllMaterialRequests = async (req, res) => {
-//   try {
-//     const { status, siteId, page = 1, limit = 20, sort = -1 } = req.query;
-
-//     const match = {};
-//     if (status) match.status = status;
-//     if (siteId) match.site = new mongoose.Types.ObjectId(siteId);
-
-//     const pipeline = [
-//       { $match: match },
-
-//       // Lookup materials.item -> Material
-//       {
-//         $lookup: {
-//           from: 'materials',
-//           localField: 'materials.item',
-//           foreignField: '_id',
-//           as: 'materialsData',
-//         },
-//       },
-
-//       // Merge looked-up materials into materials array
-//       {
-//         $addFields: {
-//           materials: {
-//             $map: {
-//               input: '$materials',
-//               as: 'm',
-//               in: {
-//                 quantity: '$$m.quantity',
-//                 unit: '$$m.unit',
-//                 vendor: '$$m.vendor',
-//                 material: {
-//                   $arrayElemAt: [
-//                     {
-//                       $filter: {
-//                         input: '$materialsData',
-//                         as: 'md',
-//                         cond: { $eq: ['$$md._id', '$$m.item'] },
-//                       },
-//                     },
-//                     0,
-//                   ],
-//                 },
-//               },
-//             },
-//           },
-//         },
-//       },
-//       { $project: { materialsData: 0 } },
-
-//       // Lookup receivedItems.material -> Material
-//       {
-//         $lookup: {
-//           from: 'materials',
-//           localField: 'receivedItems.item',
-//           foreignField: '_id',
-//           as: 'receivedMaterialsData',
-//         },
-//       },
-//       {
-//         $addFields: {
-//           receivedItems: {
-//             $map: {
-//               input: '$receivedItems',
-//               as: 'ri',
-//               in: {
-//                 quantityReceived: '$$ri.quantityReceived',
-//                 receivedAt: '$$ri.receivedAt',
-//                 remarks: '$$ri.remarks',
-//                 receivedBy: '$$ri.receivedBy',
-//                 material: {
-//                   $arrayElemAt: [
-//                     {
-//                       $filter: {
-//                         input: '$receivedMaterialsData',
-//                         as: 'rmd',
-//                         cond: { $eq: ['$$rmd._id', '$$ri.material'] },
-//                       },
-//                     },
-//                     0,
-//                   ],
-//                 },
-//               },
-//             },
-//           },
-//         },
-//       },
-//       { $project: { receivedMaterialsData: 0 } },
-
-//       // Lookup receivedItems.receivedBy -> User
-//       {
-//         $lookup: {
-//           from: 'users',
-//           localField: 'receivedItems.receivedBy',
-//           foreignField: '_id',
-//           as: 'receivedUsers',
-//         },
-//       },
-//       {
-//         $addFields: {
-//           receivedItems: {
-//             $map: {
-//               input: '$receivedItems',
-//               as: 'ri',
-//               in: {
-//                 quantityReceived: '$$ri.quantityReceived',
-//                 receivedAt: '$$ri.receivedAt',
-//                 remarks: '$$ri.remarks',
-//                 material: '$$ri.material',
-//                 receivedBy: {
-//                   $arrayElemAt: [
-//                     {
-//                       $filter: {
-//                         input: '$receivedUsers',
-//                         as: 'ru',
-//                         cond: { $eq: ['$$ru._id', '$$ri.receivedBy'] },
-//                       },
-//                     },
-//                     0,
-//                   ],
-//                 },
-//               },
-//             },
-//           },
-//         },
-//       },
-//       { $project: { receivedUsers: 0 } },
-
-//       // Lookup requestedBy
-//       {
-//         $lookup: {
-//           from: 'users',
-//           localField: 'requestedBy',
-//           foreignField: '_id',
-//           as: 'requestedBy',
-//         },
-//       },
-//       { $unwind: { path: '$requestedBy', preserveNullAndEmptyArrays: true } },
-
-//       // Lookup site
-//       {
-//         $lookup: {
-//           from: 'projects',
-//           localField: 'site',
-//           foreignField: '_id',
-//           as: 'site',
-//         },
-//       },
-//       { $unwind: { path: '$site', preserveNullAndEmptyArrays: true } },
-
-//       // Final projection
-//       {
-//         $project: {
-//           createdAt: 1,
-//           updatedAt: 1,
-//           status: 1,
-//           purpose: 1,
-//           priority: 1,
-//           requiredBefore: 1,
-
-//           // site info
-//           'site._id': 1,
-//           'site.siteID': 1,
-//           'site.name': 1,
-
-//           // requestedBy info
-//           'requestedBy._id': 1,
-//           'requestedBy.firstname': 1,
-//           'requestedBy.lastname': 1,
-//           'requestedBy.employeeId': 1,
-//           'requestedBy.email': 1,
-//           'requestedBy.phone': 1,
-//           'requestedBy.profileImage': 1,
-//           'requestedBy.roles': 1,
-
-//           // materials info
-//           'materials.quantity': 1,
-//           'materials.unit': 1,
-//           'materials.vendor': 1,
-//           'materials.material._id': 1,
-//           'materials.material.name': 1,
-//           'materials.material.unit': 1,
-//           'materials.material.price': 1,
-
-//           // receivedItems info
-//           'receivedItems.quantityReceived': 1,
-//           'receivedItems.receivedAt': 1,
-//           'receivedItems.remarks': 1,
-//           'receivedItems.item._id': 1,
-//           'receivedItems.item.name': 1,
-//           'receivedItems.material.unit': 1,
-//           'receivedItems.material.price': 1,
-//           'receivedItems.receivedBy._id': 1,
-//           'receivedItems.receivedBy.firstname': 1,
-//           'receivedItems.receivedBy.lastname': 1,
-//         },
-//       },
-
-//       // Sort & paginate
-//       { $sort: { createdAt: sort === 'asc' ? 1 : -1 } },
-//       { $skip: (page - 1) * parseInt(limit) },
-//       { $limit: parseInt(limit) },
-//     ];
-
-//     const orders = await MaterialRequest.aggregate(pipeline);
-
-//     // Total count
-//     const total = await MaterialRequest.countDocuments(match);
-
-//     res.status(200).json({
-//       data: orders,
-//       meta: {
-//         total,
-//         page: Number(page),
-//         limit: Number(limit),
-//         totalPages: Math.ceil(total / limit),
-//       },
-//     });
-//   } catch (error) {
-//     console.error('Error fetching orders:', error);
-//     res
-//       .status(500)
-//       .json({ message: error.message || 'Server error fetching orders.' });
-//   }
-// };
 
 exports.getMaterialRequestById = async (req, res) => {
   try {
@@ -735,271 +240,445 @@ exports.getOrdersBySite = async (req, res) => {
   }
 };
 
-// exports.receiveMaterials = async (req, res) => {
-//   const session = await mongoose.startSession();
-
-//   try {
-//     session.startTransaction();
-
-//     const { requestId } = req.params;
-//     const { materials } = req.body;
-//     const userId = req.user?._id || req.userId || req.body?.userId;
-
-//     // Early validation
-//     const validationError = validateRequestInput(userId, requestId, materials);
-//     if (validationError) {
-//       await session.abortTransaction();
-//       return res
-//         .status(validationError.status)
-//         .json({ message: validationError.message });
-//     }
-
-//     // Normalize + validate materials
-//     const materialsResult = normalizeAndValidateMaterials(materials);
-//     if (materialsResult.error) {
-//       await session.abortTransaction();
-//       return res.status(400).json({ message: materialsResult.error });
-//     }
-
-//     const materialsArray = materialsResult.data;
-//     const materialIds = [
-//       ...new Set(materialsArray.map(item => item.materialId)),
-//     ];
-
-//     // Validate material IDs
-//     const invalidIds = materialIds.filter(
-//       id => !mongoose.Types.ObjectId.isValid(id)
-//     );
-//     if (invalidIds.length > 0) {
-//       await session.abortTransaction();
-//       return res.status(400).json({
-//         message: `Invalid material IDs: ${invalidIds.join(', ')}`,
-//       });
-//     }
-
-//     // Parallel fetch
-//     const [request, materials_db] = await Promise.all([
-//       MaterialRequest.findById(requestId)
-//         .populate([
-//           { path: 'materials', select: 'item quantity unit' },
-//           { path: 'receivedItems', select: 'item quantity' },
-//         ])
-//         .session(session),
-//       Material.find({ _id: { $in: materialIds } }, { _id: 1, name: 1 }).session(
-//         session
-//       ),
-//     ]);
-
-//     // Validate request status
-//     const requestValidationError = validateRequestStatus(request);
-//     if (requestValidationError) {
-//       await session.abortTransaction();
-//       return res.status(requestValidationError.status).json({
-//         message: requestValidationError.message,
-//       });
-//     }
-
-//     // Lookup maps
-//     const materialMap = new Map(materials_db.map(m => [m._id.toString(), m]));
-//     const existingReceivedItems = new Map(
-//       request.receivedItems.map(item => [item.item.toString(), item.quantity])
-//     );
-//     const orderedMap = new Map(
-//       request.materials.map(m => [m.item.toString(), m.quantity])
-//     );
-
-//     // Validation
-//     const validationErrors = validateMaterialsForReceiving(
-//       materialIds,
-//       materialsArray,
-//       materialMap,
-//       existingReceivedItems,
-//       orderedMap
-//     );
-
-//     if (validationErrors.length > 0) {
-//       await session.abortTransaction();
-//       return res.status(400).json({ message: validationErrors.join('; ') });
-//     }
-
-//     // Prepare ops
-//     const { bulkUpdates, receivedItems, materialQuantities } =
-//       prepareBatchOperations(materialsArray, userId);
-
-//     // Apply DB updates
-//     const updatedRequest = await MaterialRequest.findByIdAndUpdate(
-//       requestId,
-//       {
-//         $push: { receivedItems: { $each: receivedItems } },
-//         $set: { lastUpdated: new Date() },
-//       },
-//       { session, new: true }
-//     );
-
-//     await Material.bulkWrite(bulkUpdates, { session });
-
-//     await session.commitTransaction();
-
-//     // Final stats
-//     const totalReceived = updatedRequest.receivedItems.reduce(
-//       (sum, item) => sum + item.quantity,
-//       0
-//     );
-//     const totalOrdered = updatedRequest.materials.reduce(
-//       (sum, item) => sum + item.quantity,
-//       0
-//     );
-//     const isCompleted = updatedRequest.status === 'received';
-
-//     res.status(200).json({
-//       message: `Successfully received ${materialsArray.length} material${
-//         materialsArray.length > 1 ? 's' : ''
-//       }`,
-//       request: {
-//         id: requestId,
-//         status: updatedRequest.status,
-//         receivedItemsCount: updatedRequest.receivedItems.length,
-//         totalReceived,
-//         totalOrdered,
-//         isCompleted,
-//       },
-//       processedItems: materialsArray.length,
-//       stockUpdates: materialQuantities.size,
-//     });
-//   } catch (error) {
-//     await session.abortTransaction();
-//     return handleDatabaseError(error, res);
-//   } finally {
-//     session.endSession();
-//   }
-// };
-
 exports.receiveMaterials = async (req, res) => {
+  const { requestId } = req.params;
+  const { materials } = req.body;
+  const userId = req.user?._id || req.userId || req.body?.userId;
+
+  // --- Early validations (before session) ---
+  const validationError = validateRequestInput(userId, requestId, materials);
+  if (validationError) {
+    return res
+      .status(validationError.status)
+      .json({ message: validationError.message });
+  }
+
+  const materialsResult = normalizeAndValidateMaterials(materials);
+  if (materialsResult.error) {
+    return res.status(400).json({ message: materialsResult.error });
+  }
+
+  const materialsArray = materialsResult.data;
+  const materialIds = [...new Set(materialsArray.map(item => item.materialId))];
+
+  const invalidIds = materialIds.filter(
+    id => !mongoose.Types.ObjectId.isValid(id)
+  );
+  if (invalidIds.length > 0) {
+    return res.status(400).json({
+      message: `Invalid material IDs: ${invalidIds.join(', ')}`,
+    });
+  }
+
+  // --- Start session ---
   const session = await mongoose.startSession();
 
   try {
-    await session.startTransaction();
+    let responsePayload;
 
-    const { requestId } = req.params;
-    const { materials } = req.body;
-    const userId = req.user?._id || req.userId || req.body?.userId;
+    await session.withTransaction(async () => {
+      // --- DB Fetch ---
+      const [request, materials_db] = await Promise.all([
+        MaterialRequest.findById(requestId).session(session),
+        Material.find(
+          { _id: { $in: materialIds } },
+          { _id: 1, name: 1 }
+        ).session(session),
+      ]);
 
-    // --- Early validations (before DB) ---
-    const validationError = validateRequestInput(userId, requestId, materials);
-    if (validationError) {
-      return res
-        .status(validationError.status)
-        .json({ message: validationError.message });
-    }
+      if (!request) {
+        throw { status: 404, message: 'Material request not found' };
+      }
 
-    const materialsResult = normalizeAndValidateMaterials(materials);
-    if (materialsResult.error) {
-      return res.status(400).json({ message: materialsResult.error });
-    }
+      const requestValidationError = validateRequestStatus(request);
+      if (requestValidationError) {
+        throw requestValidationError;
+      }
 
-    const materialsArray = materialsResult.data;
-    const materialIds = [
-      ...new Set(materialsArray.map(item => item.materialId)),
-    ];
+      // --- Validation against existing data ---
+      const materialMap = new Map(materials_db.map(m => [m._id.toString(), m]));
+      const existingReceivedItems = new Map(
+        request.receivedItems.map(item => [item.item.toString(), item.quantity])
+      );
+      const orderedMap = new Map(
+        request.materials.map(m => [m.item.toString(), m.quantity])
+      );
 
-    const invalidIds = materialIds.filter(
-      id => !mongoose.Types.ObjectId.isValid(id)
-    );
-    if (invalidIds.length > 0) {
-      return res.status(400).json({
-        message: `Invalid material IDs: ${invalidIds.join(', ')}`,
-      });
-    }
+      const validationErrors = validateMaterialsForReceiving(
+        materialIds,
+        materialsArray,
+        materialMap,
+        existingReceivedItems,
+        orderedMap
+      );
 
-    // --- DB Fetch ---
-    const [request, materials_db] = await Promise.all([
-      MaterialRequest.findById(requestId)
-        .populate([
-          { path: 'materials', select: 'item quantity unit' },
-          { path: 'receivedItems', select: 'item quantity' },
-        ])
-        .session(session),
-      Material.find({ _id: { $in: materialIds } }, { _id: 1, name: 1 }).session(
-        session
-      ),
-    ]);
+      if (validationErrors.length > 0) {
+        throw { status: 400, message: validationErrors.join('; ') };
+      }
 
-    const requestValidationError = validateRequestStatus(request);
-    if (requestValidationError) {
-      return res
-        .status(requestValidationError.status)
-        .json({ message: requestValidationError.message });
-    }
+      // --- Prepare Updates ---
+      const { bulkUpdates, receivedItems, materialQuantities } =
+        prepareBatchOperations(materialsArray, userId);
 
-    // --- Validation against existing data ---
-    const materialMap = new Map(materials_db.map(m => [m._id.toString(), m]));
-    const existingReceivedItems = new Map(
-      request.receivedItems.map(item => [item.item.toString(), item.quantity])
-    );
-    const orderedMap = new Map(
-      request.materials.map(m => [m.item.toString(), m.quantity])
-    );
+      // Apply to request document → .save() will trigger pre('save')
+      request.receivedItems.push(...receivedItems);
+      request.lastUpdated = new Date();
+      await request.save({ session }); // ⬅️ pre('save') runs here
 
-    const validationErrors = validateMaterialsForReceiving(
-      materialIds,
-      materialsArray,
-      materialMap,
-      existingReceivedItems,
-      orderedMap
-    );
+      // Update stock if needed
+      if (bulkUpdates.length > 0) {
+        await Material.bulkWrite(bulkUpdates, { session });
+      }
 
-    if (validationErrors.length > 0) {
-      return res.status(400).json({ message: validationErrors.join('; ') });
-    }
+      // Build response payload
+      const totalReceived = request.receivedItems.reduce(
+        (sum, item) => sum + item.quantity,
+        0
+      );
+      const totalOrdered = request.materials.reduce(
+        (sum, item) => sum + item.quantity,
+        0
+      );
 
-    // --- Apply Updates ---
-    const { bulkUpdates, receivedItems, materialQuantities } =
-      prepareBatchOperations(materialsArray, userId);
-
-    const updatedRequest = await MaterialRequest.findByIdAndUpdate(
-      requestId,
-      {
-        $push: { receivedItems: { $each: receivedItems } },
-        $set: { lastUpdated: new Date() },
-      },
-      { session, new: true }
-    );
-
-    await Material.bulkWrite(bulkUpdates, { session });
-
-    // Commit once, here
-    await session.commitTransaction();
-
-    // --- Response ---
-    const totalReceived = updatedRequest.receivedItems.reduce(
-      (sum, item) => sum + item.quantity,
-      0
-    );
-    const totalOrdered = updatedRequest.materials.reduce(
-      (sum, item) => sum + item.quantity,
-      0
-    );
-
-    return res.status(200).json({
-      message: `Successfully received ${materialsArray.length} material${
-        materialsArray.length > 1 ? 's' : ''
-      }`,
-      request: {
-        id: requestId,
-        status: updatedRequest.status,
-        receivedItemsCount: updatedRequest.receivedItems.length,
-        totalReceived,
-        totalOrdered,
-        isCompleted: updatedRequest.status === 'received',
-      },
-      processedItems: materialsArray.length,
-      stockUpdates: materialQuantities.size,
+      responsePayload = {
+        message: `Successfully received ${materialsArray.length} material${
+          materialsArray.length > 1 ? 's' : ''
+        }`,
+        request: {
+          id: requestId,
+          status: request.status, // ✅ updated by pre('save')
+          receivedItemsCount: request.receivedItems.length,
+          totalReceived,
+          totalOrdered,
+          isCompleted: request.status === 'received',
+        },
+        processedItems: materialsArray.length,
+        stockUpdates: materialQuantities.size,
+      };
     });
+
+    return res.status(200).json(responsePayload);
   } catch (error) {
-    await session.abortTransaction();
+    if (error.status) {
+      return res.status(error.status).json({ message: error.message });
+    }
     return handleDatabaseError(error, res);
   } finally {
     session.endSession();
+  }
+};
+
+exports.materialRequests = async (req, res) => {
+  try {
+    const {
+      status,
+      siteId,
+      priority,
+      requestedBy,
+      query, // search text
+      startDate,
+      endDate,
+      page = 1,
+      limit = 20,
+      sort = -1,
+    } = req.query;
+
+    const match = {};
+
+    if (status) match.status = status;
+    if (siteId) match.site = new mongoose.Types.ObjectId(siteId);
+    if (priority) match.priority = priority;
+    if (requestedBy)
+      match.requestedBy = new mongoose.Types.ObjectId(requestedBy);
+
+    if (startDate || endDate) {
+      match.createdAt = {};
+      if (startDate) match.createdAt.$gte = new Date(startDate);
+      if (endDate) match.createdAt.$lte = new Date(endDate);
+    }
+
+    // ---------- Main Results Pipeline ----------
+    const pipeline = [
+      { $match: match },
+
+      // Lookup materials.item -> Material
+      {
+        $lookup: {
+          from: 'materials',
+          localField: 'materials.item',
+          foreignField: '_id',
+          as: 'materialsData',
+        },
+      },
+      {
+        $addFields: {
+          materials: {
+            $map: {
+              input: '$materials',
+              as: 'm',
+              in: {
+                quantity: '$$m.quantity',
+                unit: '$$m.unit',
+                vendor: '$$m.vendor',
+                material: {
+                  $arrayElemAt: [
+                    {
+                      $filter: {
+                        input: '$materialsData',
+                        as: 'md',
+                        cond: { $eq: ['$$md._id', '$$m.item'] },
+                      },
+                    },
+                    0,
+                  ],
+                },
+              },
+            },
+          },
+        },
+      },
+      { $project: { materialsData: 0 } },
+
+      // Lookup receivedItems.item -> Material
+      {
+        $lookup: {
+          from: 'materials',
+          localField: 'receivedItems.item',
+          foreignField: '_id',
+          as: 'receivedMaterialsData',
+        },
+      },
+      {
+        $addFields: {
+          receivedItems: {
+            $map: {
+              input: '$receivedItems',
+              as: 'ri',
+              in: {
+                quantity: '$$ri.quantity',
+                receivedAt: '$$ri.receivedAt',
+                remarks: '$$ri.remarks',
+                receivedBy: '$$ri.receivedBy',
+                material: {
+                  $arrayElemAt: [
+                    {
+                      $filter: {
+                        input: '$receivedMaterialsData',
+                        as: 'rmd',
+                        cond: { $eq: ['$$rmd._id', '$$ri.item'] },
+                      },
+                    },
+                    0,
+                  ],
+                },
+              },
+            },
+          },
+        },
+      },
+      { $project: { receivedMaterialsData: 0 } },
+
+      // Lookup receivedItems.receivedBy -> User
+      {
+        $lookup: {
+          from: 'users',
+          localField: 'receivedItems.receivedBy',
+          foreignField: '_id',
+          as: 'receivedUsers',
+        },
+      },
+      {
+        $addFields: {
+          receivedItems: {
+            $map: {
+              input: '$receivedItems',
+              as: 'ri',
+              in: {
+                quantity: '$$ri.quantity',
+                receivedAt: '$$ri.receivedAt',
+                remarks: '$$ri.remarks',
+                material: '$$ri.material',
+                receivedBy: {
+                  $arrayElemAt: [
+                    {
+                      $filter: {
+                        input: '$receivedUsers',
+                        as: 'ru',
+                        cond: { $eq: ['$$ru._id', '$$ri.receivedBy'] },
+                      },
+                    },
+                    0,
+                  ],
+                },
+              },
+            },
+          },
+        },
+      },
+      { $project: { receivedUsers: 0 } },
+
+      // Lookup requestedBy
+      {
+        $lookup: {
+          from: 'users',
+          localField: 'requestedBy',
+          foreignField: '_id',
+          as: 'requestedBy',
+        },
+      },
+      { $unwind: { path: '$requestedBy', preserveNullAndEmptyArrays: true } },
+
+      // Lookup site
+      {
+        $lookup: {
+          from: 'projects',
+          localField: 'site',
+          foreignField: '_id',
+          as: 'site',
+        },
+      },
+      { $unwind: { path: '$site', preserveNullAndEmptyArrays: true } },
+
+      // 🔍 Global Search
+      ...(query
+        ? [
+            {
+              $match: {
+                $or: [
+                  { purpose: { $regex: query, $options: 'i' } },
+                  { 'materials.material.name': { $regex: query, $options: 'i' } },
+                  {
+                    'receivedItems.material.name': { $regex: query, $options: 'i' },
+                  },
+                  { 'site.name': { $regex: query, $options: 'i' } },
+                  { 'site.siteID': { $regex: query, $options: 'i' } },
+                  { 'requestedBy.firstname': { $regex: query, $options: 'i' } },
+                  { 'requestedBy.lastname': { $regex: query, $options: 'i' } },
+                  { 'requestedBy.email': { $regex: query, $options: 'i' } },
+                  { 'requestedBy.phone': { $regex: query, $options: 'i' } },
+                ],
+              },
+            },
+          ]
+        : []),
+
+      // Final projection
+      {
+        $project: {
+          createdAt: 1,
+          updatedAt: 1,
+          status: 1,
+          purpose: 1,
+          priority: 1,
+          requiredBefore: 1,
+          'site._id': 1,
+          'site.siteID': 1,
+          'site.name': 1,
+          'requestedBy._id': 1,
+          'requestedBy.firstname': 1,
+          'requestedBy.lastname': 1,
+          'requestedBy.employeeId': 1,
+          'requestedBy.email': 1,
+          'requestedBy.phone': 1,
+          'requestedBy.profileImage': 1,
+          'requestedBy.roles': 1,
+          'materials.quantity': 1,
+          'materials.unit': 1,
+          'materials.vendor': 1,
+          'materials.material._id': 1,
+          'materials.material.name': 1,
+          'materials.material.unit': 1,
+          'materials.material.price': 1,
+          'receivedItems.quantity': 1,
+          'receivedItems.receivedAt': 1,
+          'receivedItems.remarks': 1,
+          'receivedItems.material._id': 1,
+          'receivedItems.material.name': 1,
+          'receivedItems.material.unit': 1,
+          'receivedItems.material.price': 1,
+          'receivedItems.receivedBy._id': 1,
+          'receivedItems.receivedBy.firstname': 1,
+          'receivedItems.receivedBy.lastname': 1,
+        },
+      },
+
+      // Sort & paginate
+      { $sort: { createdAt: sort === 'asc' ? 1 : -1 } },
+      { $skip: (page - 1) * parseInt(limit) },
+      { $limit: parseInt(limit) },
+    ];
+
+    const results = await MaterialRequest.aggregate(pipeline);
+
+    // ---------- Total Count Pipeline ----------
+    const totalPipeline = [
+      { $match: match },
+
+      {
+        $lookup: {
+          from: 'materials',
+          localField: 'materials.item',
+          foreignField: '_id',
+          as: 'materialsData',
+        },
+      },
+      {
+        $lookup: {
+          from: 'projects',
+          localField: 'site',
+          foreignField: '_id',
+          as: 'site',
+        },
+      },
+      { $unwind: { path: '$site', preserveNullAndEmptyArrays: true } },
+      {
+        $lookup: {
+          from: 'users',
+          localField: 'requestedBy',
+          foreignField: '_id',
+          as: 'requestedBy',
+        },
+      },
+      { $unwind: { path: '$requestedBy', preserveNullAndEmptyArrays: true } },
+
+      ...(query
+        ? [
+            {
+              $match: {
+                $or: [
+                  { purpose: { $regex: query, $options: 'i' } },
+                  { 'materialsData.name': { $regex: query, $options: 'i' } },
+                  { 'site.name': { $regex: query, $options: 'i' } },
+                  { 'site.siteID': { $regex: query, $options: 'i' } },
+                  { 'requestedBy.firstname': { $regex: query, $options: 'i' } },
+                  { 'requestedBy.lastname': { $regex: query, $options: 'i' } },
+                  { 'requestedBy.email': { $regex: query, $options: 'i' } },
+                  { 'requestedBy.phone': { $regex: query, $options: 'i' } },
+                ],
+              },
+            },
+          ]
+        : []),
+
+      { $count: 'total' },
+    ];
+
+    const total = await MaterialRequest.aggregate(totalPipeline);
+
+    res.status(200).json({
+      data: results,
+      meta: {
+        total: total[0]?.total || 0,
+        page: Number(page),
+        limit: Number(limit),
+        totalPages: Math.ceil((total[0]?.total || 0) / limit),
+      },
+    });
+  } catch (error) {
+    console.error('Error searching material requests:', error);
+    res.status(500).json({
+      message: error.message || 'Server error searching material requests.',
+    });
   }
 };
 
@@ -1140,7 +819,7 @@ function normalizeAndValidateMaterials(materials) {
   } else if (
     typeof materials === 'object' &&
     materials.materialId &&
-    materials.quantity
+    materials.quantity !== undefined
   ) {
     materialsArray = [materials];
   } else {
@@ -1167,10 +846,18 @@ function normalizeAndValidateMaterials(materials) {
     if (itemErrors.length > 0) {
       errors.push(...itemErrors);
     } else {
-      validatedMaterials.push({
-        ...item,
-        quantity: Math.floor(item.quantity), // Ensure integer
-      });
+      const qty = parseFloat(item.quantity);
+
+      if (isNaN(qty) || qty <= 0) {
+        errors.push(
+          `Invalid quantity at item #${index + 1}. Must be a positive number`
+        );
+      } else {
+        validatedMaterials.push({
+          ...item,
+          quantity: qty, // ✅ keep float instead of flooring
+        });
+      }
     }
   });
 

@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const db = require('../models');
 const PaymentStages = db.projectPaymentStages;
 const { createLogManually } = require('../middlewares/createLog');
@@ -126,99 +127,173 @@ exports.deletePaymentStages = async (req, res) => {
 };
 
 exports.updatePaymentStagePointById = async (req, res) => {
-  const {
-    id,
-    prevPayment,
-    prevStage,
-    payment,
-    stage,
-    date,
-    siteID,
-    userName,
-    activeUser,
-  } = req.body;
+  const { siteID, stage, payment, newStage, newPayment } = req.body;
+  const session = await mongoose.startSession();
 
   try {
-    const updateResult = await PaymentStages.updateOne(
-      {
-        _id: id,
-        'stages.payment': prevPayment,
-        'stages.stage': prevStage,
-      },
-      {
-        $set: {
-          'stages.$.payment': parseFloat(payment),
-          'stages.$.stage': stage,
-        },
-      }
-    );
+    let responsePayload;
 
-    if (updateResult.modifiedCount === 0) {
-      return res.status(404).json({
-        status: 404,
-        message: 'No matching payment stage found to update',
+    const useTransaction = typeof session.startTransaction === 'function';
+
+    if (useTransaction) {
+      await session.withTransaction(async () => {
+        responsePayload = await updateStageAndLog({
+          req,
+          siteID,
+          stage,
+          payment,
+          newStage,
+          newPayment,
+          session,
+        });
+      });
+    } else {
+      // fallback: just call update without transaction
+      responsePayload = await updateStageAndLog({
+        req,
+        siteID,
+        stage,
+        payment,
+        newStage,
+        newPayment,
       });
     }
 
-    await createLogManually(
-      req,
-      `Updated payment stage "${stage}" (was "${prevStage}") for siteID ${siteID}.`,
-      siteID
-    );
-
-    return res.status(200).json({
-      status: 200,
-      message: 'Payment stage updated successfully',
-    });
+    return res.status(responsePayload.status).json(responsePayload);
   } catch (err) {
     console.error('Error updating payment stage:', err);
     return res.status(500).json({
       status: 500,
       message: 'Error updating payment stage',
+      error: err.message,
     });
+  } finally {
+    session.endSession();
   }
 };
 
+// Helper function for updating stage + creating log
+async function updateStageAndLog({
+  req,
+  siteID,
+  stage,
+  payment,
+  newStage,
+  newPayment,
+  session,
+}) {
+  // Find the document
+  const paymentStageDoc = await PaymentStages.findOne({
+    siteID,
+  }).session(session || null);
+  if (!paymentStageDoc) {
+    return { status: 404, message: 'Payment stage document not found' };
+  }
+
+  // Find the exact stage point
+  const stagePoint = paymentStageDoc.stages.find(
+    s => s.stage === stage && s.payment === parseFloat(payment)
+  );
+  if (!stagePoint) {
+    return {
+      status: 404,
+      message: 'No matching payment stage point found to update',
+    };
+  }
+
+  const oldStage = stagePoint.stage;
+  const oldPayment = stagePoint.payment;
+
+  // Atomic update in DB
+  const updateResult = await PaymentStages.updateOne(
+    {
+      siteID,
+      'stages.stage': stage,
+      'stages.payment': parseFloat(payment),
+    },
+    {
+      $set: {
+        'stages.$.stage': newStage || oldStage,
+        'stages.$.payment': newPayment ? parseFloat(newPayment) : oldPayment,
+      },
+    },
+    session ? { session } : {}
+  );
+
+  if (updateResult.modifiedCount === 0) {
+    return { status: 404, message: 'No matching stage found to update' };
+  }
+
+  // Create log
+  await createLogManually(
+    req,
+    `Updated payment stage for siteID ${siteID}: Stage "${oldStage}" → "${
+      newStage || oldStage
+    }", Payment "${oldPayment}" → "${newPayment || oldPayment}"`,
+    siteID,
+    null,
+    session
+  );
+
+  return { status: 200, message: 'Payment stage point updated successfully' };
+}
+
 exports.addNewPaymentStagePointById = async (req, res) => {
-  const { id, payment, stage, date, siteID, userName, activeUser } = req.body;
+  const { id, newPayment, newStage, siteID } = req.body;
+  const session = await mongoose.startSession();
 
   const newObj = {
-    payment: parseFloat(payment),
-    stage: stage,
+    payment: parseFloat(newPayment),
+    stage: newStage,
     paymentStatus: 'Not Due Yet',
     paymentDueDate: '',
     installments: [],
   };
 
   try {
-    const updateResult = await PaymentStages.updateOne(
-      { _id: id },
-      { $push: { stages: newObj } }
-    );
+    let responsePayload;
 
-    if (updateResult.modifiedCount === 0) {
-      return res.status(404).json({
-        status: 404,
-        message: 'No matching record found to update',
-      });
-    }
+    await session.withTransaction(async () => {
+      const updateResult = await PaymentStages.updateOne(
+        { _id: id },
+        { $push: { stages: newObj } },
+        { session }
+      );
 
-    await createLogManually(
-      req,
-      `Added new payment stage point "${stage}" with amount ${payment} for siteID ${siteID}.`,
-      siteID
-    );
+      if (updateResult.modifiedCount === 0) {
+        responsePayload = {
+          status: 404,
+          message: 'No matching record found to update',
+        };
+        await session.abortTransaction();
+        return;
+      }
 
-    return res.status(200).json({
-      status: 200,
-      message: 'New payment stage added successfully',
+      await createLogManually(
+        req,
+        req.user?._id,
+        `Added new payment stage point "${newStage}" with amount ${newPayment} for siteID ${siteID}.`,
+        siteID,
+        null,
+        session
+      );
+
+      responsePayload = {
+        status: 200,
+        message: 'New payment stage added successfully',
+      };
     });
+
+    return res.status(responsePayload.status).json(responsePayload);
   } catch (err) {
     console.error('Error adding payment stage point:', err);
     return res.status(500).json({
       status: 500,
       message: 'Error adding payment stage',
+      error: err.message,
     });
+  } finally {
+    session.endSession();
   }
 };
 

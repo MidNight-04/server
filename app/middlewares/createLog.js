@@ -87,3 +87,44 @@ exports.createLogManually = async (
     throw error; // bubble up so controller knows
   }
 };
+
+exports.createLogManual = async ({
+  req,
+  logMessage,
+  siteId = null,
+  taskId = null,
+  ticketId = null,
+  session = null,
+}) => {
+  try {
+    if (!logMessage) {
+      console.warn('createLogManually: Missing logMessage.');
+      return;
+    }
+
+    const userId = req.body?.userId || req.userId || req.user?._id;
+    const siteID = siteId || req.body?.projectId || req.body?.siteID;
+
+    const log = new Log({
+      log: logMessage,
+      userId,
+      siteID,
+      taskId,
+      ticketId,
+      date: new Date(),
+    });
+
+    if (session) {
+      // Save within the transaction
+      await log.save({ session });
+    } else {
+      // Save normally
+      await log.save();
+    }
+
+    return log;
+  } catch (error) {
+    console.error('Error creating log:', error.message);
+    throw error; // bubble up so controller knows
+  }
+};

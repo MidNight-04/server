@@ -22,7 +22,7 @@ module.exports = function (app) {
   //     }
   //     ]), controller.updateCategoryDetails);
   app.put(
-    '/api/client/project-document/update-statusbyclient',
+    '/api/client/project-document/updatestatus/:id',
     verifyToken,
     controller.updateDocumentStatusByClient
   );

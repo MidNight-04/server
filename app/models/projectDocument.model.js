@@ -1,4 +1,3 @@
-const { type } = require('@testing-library/user-event/dist/type');
 const mongoose = require('mongoose');
 
 const projectDocumentModel = mongoose.model(
@@ -14,7 +13,13 @@ const projectDocumentModel = mongoose.model(
       },
       status: {
         type: String,
+        enum: ['Pending', 'Approved', 'Rejected'],
         default: 'Pending',
+      },
+      ApprovalDate: Date,
+      approvedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
       },
       document: [],
     },

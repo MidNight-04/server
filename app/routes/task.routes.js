@@ -1,5 +1,4 @@
 const controller = require('../controllers/task.controller');
-const { uploadImage } = require('../middlewares/uploadImage');
 const uploader = require('../middlewares/fileUploader');
 const { verifyToken, isSenior } = require('../middlewares/authJwt');
 
@@ -9,22 +8,7 @@ module.exports = function (app) {
     next();
   });
 
-  app.post(
-    '/api/task/add',
-    // uploadImage.fields([
-    //   {
-    //     name: 'file',
-    //     maxCount: 10,
-    //   },
-    //   {
-    //     name: 'audio',
-    //     maxCount: 10,
-    //   },
-    // ]),
-    uploader,
-    verifyToken,
-    controller.addTask
-  );
+  app.post('/api/task/add', uploader, verifyToken, controller.addTask);
   app.post('/api/task/getall', verifyToken, controller.getAllTask);
   app.post(
     '/api/task/employeeID/:id',
@@ -34,12 +18,6 @@ module.exports = function (app) {
   app.put(
     '/api/task/update/member',
     verifyToken,
-    // uploadImage.fields([
-    //   {
-    //     name: 'image',
-    //     maxCount: 20,
-    //   },
-    // ]),
     uploader,
     controller.taskUpdateByMember
   );
@@ -48,12 +26,6 @@ module.exports = function (app) {
     '/api/task/update/admin',
     verifyToken,
     isSenior,
-    // uploadImage.fields([
-    //   {
-    //     name: 'image',
-    //     maxCount: 20,
-    //   },
-    // ]),
     uploader,
     controller.taskUpdateByAdmin
   );
@@ -84,24 +56,10 @@ module.exports = function (app) {
     isSenior,
     controller.getAllProjectTickets
   );
-  // app.put("/api/constructionstep/deletefield", controller.deleteConstructionPointById);
-  // app.delete("/api/constructionstep/delete/:id", controller.deleteConstructionStepById);
   app.get('/api/task/gettaskbyid/:id', verifyToken, controller.getTaskByid);
-  app.post('/api/task/search/:searchTerm', verifyToken, controller.searchTask);
   app.post(
     '/api/task/taskaddcomment',
     verifyToken,
-    // isSenior,
-    // uploadImage.fields([
-    //   {
-    //     name: 'image',
-    //     maxCount: 20,
-    //   },
-    //   {
-    //     name: 'audio',
-    //     maxCount: 1,
-    //   },
-    // ]),
     uploader,
     controller.taskAddComment
   );
@@ -136,68 +94,10 @@ module.exports = function (app) {
     controller.manuallyCloseTask
   );
 
-  app.post(
-    '/api/task/gettodaytaskbyid',
-    verifyToken,
-    controller.getTodayTaskById
-  );
-  app.post(
-    '/api/task/getyesterdaytaskbyid',
-    verifyToken,
-    controller.getYesterdayTaskById
-  );
-  app.post(
-    '/api/task/gettomorrowtaskbyid',
-    verifyToken,
-    controller.getTomorrowTaskById
-  );
-  app.post(
-    '/api/task/getthisweektaskbyid',
-    verifyToken,
-    controller.getThisWeekTaskById
-  );
-  app.post(
-    '/api/task/getlastweektaskbyid',
-    verifyToken,
-    controller.getLastWeekTaskById
-  );
-  app.post(
-    '/api/task/getnextweektaskbyid',
-    verifyToken,
-    controller.nextWeekTaskById
-  );
-  app.post(
-    '/api/task/getlastmonthtaskbyid',
-    verifyToken,
-    controller.getLastMonthTaskById
-  );
-  app.post(
-    '/api/task/getthismonthtaskbyid',
-    verifyToken,
-    controller.thisMonthTaskById
-  );
-  app.post(
-    '/api/task/getnextmonthtaskbyid',
-    verifyToken,
-    controller.getNextMonthTaskById
-  );
-  app.post(
-    '/api/task/getlastyeartaskbyid',
-    verifyToken,
-    controller.getLastYearTaskById
-  );
-  app.post(
-    '/api/task/getthisyeartaskbyid',
-    verifyToken,
-    controller.getThisYearTaskById
-  );
   app.post('/api/task/customfilters', verifyToken, controller.customFilters);
   app.post('/api/task/delegatedtasks', verifyToken, controller.delegatedTasks);
+  app.post('/api/task/mytasks', verifyToken, controller.myTasks);
   app.get('/api/task/getTask', verifyToken, controller.getTask);
-  app.post(
-    '/api/task/customdashboardfilters',
-    controller.customDashboardFilters
-  );
   app.post(
     '/api/task/addchecklist',
     verifyToken,
@@ -215,5 +115,9 @@ module.exports = function (app) {
     isSenior,
     controller.deleteChecklist
   );
-  app.post('/api/task/dashboardfilter', verifyToken, controller.dashboardFilter);
+  app.post(
+    '/api/task/dashboardfilter',
+    verifyToken,
+    controller.dashboardFilter
+  );
 };

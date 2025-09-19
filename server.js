@@ -132,6 +132,7 @@ registerRoutes([
   './app/routes/vendor.routes',
   './app/routes/material.routes',
   './app/routes/purpose.routes',
+  './app/routes/signUp.routes',
 ]);
 
 // Fallback route

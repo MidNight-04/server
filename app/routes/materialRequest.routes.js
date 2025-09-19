@@ -12,10 +12,7 @@ module.exports = function (app) {
     verifyToken,
     controller.createMaterialRequest
   );
-  app.get(
-    '/api/materialrequest/getallrequest',
-    controller.getAllMaterialRequests
-  );
+  app.get('/api/materialrequest/requests', controller.materialRequests);
   app.get(
     '/api/materialrequest/getorderbyid/:id',
     controller.getMaterialRequestById

@@ -5,35 +5,216 @@ const TaskComment = require('../models/taskCommentModel');
 
 exports.getAllTickets = async (req, res) => {
   try {
-    const tickets = await Ticket.find()
-      .populate({
-        path: 'assignMember assignedBy',
-        select:
-          '-token -password -refreshToken -loginOtp -phone -email -country -city -state -userStatus -isExit',
-        populate: {
-          path: 'roles',
-          model: 'Role',
-          select: 'name',
-        },
-      })
-      .populate({
-        path: 'comments',
-        populate: {
-          path: 'createdBy',
-          model: 'User',
-          select:
-            '-token -password -refreshToken -loginOtp -phone -email -country -city -state -userStatus -isExit',
-        },
-      })
+    const currentUser = req.user?._id || req.userId || req.body?.userId;
+    const userWithRoles = await User.findById(currentUser)
+      .populate('roles')
+      .select('roles')
       .lean();
 
-    return res.status(200).json({ success: true, data: tickets });
+    const isAdmin =
+      userWithRoles?.roles?.name !== 'Client' ||
+      userWithRoles?.roles?.name !== 'Site Engineer';
+
+    const { search, page = 1, limit = 10 } = req.query;
+    const searchRegex = search ? new RegExp(search, 'i') : null;
+
+    const pageNum = parseInt(page, 10) || 1;
+    const limitNum = parseInt(limit, 10) || 10;
+    const skip = (pageNum - 1) * limitNum;
+
+    const pipeline = [];
+
+    pipeline.push({
+      $sort: { createdAt: -1 },
+    });
+
+    // Only restrict if not Admin
+    if (!isAdmin) {
+      pipeline.push({
+        $match: {
+          $or: [{ assignMember: currentUser }, { issueMember: currentUser }],
+        },
+      });
+    }
+
+    // Lookup assignMember & assignedBy
+    pipeline.push(
+      {
+        $lookup: {
+          from: 'users',
+          localField: 'assignMember',
+          foreignField: '_id',
+          as: 'assignMember',
+        },
+      },
+      {
+        $lookup: {
+          from: 'users',
+          localField: 'assignedBy',
+          foreignField: '_id',
+          as: 'assignedBy',
+        },
+      },
+      { $unwind: { path: '$assignMember', preserveNullAndEmptyArrays: true } },
+      { $unwind: { path: '$assignedBy', preserveNullAndEmptyArrays: true } },
+
+      // Lookup roles
+      {
+        $lookup: {
+          from: 'roles',
+          localField: 'assignMember.roles',
+          foreignField: '_id',
+          as: 'assignMember.roles',
+        },
+      },
+      {
+        $lookup: {
+          from: 'roles',
+          localField: 'assignedBy.roles',
+          foreignField: '_id',
+          as: 'assignedBy.roles',
+        },
+      },
+
+      // Lookup comments
+      {
+        $lookup: {
+          from: 'comments',
+          localField: 'comments',
+          foreignField: '_id',
+          as: 'comments',
+        },
+      },
+
+      // Lookup users for comments
+      {
+        $lookup: {
+          from: 'users',
+          localField: 'comments.createdBy',
+          foreignField: '_id',
+          as: 'commentUsers',
+        },
+      },
+
+      // Merge commentUsers into comments
+      {
+        $addFields: {
+          comments: {
+            $map: {
+              input: '$comments',
+              as: 'comment',
+              in: {
+                $mergeObjects: [
+                  '$$comment',
+                  {
+                    createdBy: {
+                      $arrayElemAt: [
+                        {
+                          $filter: {
+                            input: '$commentUsers',
+                            as: 'cu',
+                            cond: { $eq: ['$$cu._id', '$$comment.createdBy'] },
+                          },
+                        },
+                        0,
+                      ],
+                    },
+                  },
+                ],
+              },
+            },
+          },
+        },
+      }
+    );
+
+    // Global search
+    if (searchRegex) {
+      pipeline.push({
+        $match: {
+          $or: [
+            { title: searchRegex },
+            { description: searchRegex },
+            { status: searchRegex },
+            { siteID: searchRegex },
+            { query: searchRegex },
+
+            { 'assignMember.username': searchRegex },
+            { 'assignMember.firstname': searchRegex },
+            { 'assignMember.lastname': searchRegex },
+
+            { 'assignedBy.username': searchRegex },
+            { 'assignedBy.firstname': searchRegex },
+            { 'assignedBy.lastname': searchRegex },
+
+            { 'assignMember.roles.name': searchRegex },
+            { 'assignedBy.roles.name': searchRegex },
+          ],
+        },
+      });
+    }
+
+    // Projection (remove sensitive fields)
+    pipeline.push({
+      $project: {
+        'assignMember.token': 0,
+        'assignMember.password': 0,
+        'assignMember.refreshToken': 0,
+        'assignMember.loginOtp': 0,
+        'assignMember.phone': 0,
+        'assignMember.email': 0,
+        'assignMember.country': 0,
+        'assignMember.city': 0,
+        'assignMember.state': 0,
+        'assignMember.userStatus': 0,
+        'assignMember.isExit': 0,
+
+        'assignedBy.token': 0,
+        'assignedBy.password': 0,
+        'assignedBy.refreshToken': 0,
+        'assignedBy.loginOtp': 0,
+        'assignedBy.phone': 0,
+        'assignedBy.email': 0,
+        'assignedBy.country': 0,
+        'assignedBy.city': 0,
+        'assignedBy.state': 0,
+        'assignedBy.userStatus': 0,
+        'assignedBy.isExit': 0,
+
+        commentUsers: 0,
+      },
+    });
+
+    // Pagination
+    pipeline.push({
+      $facet: {
+        metadata: [{ $count: 'total' }],
+        data: [{ $skip: skip }, { $limit: limitNum }],
+      },
+    });
+
+    const result = await Ticket.aggregate(pipeline);
+
+    const tickets = result[0]?.data || [];
+    const total = result[0]?.metadata[0]?.total || 0;
+
+    return res.status(200).json({
+      success: true,
+      data: tickets,
+      pagination: {
+        total,
+        page: pageNum,
+        limit: limitNum,
+        totalPages: Math.ceil(total / limitNum),
+      },
+    });
   } catch (error) {
     console.error('Error fetching tickets:', error);
     return res.status(500).json({
       success: false,
       message: 'Could not fetch tickets',
-      error: error.message,
+      error:
+        process.env.NODE_ENV === 'development' ? error.stack : error.message,
     });
   }
 };

@@ -6,8 +6,8 @@ const Project = db.projects;
 const mongoose = require('mongoose');
 const User = require('../models/user.model');
 const Ticket = require('../models/ticketModel');
-const Client = require('../models/client.model');
 const awsS3 = require('../middlewares/aws-s3');
+const Joi = require('joi');
 // const { updateTaskAndReschedule } = require('../helper/schedule');
 const {
   assignedNotification,
@@ -18,6 +18,7 @@ const { uploadToS3AndExtractUrls } = require('../helper/s3Helpers');
 const { sendTeamNotification } = require('../helper/notification');
 const { activateNextSteps } = require('../helper/nextStepActivator');
 const { createLogManually } = require('../middlewares/createLog');
+const { getDateRange } = require('../helper/dateRange');
 
 let today = new Date();
 let yyyy = today.getFullYear();
@@ -512,308 +513,19 @@ exports.searchTask = async (req, res) => {
   }
 };
 
-// exports.taskAddComment = async (req, res) => {
-//   try {
-//     const {
-//       taskId,
-//       type,
-//       comment = '',
-//       userId,
-//       isWorking,
-//       material,
-//       workers,
-//     } = req.body;
-
-//     if (!taskId || !type || !userId) {
-//       return res.status(400).send({ message: 'Required fields missing.' });
-//     }
-
-//     const task = await Task.findById(taskId).populate('issueMember');
-//     const member = await User.findById(userId);
-//     if (!task || !member) {
-//       return res.status(404).send({ message: 'Task or user not found' });
-//     }
-
-//     // Upload files if provided
-//     const images = req.files?.image
-//       ? await uploadToS3AndExtractUrls(req.files.image)
-//       : [];
-//     const files = req.files?.docs
-//       ? await uploadToS3AndExtractUrls(req.files.docs)
-//       : [];
-//     const audio = req.files?.audio
-//       ? (await uploadToS3AndExtractUrls(req.files.audio))?.[0]
-//       : null;
-
-//     // 🔔 Notification logic
-//     if (task.category === 'Project') {
-//       const project = await Project.findOne({ siteID: task.siteID }).populate(
-//         'sr_engineer'
-//       );
-//       const sr = project?.sr_engineer?.[0];
-//       if (sr && sr.toString() !== userId) {
-//         sendTeamNotification({
-//           recipient: sr,
-//           sender: `${member.firstname} ${member.lastname || ''}`.trim(),
-//           task,
-//         });
-//       }
-//     } else {
-//       const assignedBy = await User.findById(task.assignedBy);
-//       if (assignedBy && assignedBy._id.toString() !== userId) {
-//         sendTeamNotification({
-//           recipient: assignedBy,
-//           sender: `${member.firstname} ${member.lastname || ''}`.trim(),
-//           task,
-//         });
-//       }
-
-//       const issueMember = task.issueMember;
-//       if (issueMember && issueMember._id.toString() !== userId) {
-//         sendTeamNotification({
-//           recipient: issueMember,
-//           sender: `${member.firstname} ${member.lastname || ''}`.trim(),
-//           task,
-//         });
-//       }
-//     }
-
-//     // ✅ Handle completion step progression (activate next 2 tasks)
-//     if (type === 'Complete') {
-//       const project = await Project.findOne({ siteID: task.siteID });
-
-//       if (project) {
-//         const today = new Date();
-
-//         const activateTask = async tId => {
-//           const taskToActivate = await Task.findById(tId);
-//           if (taskToActivate && !taskToActivate.isActive) {
-//             const dueDate = new Date(today);
-//             dueDate.setDate(today.getDate() + taskToActivate.duration);
-
-//             await Task.findByIdAndUpdate(
-//               tId,
-//               {
-//                 $set: {
-//                   isActive: true,
-//                   assignedOn: today,
-//                   dueDate,
-//                 },
-//               },
-//               { new: true }
-//             );
-//           }
-//         };
-
-//         // Flatten steps in order
-//         const allSteps = project.project_status.flatMap(ps => ps.step);
-
-//         // Find current index
-//         const currentIndex = allSteps.findIndex(
-//           s => s.taskId.toString() === task._id.toString()
-//         );
-
-//         if (currentIndex !== -1) {
-//           const nextSteps = allSteps.slice(currentIndex + 1, currentIndex + 3);
-//           for (const step of nextSteps) {
-//             if (step?.taskId) await activateTask(step.taskId);
-//           }
-//         }
-
-//         task.completedOn = new Date();
-//       }
-//     }
-
-//     // ✅ Task status updates
-//     if (type === 'Reopened') {
-//       task.status = 'In Progress';
-//     } else if (
-//       type === 'Complete' ||
-//       (type === 'In Progress' && task.status !== 'Overdue')
-//     ) {
-//       task.status = type;
-//     }
-
-//     // ✅ Create comment
-//     const newComment = {
-//       comment: comment.trim(),
-//       type,
-//       createdBy: userId,
-//       taskId,
-//       images,
-//       audio,
-//       file: files,
-//     };
-
-//     if (type === 'In Progress') {
-//       if (!task.isActive) {
-//         task.isActive = true;
-//         task.assignedOn = new Date();
-//         const due = new Date();
-//         const day = due.getDate() + task.duration;
-//         due.setDate(day);
-//         task.dueDate = due;
-//       }
-//       newComment.siteDetails = {
-//         isWorking: isWorking === 'yes',
-//         materialAvailable: material === 'yes',
-//         workers,
-//       };
-//     }
-
-//     const savedComment = await TaskComment.create(newComment);
-//     if (!savedComment) {
-//       return res.status(500).send({ message: 'Failed to save comment' });
-//     }
-
-//     // Link comment to task
-//     task.comments.push(savedComment._id);
-//     task.updatedOn = new Date();
-//     await task.save();
-
-//     // ✅ Logging
-//     const logParts = ['Added new comment'];
-//     if (comment.trim()) logParts.push(`text: "${comment}"`);
-//     if (images.length > 0) logParts.push(`+ ${images.length} image(s)`);
-//     if (files.length > 0) logParts.push(`+ ${files.length} file(s)`);
-//     if (audio) logParts.push(`+ audio`);
-
-//     await createLogManually(req, logParts.join(', '), task.siteID, task._id);
-
-//     res.status(200).send({ message: 'Comment added successfully' });
-//   } catch (error) {
-//     console.error('Error adding comment:', error);
-//     res.status(500).send({ message: 'Error while adding comment' });
-//   }
-// };
-
-// exports.taskAddComment = async (req, res) => {
-//   try {
-//     const { taskId, type, comment, userId, isWorking, material, workers } =
-//       req.body;
-
-//     if (!taskId || !type || !comment || !userId) {
-//       return res.status(400).send({ message: 'Required fields missing.' });
-//     }
-
-//     const task = await Task.findById(taskId).populate('issueMember');
-//     const member = await User.findById(userId);
-//     if (!task || !member)
-//       return res.status(404).send({ message: 'Task or user not found' });
-
-//     // Upload files
-//     const images = await uploadToS3AndExtractUrls(req.files?.image);
-//     const files = await uploadToS3AndExtractUrls(req.files?.docs);
-//     const audio =
-//       (await uploadToS3AndExtractUrls(req.files?.audio))?.[0] || null;
-
-//     // Notification logic
-//     if (task.category === 'Project') {
-//       const project = await Project.findOne({ siteID: task.siteID }).populate(
-//         'sr_engineer'
-//       );
-//       const sr = project?.sr_engineer?.[0];
-//       if (sr && sr !== userId) {
-//         sendTeamNotification({
-//           recipient: sr,
-//           sender: member.firstname + ' ' + member?.lastname,
-//           task,
-//         });
-//       }
-//     } else {
-//       const assignedBy = await User.findById(task.assignedBy);
-//       if (assignedBy && assignedBy._id.toString() !== userId) {
-//         sendTeamNotification({
-//           recipient: assignedBy,
-//           sender: member.firstname + ' ' + member?.lastname,
-//           task,
-//         });
-//       }
-
-//       const issueMember = task.issueMember;
-//       if (issueMember && issueMember._id.toString() !== userId) {
-//         sendTeamNotification({
-//           recipient: issueMember,
-//           sender: member.firstname + ' ' + member?.lastname,
-//           task,
-//         });
-//       }
-//     }
-
-//     // Handle completion step progression
-//     if (type === 'Complete') {
-//       const project = await Project.findOne({ siteID: task.siteID });
-//       if (project) await activateNextSteps(task, project);
-//     }
-
-//     // Task status updates
-//     if (type === 'Reopened') {
-//       task.status = 'In Progress';
-//     } else if (
-//       type === 'Complete' ||
-//       (type === 'In Progress' && task.status !== 'Overdue')
-//     ) {
-//       task.status = type;
-//     }
-
-//     // Create comment
-//     const newComment = {
-//       comment,
-//       type,
-//       createdBy: userId,
-//       taskId,
-//       images,
-//       audio,
-//       file: files,
-//     };
-
-//     if (type === 'In Progress') {
-//       newComment.siteDetails = {
-//         isWorking: isWorking === 'yes',
-//         materialAvailable: material === 'yes',
-//         workers,
-//       };
-//     }
-
-//     const savedComment = await TaskComment.create(newComment);
-//     if (!savedComment)
-//       return res.status(500).send({ message: 'Failed to save comment' });
-
-//     task.comments.push(savedComment._id);
-//     task.updatedOn = new Date().toISOString();
-//     await task.save();
-//     const logParts = [`Added New Comment ${comment}`];
-
-//     if (images.length > 0) {
-//       logParts.push(
-//         `added ${images.length} image${images.length > 1 ? 's' : ''}`
-//       );
-//     }
-
-//     if (files.length > 0) {
-//       logParts.push(`added ${files.length} file${files.length > 1 ? 's' : ''}`);
-//     }
-
-//     if (audio) {
-//       logParts.push('added audio');
-//     }
-
-//     createLogManually(req, logParts.join(', '), task.siteID, task._id);
-
-//     res.status(200).send({ message: 'Comment added successfully' });
-//   } catch (error) {
-//     console.error(error);
-//     res.status(500).send({ message: 'Error while adding comment' });
-//   }
-// };
-
-// controllers/taskController.js
-const Joi = require('joi');
-
 // Validation schema (Joi)
 const commentSchema = Joi.object({
   taskId: Joi.string().required(),
-  type: Joi.string().valid('In Progress', 'Complete', 'Reopened').required(),
+  type: Joi.string()
+    .valid(
+      'In Progress',
+      'Complete',
+      'Comment',
+      'Closed',
+      'Reopened',
+      'Task Updated'
+    )
+    .required(),
   comment: Joi.string().allow('').optional(),
   userId: Joi.string().required(),
   isWorking: Joi.string().valid('yes', 'no').optional(),
@@ -1287,411 +999,6 @@ exports.reassignTask = async (req, res) => {
   }
 };
 
-exports.getTodayTaskById = async (req, res) => {
-  const { start, end } = getTodayRange();
-  const userId = req.body?.userId;
-  const assignedBy = req.body?.assignedId;
-
-  const page = req.body?.page;
-
-  const query = {
-    isActive: true,
-    dueDate: { $gte: start, $lte: end },
-  };
-  if (userId) {
-    query.issueMember = userId;
-  }
-  if (assignedBy) {
-    query.assignedBy = assignedBy;
-  }
-
-  const assignedTo = req.body?.assignedTo;
-  if (assignedTo) {
-    query.issueMember = assignedTo;
-  }
-
-  const category = req.body?.category;
-  if (category) {
-    query.category = category;
-  }
-
-  const repeatType = req.body?.repeat;
-  if (repeatType) {
-    query['repeat.repeatType'] = repeatType;
-  }
-
-  await fetchTasks(res, query, 'No tasks found for today', page);
-};
-
-exports.getYesterdayTaskById = async (req, res) => {
-  const { start, end } = getYesterdayRange();
-  const userId = req.body?.userId;
-  const assignedBy = req.body?.assignedId;
-  const page = req.body?.page;
-
-  const query = {
-    isActive: true,
-    dueDate: { $gte: start, $lte: end },
-  };
-  if (userId) {
-    query.issueMember = userId;
-  }
-  if (assignedBy) {
-    query.assignedBy = assignedBy;
-  }
-
-  const assignedTo = req.body?.assignedTo;
-  if (assignedTo) {
-    query.issueMember = assignedTo;
-  }
-
-  const category = req.body?.category;
-  if (category) {
-    query.category = category;
-  }
-
-  const repeatType = req.body?.repeat;
-  if (repeatType) {
-    query['repeat.repeatType'] = repeatType;
-  }
-
-  await fetchTasks(res, query, 'No tasks found for yesterday', page);
-};
-
-exports.getTomorrowTaskById = async (req, res) => {
-  const { start, end } = getTomorrowRange();
-  const userId = req.body?.userId;
-  const assignedBy = req.body?.assignedId;
-  const page = req.body?.page;
-
-  const query = {
-    isActive: true,
-    dueDate: { $gte: start, $lte: end },
-  };
-  if (userId) {
-    query.issueMember = userId;
-  }
-  if (assignedBy) {
-    query.assignedBy = assignedBy;
-  }
-
-  const assignedTo = req.body?.assignedTo;
-  if (assignedTo) {
-    query.issueMember = assignedTo;
-  }
-
-  const category = req.body?.category;
-  if (category) {
-    query.category = category;
-  }
-
-  const repeatType = req.body?.repeat;
-  if (repeatType) {
-    query['repeat.repeatType'] = repeatType;
-  }
-
-  await fetchTasks(res, query, 'No tasks found for tomorrow', page);
-};
-
-exports.getThisWeekTaskById = async (req, res) => {
-  const { start, end } = getWeekRange();
-  const userId = req.body?.userId;
-  const assignedBy = req.body?.assignedId;
-  const page = req.body?.page;
-
-  const query = {
-    isActive: true,
-    dueDate: { $gte: start, $lte: end },
-  };
-  if (userId) {
-    query.issueMember = userId;
-  }
-  if (assignedBy) {
-    query.assignedBy = assignedBy;
-  }
-
-  const assignedTo = req.body?.assignedTo;
-  if (assignedTo) {
-    query.issueMember = assignedTo;
-  }
-
-  const category = req.body?.category;
-  if (category) {
-    query.category = category;
-  }
-
-  const repeatType = req.body?.repeat;
-  if (repeatType) {
-    query['repeat.repeatType'] = repeatType;
-  }
-
-  await fetchTasks(res, query, 'No tasks found for this week', page);
-};
-
-exports.getLastWeekTaskById = async (req, res) => {
-  const { start, end } = getWeekRange(-7);
-  const userId = req.body?.userId;
-  const assignedBy = req.body?.assignedId;
-  const page = req.body?.page;
-  const query = {
-    isActive: true,
-    dueDate: { $gte: start, $lte: end },
-  };
-
-  if (userId) {
-    query.issueMember = userId;
-  }
-
-  if (assignedBy) {
-    query.assignedBy = assignedBy;
-  }
-
-  const assignedTo = req.body?.assignedTo;
-  if (assignedTo) {
-    query.issueMember = assignedTo;
-  }
-
-  const category = req.body?.category;
-  if (category) {
-    query.category = category;
-  }
-
-  const repeatType = req.body?.repeat;
-  if (repeatType) {
-    query['repeat.repeatType'] = repeatType;
-  }
-
-  await fetchTasks(res, query, 'No tasks found for last week', page);
-};
-
-exports.nextWeekTaskById = async (req, res) => {
-  const { start, end } = getWeekRange(7);
-  const userId = req.body?.userId;
-  const assignedBy = req.body?.assignedId;
-  const page = req.body?.page;
-
-  const query = {
-    isActive: true,
-    dueDate: { $gte: start, $lte: end },
-  };
-  if (userId) {
-    query.issueMember = userId;
-  }
-  if (assignedBy) {
-    query.assignedBy = assignedBy;
-  }
-
-  const assignedTo = req.body?.assignedTo;
-  if (assignedTo) {
-    query.issueMember = assignedTo;
-  }
-
-  const category = req.body?.category;
-  if (category) {
-    query.category = category;
-  }
-
-  const repeatType = req.body?.repeat;
-  if (repeatType) {
-    query['repeat.repeatType'] = repeatType;
-  }
-
-  await fetchTasks(res, query, 'No tasks found for next week', page);
-};
-
-exports.thisMonthTaskById = async (req, res) => {
-  const { start, end } = getMonthRange();
-  const userId = req.body?.userId;
-  const assignedBy = req.body?.assignedId;
-  const page = req.body?.page;
-
-  const query = {
-    isActive: true,
-    dueDate: { $gte: start, $lte: end },
-  };
-  if (userId) {
-    query.issueMember = userId;
-  }
-  if (assignedBy) {
-    query.assignedBy = assignedBy;
-  }
-
-  const assignedTo = req.body?.assignedTo;
-  if (assignedTo) {
-    query.issueMember = assignedTo;
-  }
-
-  const category = req.body?.category;
-  if (category) {
-    query.category = category;
-  }
-
-  const repeatType = req.body?.repeat;
-  if (repeatType) {
-    query['repeat.repeatType'] = repeatType;
-  }
-
-  await fetchTasks(res, query, 'No tasks found for this month', page);
-};
-
-exports.getLastMonthTaskById = async (req, res) => {
-  const { start, end } = getMonthRange(-1);
-  const userId = req.body?.userId;
-  const assignedBy = req.body?.assignedId;
-  const page = req.body?.page;
-
-  const query = {
-    isActive: true,
-    dueDate: { $gte: start, $lte: end },
-  };
-  if (userId) {
-    query.issueMember = userId;
-  }
-  if (assignedBy) {
-    query.assignedBy = assignedBy;
-  }
-
-  const assignedTo = req.body?.assignedTo;
-  if (assignedTo) {
-    query.issueMember = assignedTo;
-  }
-
-  const category = req.body?.category;
-  if (category) {
-    query.category = category;
-  }
-
-  const repeatType = req.body?.repeat;
-  if (repeatType) {
-    query['repeat.repeatType'] = repeatType;
-  }
-
-  await fetchTasks(res, query, 'No tasks found for last month', page);
-};
-
-exports.getNextMonthTaskById = async (req, res) => {
-  const { start, end } = getMonthRange(1);
-  const userId = req.body?.userId;
-  const assignedBy = req.body?.assignedId;
-  const page = req.body?.page;
-
-  const query = {
-    isActive: true,
-    dueDate: { $gte: start, $lte: end },
-  };
-  if (userId) {
-    query.issueMember = userId;
-  }
-  if (assignedBy) {
-    query.assignedBy = assignedBy;
-  }
-
-  const assignedTo = req.body?.assignedTo;
-  if (assignedTo) {
-    query.issueMember = assignedTo;
-  }
-
-  const category = req.body?.category;
-  if (category) {
-    query.category = category;
-  }
-
-  const repeatType = req.body?.repeat;
-  if (repeatType) {
-    query['repeat.repeatType'] = repeatType;
-  }
-
-  await fetchTasks(res, query, 'No tasks found for next month', page);
-};
-
-exports.getThisYearTaskById = async (req, res) => {
-  const { start, end } = getYearRange();
-  const userId = req.body?.userId;
-  const assignedBy = req.body?.assignedId;
-  const page = req.body?.page;
-  const query = {
-    isActive: true,
-    dueDate: { $gte: start, $lte: end },
-  };
-  if (userId) {
-    query.issueMember = userId;
-  }
-  if (assignedBy) {
-    query.assignedBy = assignedBy;
-  }
-  const assignedTo = req.body?.assignedTo;
-  if (assignedTo) {
-    query.issueMember = assignedTo;
-  }
-
-  const category = req.body?.category;
-  if (category) {
-    query.category = category;
-  }
-
-  const repeatType = req.body?.repeat;
-  if (repeatType) {
-    query['repeat.repeatType'] = repeatType;
-  }
-
-  await fetchTasks(res, query, 'No tasks found for this year', page);
-};
-
-exports.getLastYearTaskById = async (req, res) => {
-  const { start, end } = getYearRange(-1);
-  const userId = req.body?.userId;
-  const assignedBy = req.body?.assignedId;
-  const page = req.body?.page;
-  const query = {
-    isActive: true,
-    dueDate: { $gte: start, $lte: end },
-  };
-  if (userId) {
-    query.issueMember = userId;
-  }
-  if (assignedBy) {
-    query.assignedBy = assignedBy;
-  }
-  const assignedTo = req.body?.assignedTo;
-  if (assignedTo) {
-    query.issueMember = assignedTo;
-  }
-
-  const category = req.body?.category;
-  if (category) {
-    query.category = category;
-  }
-
-  const repeatType = req.body?.repeat;
-  if (repeatType) {
-    query['repeat.repeatType'] = repeatType;
-  }
-
-  await fetchTasks(res, query, 'No tasks found for last year', page);
-};
-
-exports.getTaskByDateById = async (req, res) => {
-  const { date } = req.params;
-  const targetDate = new Date(date);
-  const start = new Date(targetDate.setHours(0, 0, 0, 0));
-  const end = new Date(targetDate.setHours(23, 59, 59, 999));
-  const userId = req.body?.userId;
-  const assignedBy = req.body?.assignedId;
-  const page = req.body?.page;
-
-  const query = {
-    isActive: true,
-    dueDate: { $gte: start, $lte: end },
-  };
-  if (userId) {
-    query.issueMember = userId;
-  }
-  if (assignedBy) {
-    query.assignedBy = assignedBy;
-  }
-  await fetchTasks(res, query, 'No tasks found for the given date', page);
-};
-
 exports.getTaskByDateRangeById = async (req, res) => {
   const { startDate, endDate } = req.params;
   const userId = req.body?.userId;
@@ -1710,182 +1017,278 @@ exports.getTaskByDateRangeById = async (req, res) => {
   }
   await fetchTasks(res, query, 'No tasks found for the given date range', page);
 };
-//add branch in task model and while creating task
+
 exports.customFilters = async (req, res) => {
-  const userId = req.body?.userId;
-  const page = req.body?.page;
-  const selectedCategory = req.body?.selectedCategory;
-  const assignedBy = req.body?.assignedBy;
-  const assignedTo = req.body?.assignedTo;
-  const frequency = req.body?.frequency;
-  const priority = req.body?.priority;
-  const filter = req.body?.filter;
-  const siteId = req.body?.siteId;
-  const withComments = req.body?.withComments;
-  const branch = req.body?.branch;
-
-  let start;
-  let end;
-
-  switch (filter) {
-    case 'Today':
-      ({ start, end } = getTodayRange());
-      break;
-    case 'Yesterday':
-      ({ start, end } = getYesterdayRange());
-      break;
-    case 'Tomorrow':
-      ({ start, end } = getTomorrowRange());
-      break;
-    case 'This Week':
-      ({ start, end } = getWeekRange());
-      break;
-    case 'Last Week':
-      ({ start, end } = getWeekRange(-7));
-      break;
-    case 'Next Week':
-      ({ start, end } = getWeekRange(7));
-      break;
-    case 'This Month':
-      ({ start, end } = getMonthRange());
-      break;
-    case 'Last Month':
-      ({ start, end } = getMonthRange(-1));
-      break;
-    case 'Next Month':
-      ({ start, end } = getMonthRange(1));
-      break;
-    case 'This Year':
-      ({ start, end } = getYearRange());
-    // default:
-    //   ({ start, end } = getWeekRange());
-  }
-
-  const query = {
-    isActive: true,
-    dueDate: { $gte: start, $lte: end },
-  };
-
-  if (userId) {
-    query.issueMember = userId;
-  }
-  if (selectedCategory) {
-    query.category = selectedCategory;
-  }
-  if (assignedBy) {
-    query.assignedBy = assignedBy;
-  }
-  if (assignedTo) {
-    query.issueMember = assignedTo;
-  }
-  if (frequency) {
-    query['repeat.repeatType'] = frequency;
-  }
-  if (priority) {
-    query.priority = priority;
-  }
-  if (withComments) {
-    query.comments = { $exists: true, $not: { $size: 0 } };
-  }
-  if (siteId) {
-    query.siteID = siteId;
-  }
-  if (branch) {
-    query.branch = branch;
-  }
-
-  await fetchTasks(res, query, page);
-};
-
-const getTodayRange = () => {
-  const start = new Date();
-  start.setHours(0, 0, 0, 0);
-  const end = new Date();
-  end.setHours(23, 59, 59, 999);
-  return { start, end };
-};
-
-const getYesterdayRange = () => {
-  const yesterday = new Date();
-  yesterday.setDate(yesterday.getDate() - 1);
-  yesterday.setHours(0, 0, 0, 0);
-  const end = new Date(yesterday);
-  end.setHours(23, 59, 59, 999);
-  return { start: yesterday, end };
-};
-
-const getTomorrowRange = () => {
-  const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  tomorrow.setHours(0, 0, 0, 0);
-  const end = new Date(tomorrow);
-  end.setHours(23, 59, 59, 999);
-  return { start: tomorrow, end };
-};
-
-const getWeekRange = (offset = 0) => {
-  const today = new Date();
-  const currentDay = today.getDay();
-  const start = new Date(today);
-  start.setDate(today.getDate() - currentDay + offset * 7);
-  start.setHours(0, 0, 0, 0);
-  const end = new Date(start);
-  end.setDate(start.getDate() + 6);
-  end.setHours(23, 59, 59, 999);
-  return { start, end };
-};
-
-const getMonthRange = (offset = 0) => {
-  const today = new Date();
-  const start = new Date(today.getFullYear(), today.getMonth() + offset, 1);
-  const end = new Date(today.getFullYear(), today.getMonth() + offset + 1, 0);
-  end.setHours(23, 59, 59, 999);
-  return { start, end };
-};
-
-const getYearRange = (offset = 0) => {
-  const now = new Date();
-  const year = now.getFullYear() + offset;
-  const start = new Date(year, 3, 1, 0, 0, 0, 0); // April 1 of current year
-  const end = new Date(year + 1, 2, 31, 23, 59, 59, 999); // March 31 of next year
-  return { start, end };
-};
-
-const fetchTasks = async (res, filters, page = 0, limit = 10) => {
   try {
-    // const tasks = await Task.find(filters)
-    //   .sort({ dueDate: 1 })
-    //   .limit(limit)
-    //   .skip(limit * page)
-    //   .populate(['issueMember', 'assignedBy'])
-    //   .exec();
-    const tasks = await Task.find(filters)
-      .sort({ dueDate: 1 })
-      .populate([
-        {
-          path: 'assignedBy',
-          model: 'User',
-          select: '_id firstname lastname roles',
+    const {
+      userId,
+      page = 0,
+      limit = 10,
+      selectedCategory,
+      assignedBy,
+      assignedTo,
+      frequency,
+      priority,
+      filter,
+      siteId,
+      withComments,
+      branch,
+    } = req.body;
+
+    const { start, end } = getDateRange(filter);
+
+    // --- Build match conditions ---
+    const match = { isActive: true, dueDate: { $gte: start, $lte: end } };
+
+    if (userId && assignedTo) match.issueMember = { $in: [userId, assignedTo] };
+    else if (userId) match.issueMember = userId;
+    else if (assignedTo) match.issueMember = assignedTo;
+
+    if (selectedCategory) match.category = selectedCategory;
+    if (assignedBy) match.assignedBy = assignedBy;
+    if (frequency) match['repeat.repeatType'] = frequency;
+    if (priority) match.priority = priority;
+    if (withComments) match.comments = { $exists: true, $not: { $size: 0 } };
+    if (siteId) match.siteID = siteId;
+    if (branch) match.branch = branch;
+    
+    // --- Aggregation pipeline ---
+    const pipeline = [
+      { $match: match },
+
+      // Lookup users
+      {
+        $lookup: {
+          from: 'users',
+          localField: 'assignedBy',
+          foreignField: '_id',
+          as: 'assignedBy',
         },
-        {
-          path: 'issueMember',
-          model: 'User',
-          select: '_id firstname lastname roles',
+      },
+      { $unwind: { path: '$assignedBy', preserveNullAndEmptyArrays: true } },
+
+      {
+        $lookup: {
+          from: 'users',
+          localField: 'issueMember',
+          foreignField: '_id',
+          as: 'issueMember',
         },
-        'comments',
-        {
-          path: 'comments',
-          populate: {
-            path: 'createdBy',
+      },
+      { $unwind: { path: '$issueMember', preserveNullAndEmptyArrays: true } },
+
+      // Lookup comments
+      {
+        $lookup: {
+          from: 'comments',
+          localField: 'comments',
+          foreignField: '_id',
+          as: 'comments',
+        },
+      },
+
+      // --- Safe date conversion and computed fields ---
+      {
+        $addFields: {
+          updatedDate: {
+            $convert: {
+              input: { $ifNull: ['$updatedOn', '$updatedAt'] },
+              to: 'date',
+              onError: new Date(0),
+              onNull: new Date(0),
+            },
+          },
+          dueDateSafe: {
+            $convert: {
+              input: '$dueDate',
+              to: 'date',
+              onError: new Date(0),
+              onNull: new Date(0),
+            },
+          },
+          employeeName: {
+            $concat: [
+              { $ifNull: ['$issueMember.firstname', ''] },
+              ' ',
+              { $ifNull: ['$issueMember.lastname', ''] },
+            ],
           },
         },
-      ])
-      .exec();
+      },
+      {
+        $addFields: {
+          month: {
+            $dateToString: { date: '$updatedDate', format: '%B %Y' },
+          },
+          date: {
+            $dateToString: { date: '$updatedDate', format: '%B %d, %Y' },
+          },
+          inTime: {
+            $cond: [
+              {
+                $and: [
+                  { $eq: ['$status', 'Complete'] },
+                  { $lte: ['$updatedDate', '$dueDateSafe'] },
+                ],
+              },
+              true,
+              false,
+            ],
+          },
+        },
+      },
 
-    res.status(200).send(tasks);
+      // --- Facet for pagination, counts, and groupings ---
+      {
+        $facet: {
+          paginatedTasks: [
+            { $sort: { dueDateSafe: 1 } },
+            { $skip: page * limit },
+            { $limit: limit },
+          ],
+          statusCounts: [
+            {
+              $group: {
+                _id: null,
+                Overdue: {
+                  $sum: { $cond: [{ $eq: ['$status', 'Overdue'] }, 1, 0] },
+                },
+                Pending: {
+                  $sum: { $cond: [{ $eq: ['$status', 'Pending'] }, 1, 0] },
+                },
+                InProgress: {
+                  $sum: { $cond: [{ $eq: ['$status', 'In Progress'] }, 1, 0] },
+                },
+                Complete: {
+                  $sum: { $cond: [{ $eq: ['$status', 'Complete'] }, 1, 0] },
+                },
+                InTime: {
+                  $sum: {
+                    $cond: [
+                      { $and: [{ $eq: ['$status', 'Complete'] }, '$inTime'] },
+                      1,
+                      0,
+                    ],
+                  },
+                },
+                Delayed: {
+                  $sum: {
+                    $cond: [
+                      {
+                        $and: [
+                          { $eq: ['$status', 'Complete'] },
+                          { $not: '$inTime' },
+                        ],
+                      },
+                      1,
+                      0,
+                    ],
+                  },
+                },
+              },
+            },
+          ],
+          groupedByMonth: [
+            {
+              $group: {
+                _id: '$month',
+                tasks: { $push: '$$ROOT' },
+              },
+            },
+          ],
+          groupedByDate: [
+            {
+              $group: {
+                _id: '$date',
+                tasks: { $push: '$$ROOT' },
+              },
+            },
+          ],
+          groupedByEmployee: [
+            {
+              $group: {
+                _id: '$employeeName',
+                tasks: { $push: '$$ROOT' },
+              },
+            },
+          ],
+          groupedByCategory: [
+            {
+              $group: {
+                _id: '$category',
+                tasks: { $push: '$$ROOT' },
+              },
+            },
+          ],
+          groupedByCategoryAndUserId: [
+            {
+              $match: {
+                'issueMember._id': userId
+                  ? new mongoose.Types.ObjectId(userId)
+                  : null,
+              },
+            },
+            {
+              $group: {
+                _id: '$category',
+                tasks: { $push: '$$ROOT' },
+              },
+            },
+          ],
+          groupedByOverdueByEmployee: [
+            { $match: { status: 'Overdue' } },
+            {
+              $group: {
+                _id: '$employeeName',
+                tasks: { $push: '$$ROOT' },
+              },
+            },
+          ],
+        },
+      },
+    ];
+
+    const result = await Task.aggregate(pipeline).exec();
+    const data = result[0] || {};
+
+    res.status(200).json({
+      tasks: data.paginatedTasks || [],
+      statusCounts: data.statusCounts?.[0] || {},
+      groupedData: {
+        groupedByMonth: (data.groupedByMonth || []).map(g => ({
+          month: g._id,
+          obj: g.tasks,
+        })),
+        groupedByDate: (data.groupedByDate || []).map(g => ({
+          date: g._id,
+          obj: g.tasks,
+        })),
+        groupedByEmployee: (data.groupedByEmployee || []).map(g => ({
+          employee: g._id,
+          obj: g.tasks,
+        })),
+        groupedByCategory: (data.groupedByCategory || []).map(g => ({
+          category: g._id,
+          obj: g.tasks,
+        })),
+        groupedByCategoryAndUserId: (data.groupedByCategoryAndUserId || []).map(
+          g => ({
+            category: g._id,
+            userId,
+            obj: g.tasks,
+          })
+        ),
+        groupedByOverdueByEmployee: (data.groupedByOverdueByEmployee || []).map(
+          g => ({
+            employee: g._id,
+            obj: g.tasks,
+          })
+        ),
+      },
+    });
   } catch (error) {
-    console.error('Server error:', error);
-    res.status(500).send({ message: 'Error while fetching tasks' });
+    console.error('Error in customFilters:', error);
+    res.status(500).json({ message: 'Server error while fetching tasks' });
   }
 };
 
@@ -1921,23 +1324,6 @@ exports.customDashboardFilters = async (req, res) => {
       siteId,
       branch,
     } = req.body || {};
-
-    // Helper to get date range
-    const getDateRange = filterType => {
-      const map = {
-        Today: getTodayRange,
-        Yesterday: getYesterdayRange,
-        Tomorrow: getTomorrowRange,
-        'This Week': () => getWeekRange(),
-        'Last Week': () => getWeekRange(-7),
-        'Next Week': () => getWeekRange(7),
-        'This Month': () => getMonthRange(),
-        'Last Month': () => getMonthRange(-1),
-        'Next Month': () => getMonthRange(1),
-        'This Year': () => getYearRange(),
-      };
-      return map[filterType]?.() || getWeekRange();
-    };
 
     const { start, end } = getDateRange(filter);
 
@@ -1978,6 +1364,7 @@ exports.delegatedTasks = async (req, res) => {
     const {
       userId,
       page = 1,
+      pageSize = PAGE_SIZE, // frontend can override
       selectedCategory,
       assignedBy,
       assignedTo,
@@ -1986,100 +1373,497 @@ exports.delegatedTasks = async (req, res) => {
       filter,
       siteId,
       branch,
+      search, // <-- global search
     } = req.body;
 
-    let start, end;
+    const { start, end } = getDateRange(filter);
 
-    switch (filter) {
-      case 'Today':
-        ({ start, end } = getTodayRange());
-        break;
-      case 'Yesterday':
-        ({ start, end } = getYesterdayRange());
-        break;
-      case 'Tomorrow':
-        ({ start, end } = getTomorrowRange());
-        break;
-      case 'This Week':
-        ({ start, end } = getWeekRange());
-        break;
-      case 'Last Week':
-        ({ start, end } = getWeekRange(-7));
-        break;
-      case 'Next Week':
-        ({ start, end } = getWeekRange(7));
-        break;
-      case 'This Month':
-        ({ start, end } = getMonthRange());
-        break;
-      case 'Last Month':
-        ({ start, end } = getMonthRange(-1));
-        break;
-      case 'Next Month':
-        ({ start, end } = getMonthRange(1));
-        break;
-      case 'This Year':
-        ({ start, end } = getYearRange());
-        break;
-      default:
-        ({ start, end } = getWeekRange());
-    }
-
-    const query = {
+    const matchStage = {
       isActive: true,
       dueDate: { $gte: start, $lte: end },
     };
 
-    if (userId) query.assignedBy = userId;
-    if (selectedCategory) query.category = selectedCategory;
-    if (assignedBy) query.assignedBy = assignedBy;
-    if (assignedTo) query.issueMember = assignedTo;
-    if (frequency) query['repeat.repeatType'] = frequency;
-    if (priority) query.priority = priority;
-    if (siteId) query.siteID = siteId;
-    if (branch) query.branch = branch;
+    if (userId) matchStage.assignedBy = new mongoose.Types.ObjectId(userId);
+    if (selectedCategory) matchStage.category = selectedCategory;
+    if (assignedBy)
+      matchStage.assignedBy = new mongoose.Types.ObjectId(assignedBy);
+    if (assignedTo)
+      matchStage.issueMember = new mongoose.Types.ObjectId(assignedTo);
+    if (frequency) matchStage['repeat.repeatType'] = frequency;
+    if (priority) matchStage.priority = priority;
+    if (siteId) matchStage.siteID = new mongoose.Types.ObjectId(siteId);
+    if (branch) matchStage.branch = branch;
 
-    const skip = (page - 1) * PAGE_SIZE;
+    const skip = (page - 1) * pageSize;
 
-    const [tasks, total] = await Promise.all([
-      Task.find(query)
-        .sort({ dueDate: 1 })
-        .skip(skip)
-        .limit(PAGE_SIZE)
-        .populate([
-          {
-            path: 'assignedBy',
-            model: 'User',
-            select: '_id firstname lastname roles',
-          },
-          {
-            path: 'issueMember',
-            model: 'User',
-            select: '_id firstname lastname roles',
-          },
-          'comments',
-          {
-            path: 'comments',
-            populate: {
-              path: 'createdBy',
+    const pipeline = [
+      { $match: matchStage },
+      { $sort: { dueDate: 1 } },
+
+      // populate assignedBy
+      {
+        $lookup: {
+          from: 'users',
+          localField: 'assignedBy',
+          foreignField: '_id',
+          as: 'assignedBy',
+        },
+      },
+      { $unwind: { path: '$assignedBy', preserveNullAndEmptyArrays: true } },
+
+      // populate issueMember
+      {
+        $lookup: {
+          from: 'users',
+          localField: 'issueMember',
+          foreignField: '_id',
+          as: 'issueMember',
+        },
+      },
+      { $unwind: { path: '$issueMember', preserveNullAndEmptyArrays: true } },
+
+      // populate comments with createdBy directly
+      {
+        $lookup: {
+          from: 'comments',
+          let: { commentIds: '$comments' },
+          pipeline: [
+            { $match: { $expr: { $in: ['$_id', '$$commentIds'] } } },
+            {
+              $lookup: {
+                from: 'users',
+                localField: 'createdBy',
+                foreignField: '_id',
+                as: 'createdBy',
+              },
+            },
+            {
+              $unwind: { path: '$createdBy', preserveNullAndEmptyArrays: true },
+            },
+          ],
+          as: 'comments',
+        },
+      },
+    ];
+
+    // 🔍 Global search (task fields + user names)
+    if (search && search.trim() !== '') {
+      const regex = new RegExp(search.trim(), 'i');
+      pipeline.push({
+        $match: {
+          $or: [
+            { title: regex },
+            { description: regex },
+            { priority: regex },
+            { status: regex },
+            { 'assignedBy.firstname': regex },
+            { 'assignedBy.lastname': regex },
+            { 'issueMember.firstname': regex },
+            { 'issueMember.lastname': regex },
+          ],
+        },
+      });
+    }
+
+    pipeline.push(
+      {
+        $facet: {
+          data: [{ $skip: skip }, { $limit: pageSize }],
+          total: [{ $count: 'count' }],
+          statusCounts: [
+            {
+              $group: {
+                _id: '$status',
+                count: { $sum: 1 },
+              },
+            },
+          ],
+        },
+      },
+      {
+        $project: {
+          data: 1,
+          total: { $ifNull: [{ $arrayElemAt: ['$total.count', 0] }, 0] },
+          statusCounts: {
+            $map: {
+              input: ['Pending', 'In Progress', 'Complete', 'Overdue'],
+              as: 'status',
+              in: {
+                status: '$$status',
+                count: {
+                  $ifNull: [
+                    {
+                      $arrayElemAt: [
+                        {
+                          $map: {
+                            input: {
+                              $filter: {
+                                input: '$statusCounts',
+                                cond: { $eq: ['$$this._id', '$$status'] },
+                              },
+                            },
+                            as: 'sc',
+                            in: '$$sc.count',
+                          },
+                        },
+                        0,
+                      ],
+                    },
+                    0,
+                  ],
+                },
+              },
             },
           },
-        ]),
-      Task.countDocuments(query),
-    ]);
+        },
+      }
+    );
 
-    const hasMore = skip + tasks.length < total;
+    const result = await Task.aggregate(pipeline);
+    const tasks = result[0]?.data || [];
+    const total = result[0]?.total || 0;
+    const totalPages = Math.ceil(total / pageSize);
+    const statusCounts = result[0]?.statusCounts || [];
 
-    return res.status(200).json({
+    res.status(200).json({
+      success: true,
       tasks,
-      hasMore,
+      total,
+      totalPages,
       page,
+      pageSize,
+      statusCounts,
     });
   } catch (error) {
-    console.error('Server error:', error);
-    return res.status(500).json({ message: 'Error while fetching tasks' });
+    console.error('Error while fetching delegated tasks:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error while fetching delegated tasks',
+      error: error.message,
+    });
   }
 };
+
+exports.myTasks = async (req, res) => {
+  try {
+    const {
+      userId,
+      page = 1,
+      pageSize = PAGE_SIZE, // frontend can override
+      selectedCategory,
+      assignedBy,
+      assignedTo,
+      frequency,
+      priority,
+      filter,
+      siteId,
+      branch,
+      search, // <-- global search
+    } = req.body;
+
+    const { start, end } = getDateRange(filter);
+
+    const matchStage = {
+      isActive: true,
+      dueDate: { $gte: start, $lte: end },
+    };
+
+    if (userId) matchStage.issueMember = new mongoose.Types.ObjectId(userId);
+    if (selectedCategory) matchStage.category = selectedCategory;
+    if (assignedBy)
+      matchStage.assignedBy = new mongoose.Types.ObjectId(assignedBy);
+    if (assignedTo)
+      matchStage.issueMember = new mongoose.Types.ObjectId(assignedTo);
+    if (frequency) matchStage['repeat.repeatType'] = frequency;
+    if (priority) matchStage.priority = priority;
+    if (siteId) matchStage.siteID = new mongoose.Types.ObjectId(siteId);
+    if (branch) matchStage.branch = branch;
+
+    const skip = (page - 1) * pageSize;
+
+    const pipeline = [
+      { $match: matchStage },
+      { $sort: { dueDate: 1 } },
+
+      // populate assignedBy
+      {
+        $lookup: {
+          from: 'users',
+          localField: 'assignedBy',
+          foreignField: '_id',
+          as: 'assignedBy',
+        },
+      },
+      { $unwind: { path: '$assignedBy', preserveNullAndEmptyArrays: true } },
+
+      // populate issueMember
+      {
+        $lookup: {
+          from: 'users',
+          localField: 'issueMember',
+          foreignField: '_id',
+          as: 'issueMember',
+        },
+      },
+      { $unwind: { path: '$issueMember', preserveNullAndEmptyArrays: true } },
+
+      // populate comments with createdBy directly
+      {
+        $lookup: {
+          from: 'comments',
+          let: { commentIds: '$comments' },
+          pipeline: [
+            { $match: { $expr: { $in: ['$_id', '$$commentIds'] } } },
+            {
+              $lookup: {
+                from: 'users',
+                localField: 'createdBy',
+                foreignField: '_id',
+                as: 'createdBy',
+              },
+            },
+            {
+              $unwind: { path: '$createdBy', preserveNullAndEmptyArrays: true },
+            },
+          ],
+          as: 'comments',
+        },
+      },
+    ];
+
+    // 🔍 Global search (task fields + user names)
+    if (search && search.trim() !== '') {
+      const regex = new RegExp(search.trim(), 'i');
+      pipeline.push({
+        $match: {
+          $or: [
+            { title: regex },
+            { description: regex },
+            { priority: regex },
+            { status: regex },
+            { 'assignedBy.firstname': regex },
+            { 'assignedBy.lastname': regex },
+            { 'issueMember.firstname': regex },
+            { 'issueMember.lastname': regex },
+          ],
+        },
+      });
+    }
+
+    pipeline.push(
+      {
+        $facet: {
+          data: [{ $skip: skip }, { $limit: pageSize }],
+          total: [{ $count: 'count' }],
+          statusCounts: [
+            {
+              $group: {
+                _id: '$status',
+                count: { $sum: 1 },
+              },
+            },
+          ],
+        },
+      },
+      {
+        $project: {
+          data: 1,
+          total: { $ifNull: [{ $arrayElemAt: ['$total.count', 0] }, 0] },
+          statusCounts: {
+            $map: {
+              input: ['Pending', 'In Progress', 'Complete', 'Overdue'],
+              as: 'status',
+              in: {
+                status: '$$status',
+                count: {
+                  $ifNull: [
+                    {
+                      $arrayElemAt: [
+                        {
+                          $map: {
+                            input: {
+                              $filter: {
+                                input: '$statusCounts',
+                                cond: { $eq: ['$$this._id', '$$status'] },
+                              },
+                            },
+                            as: 'sc',
+                            in: '$$sc.count',
+                          },
+                        },
+                        0,
+                      ],
+                    },
+                    0,
+                  ],
+                },
+              },
+            },
+          },
+        },
+      }
+    );
+
+    const result = await Task.aggregate(pipeline);
+    const tasks = result[0]?.data || [];
+    const total = result[0]?.total || 0;
+    const totalPages = Math.ceil(total / pageSize);
+    const statusCounts = result[0]?.statusCounts || [];
+
+    res.status(200).json({
+      success: true,
+      tasks,
+      total,
+      totalPages,
+      page,
+      pageSize,
+      statusCounts,
+    });
+  } catch (error) {
+    console.error('Error while fetching delegated tasks:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error while fetching delegated tasks',
+      error: error.message,
+    });
+  }
+};
+
+// exports.myTasks = async (req, res) => {
+//   try {
+//     const {
+//       userId,
+//       page = 1,
+//       selectedCategory,
+//       assignedBy,
+//       frequency,
+//       priority,
+//       filter,
+//       siteId,
+//       branch,
+//       query = '',
+//     } = req.body;
+
+//     const { start, end } = getDateRange(filter);
+
+//     // Base filters
+//     const matchStage = {
+//       isActive: true,
+//       dueDate: { $gte: start, $lte: end },
+//     };
+
+//     if (userId) matchStage.issueMember = new mongoose.Types.ObjectId(userId);
+//     if (selectedCategory) matchStage.category = selectedCategory;
+//     if (assignedBy)
+//       matchStage.assignedBy = new mongoose.Types.ObjectId(assignedBy);
+//     if (frequency) matchStage['repeat.repeatType'] = frequency;
+//     if (priority) matchStage.priority = priority;
+//     if (siteId) matchStage.siteID = new mongoose.Types.ObjectId(siteId);
+//     if (branch) matchStage.branch = branch;
+
+//     // Global search
+//     if (query && query.trim() !== '') {
+//       matchStage.$or = [
+//         { title: { $regex: query, $options: 'i' } },
+//         { description: { $regex: query, $options: 'i' } },
+//       ];
+//     }
+
+//     const skip = (page - 1) * PAGE_SIZE;
+
+//     const pipeline = [
+//       { $match: matchStage },
+//       {
+//         $lookup: {
+//           from: 'users',
+//           localField: 'assignedBy',
+//           foreignField: '_id',
+//           as: 'assignedBy',
+//         },
+//       },
+//       { $unwind: { path: '$assignedBy', preserveNullAndEmptyArrays: true } },
+//       {
+//         $lookup: {
+//           from: 'users',
+//           localField: 'issueMember',
+//           foreignField: '_id',
+//           as: 'issueMember',
+//         },
+//       },
+//       { $unwind: { path: '$issueMember', preserveNullAndEmptyArrays: true } },
+//       {
+//         $lookup: {
+//           from: 'comments',
+//           localField: 'comments',
+//           foreignField: '_id',
+//           as: 'comments',
+//         },
+//       },
+//       {
+//         $lookup: {
+//           from: 'users',
+//           localField: 'comments.createdBy',
+//           foreignField: '_id',
+//           as: 'commentCreators',
+//         },
+//       },
+//       {
+//         $addFields: {
+//           comments: {
+//             $map: {
+//               input: '$comments',
+//               as: 'c',
+//               in: {
+//                 $mergeObjects: [
+//                   '$$c',
+//                   {
+//                     createdBy: {
+//                       $arrayElemAt: [
+//                         {
+//                           $filter: {
+//                             input: '$commentCreators',
+//                             as: 'u',
+//                             cond: { $eq: ['$$u._id', '$$c.createdBy'] },
+//                           },
+//                         },
+//                         0,
+//                       ],
+//                     },
+//                   },
+//                 ],
+//               },
+//             },
+//           },
+//         },
+//       },
+//       {
+//         $facet: {
+//           data: [
+//             { $sort: { dueDate: 1 } },
+//             { $skip: skip },
+//             { $limit: PAGE_SIZE },
+//           ],
+//           totalCount: [{ $count: 'count' }],
+//         },
+//       },
+//     ];
+
+//     const result = await Task.aggregate(pipeline);
+
+//     const tasks = result[0]?.data || [];
+//     const total = result[0]?.totalCount[0]?.count || 0;
+//     const hasMore = skip + tasks.length < total;
+
+//     return res.status(200).json({
+//       tasks,
+//       hasMore,
+//       page,
+//     });
+//   } catch (error) {
+//     console.error('Server error:', error);
+//     return res.status(500).json({ message: 'Error while fetching tasks' });
+//   }
+// };
 
 exports.addChecklist = async (req, res) => {
   try {
@@ -2291,41 +2075,7 @@ exports.dashboardFilter = async (req, res) => {
       limit = 20,
     } = req.body;
 
-    let start, end;
-    switch (filter) {
-      case 'Today':
-        ({ start, end } = getTodayRange());
-        break;
-      case 'Yesterday':
-        ({ start, end } = getYesterdayRange());
-        break;
-      case 'Tomorrow':
-        ({ start, end } = getTomorrowRange());
-        break;
-      case 'This Week':
-        ({ start, end } = getWeekRange());
-        break;
-      case 'Last Week':
-        ({ start, end } = getWeekRange(-7));
-        break;
-      case 'Next Week':
-        ({ start, end } = getWeekRange(7));
-        break;
-      case 'This Month':
-        ({ start, end } = getMonthRange());
-        break;
-      case 'Last Month':
-        ({ start, end } = getMonthRange(-1));
-        break;
-      case 'Next Month':
-        ({ start, end } = getMonthRange(1));
-        break;
-      case 'This Year':
-        ({ start, end } = getYearRange());
-        break;
-      default:
-        ({ start, end } = getWeekRange());
-    }
+    const { start, end } = getDateRange(filter);
 
     const projectQuery = {};
     if (siteId) projectQuery.siteID = siteId;

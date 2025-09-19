@@ -138,7 +138,7 @@ module.exports = function (app) {
 
   // ticket update related /api/project/ticketupdatemember/byid
   app.put(
-    '/api/project/ticketupdatemember/byid',
+    '/api/project/updateticket/:ticketId',
     // uploadImage.fields([
     //   {
     //     name: 'image',
@@ -147,7 +147,7 @@ module.exports = function (app) {
     // ]),
     verifyToken,
     fileUploader,
-    controller.TicketUpdateByMember
+    controller.updateTicket
   );
   app.post(
     '/api/project/changeissuemember',

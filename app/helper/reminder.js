@@ -515,7 +515,6 @@ const updateTicketStatus = async ({ phone, name, teammember, id, title }) => {
         },
       }
     );
-    console.log('Message sent:', msg.data);
   } catch (error) {
     console.error(
       'Error sending message:',

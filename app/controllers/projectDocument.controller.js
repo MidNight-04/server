@@ -103,7 +103,7 @@ exports.getDocumentBySiteID = async (req, res) => {
     select: 'firstname lastname profileImage',
   });
   if (data?.length > 0) {
-    res.status(200).json({  
+    res.status(200).json({
       status: 200,
       data: data,
     });
@@ -148,7 +148,8 @@ exports.getDocumentByID = async (req, res) => {
   }
 };
 exports.updateDocumentStatusByClient = async (req, res) => {
-  const { id, status } = req.body;
+  const { id } = req.params;
+  const { status } = req.body;
   const projectDocument = await ProjectDocuments.findById(id);
   if (!projectDocument) {
     return res.status(404).json({ message: 'Project document not found' });
@@ -160,7 +161,7 @@ exports.updateDocumentStatusByClient = async (req, res) => {
   if (data.modifiedCount === 1) {
     await createLogManually(
       req,
-      `Updated document status to ${status} for project document ${projectDocument.name}.`,
+      `Updated document status to ${status} for project document ${projectDocument.name} for site: ${projectDocument.siteID}.`,
       projectDocument.siteID
     );
     res.status(200).json({

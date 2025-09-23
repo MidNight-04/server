@@ -19,6 +19,7 @@ const { sendTeamNotification } = require('../helper/notification');
 const { activateNextSteps } = require('../helper/nextStepActivator');
 const { createLogManually } = require('../middlewares/createLog');
 const { getDateRange } = require('../helper/dateRange');
+const { groupTasksByDate } = require('../utils/groupTask');
 
 let today = new Date();
 let yyyy = today.getFullYear();
@@ -1051,7 +1052,7 @@ exports.customFilters = async (req, res) => {
     if (withComments) match.comments = { $exists: true, $not: { $size: 0 } };
     if (siteId) match.siteID = siteId;
     if (branch) match.branch = branch;
-    
+
     // --- Aggregation pipeline ---
     const pipeline = [
       { $match: match },
@@ -2182,3 +2183,154 @@ exports.dashboardFilter = async (req, res) => {
     res.status(500).json({ message: 'Error while fetching tasks' });
   }
 };
+
+// exports.dashboardFilter = async (req, res) => {
+//   try {
+//     const {
+//       userId,
+//       page = 1,
+//       limit = 200,
+//       selectedCategory,
+//       assignedTo,
+//       frequency,
+//       priority,
+//       filter,
+//       siteId,
+//       branch,
+//     } = req.body;
+
+//     const siteIds = await Project.find();
+
+//     const { start, end } = getDateRange(filter);
+
+//     const matchTask = {
+//       'task.isActive': true,
+//       'task.status': { $ne: 'Complete' },
+//     };
+
+//     if (userId) matchTask['task.assignedBy'] = userId;
+//     if (assignedTo && assignedTo.trim() !== '') {
+//       matchTask['task.issueMember'] = new mongoose.Types.ObjectId(assignedTo);
+//     }
+//     if (selectedCategory && selectedCategory.trim() !== '') {
+//       matchTask['task.category'] = selectedCategory;
+//     }
+//     if (frequency && frequency.trim() !== '') {
+//       matchTask['task.repeat.repeatType'] = frequency;
+//     }
+//     if (priority && priority.trim() !== '') {
+//       matchTask['task.priority'] = priority;
+//     }
+//     // if (start && end) {
+//     //   const startDate = new Date(start);
+//     //   const endDate = new Date(end);
+//     //   if (!isNaN(startDate) && !isNaN(endDate)) {
+//     //     matchTask['task.dueDate'] = { $gte: startDate, $lte: endDate };
+//     //   }
+//     // }
+
+//     console.log(start, end);
+//     // Similarly, for projects
+//     const matchProject = {};
+//     if (siteId && siteId.trim() !== '') matchProject.siteID = siteId;
+//     if (branch && branch.trim() !== '') matchProject.branch = branch;
+
+//     const skip = (page - 1) * limit;
+
+//     const tasksAggregation = await Project.aggregate([
+//       { $match: matchProject || {} },
+//       { $unwind: '$project_status' }, // Unwind project_status array
+//       { $unwind: '$project_status.step' }, // Unwind step array
+//       {
+//         $lookup: {
+//           // Lookup task details
+//           from: 'tasks',
+//           localField: 'project_status.step.taskId',
+//           foreignField: '_id',
+//           as: 'task',
+//         },
+//       },
+//       { $unwind: '$task' }, // Flatten task array
+//       { $match: matchTask }, // Apply task filters
+//       {
+//         $lookup: {
+//           // Populate issueMember
+//           from: 'users',
+//           localField: 'task.issueMember',
+//           foreignField: '_id',
+//           as: 'task.issueMember',
+//         },
+//       },
+//       {
+//         $lookup: {
+//           // Populate comments.createdBy
+//           from: 'comments',
+//           localField: 'task.comments',
+//           foreignField: '_id',
+//           as: 'task.comments',
+//         },
+//       },
+//       {
+//         $lookup: {
+//           // Populate roles inside comments.createdBy
+//           from: 'roles',
+//           localField: 'task.comments.createdBy.roles',
+//           foreignField: '_id',
+//           as: 'task.comments.createdBy.roles',
+//         },
+//       },
+//       {
+//         $project: {
+//           // Select needed fields
+//           branch: 1,
+//           siteID: 1,
+//           stepName: '$project_status.name',
+//           _id: '$task._id',
+//           title: '$task.title',
+//           description: '$task.description',
+//           dueDate: '$task.dueDate',
+//           status: '$task.status',
+//           issueMember: '$task.issueMember',
+//           comments: '$task.comments',
+//         },
+//       },
+//       { $sort: { dueDate: 1 } }, // Optional sorting
+//       { $skip: skip },
+//       { $limit: limit },
+//     ]);
+
+//     // Total tasks count for pagination
+//     const totalCountAgg = await Project.aggregate([
+//       { $match: matchProject },
+//       { $unwind: '$project_status' },
+//       { $unwind: '$project_status.step' },
+//       {
+//         $lookup: {
+//           from: 'tasks',
+//           localField: 'project_status.step.taskId',
+//           foreignField: '_id',
+//           as: 'task',
+//         },
+//       },
+//       { $unwind: '$task' },
+//       { $match: matchTask },
+//       { $count: 'totalTasks' },
+//     ]);
+
+//     const totalTasks = totalCountAgg[0]?.totalTasks || 0;
+
+//     const groupedTasks = groupTasksByDate(tasksAggregation, siteIds, {
+//       activeFilter: req.body.filter || 'This Month',
+//     });
+
+//     res.status(200).json({
+//       page,
+//       limit,
+//       totalTasks,
+//       tasks: tasksAggregation,
+//     });
+//   } catch (error) {
+//     console.error('Server error:', error);
+//     res.status(500).json({ message: 'Error while fetching tasks' });
+//   }
+// };

@@ -1,6 +1,6 @@
-export const getDateKey = date => date.toISOString().split('T')[0];
+exports.getDateKey = date => date?.toISOString().split('T')[0];
 
-export const getMonthRange = (offset = 0, includeDays = false) => {
+exports.getMonthRange = (offset = 0, includeDays = false) => {
   const today = new Date();
   const start = new Date(today.getFullYear(), today.getMonth() + offset, 1);
   const end = new Date(today.getFullYear(), today.getMonth() + offset + 1, 0);
@@ -11,7 +11,7 @@ export const getMonthRange = (offset = 0, includeDays = false) => {
   return generateDays(start, end);
 };
 
-export const getWeekRange = (offset = 0, includeDays = false) => {
+exports.getWeekRange = (offset = 0, includeDays = false) => {
   const today = new Date();
   const start = new Date(today);
   start.setDate(today.getDate() - today.getDay() + offset * 7);
@@ -24,21 +24,21 @@ export const getWeekRange = (offset = 0, includeDays = false) => {
   return includeDays ? generateDays(start, end) : { start, end };
 };
 
-export const getTodayRange = (offset = 0, includeToday = true) => {
+exports.getTodayRange = (offset = 0, includeToday = true) => {
   const today = new Date();
   today.setDate(today.getDate() + offset);
   today.setHours(0, 0, 0, 0);
   return includeToday ? [today] : [];
 };
 
-export const getYesterdayRange = (offset = 0, includeYesterday = true) => {
+exports.getYesterdayRange = (offset = 0, includeYesterday = true) => {
   const yesterday = new Date();
   yesterday.setDate(yesterday.getDate() - 1 + offset);
   yesterday.setHours(0, 0, 0, 0);
   return includeYesterday ? [yesterday] : [];
 };
 
-export const getYearRange = (offset = 0, includeDays = false) => {
+exports.getYearRange = (offset = 0, includeDays = false) => {
   const now = new Date();
   const year = now.getFullYear() + offset;
   const start = new Date(year, 0, 1);
@@ -47,7 +47,7 @@ export const getYearRange = (offset = 0, includeDays = false) => {
   return includeDays ? generateDays(start, end) : { start, end };
 };
 
-export const generateDays = (start, end) => {
+exports.generateDays = (start, end) => {
   const days = [];
   const date = new Date(start);
   while (date <= end) {

@@ -2018,6 +2018,12 @@ exports.AddNewProjectPoint = async (req, res) => {
       issueMember,
     };
 
+    if (Boolean(forceMajeure.isForceMajeure)) {
+      const date = new Date();
+      date.setDate(date.getDate() + dur);
+      newTaskPayload.dueDate = date.toISOString().split('T')[0];
+    }
+
     const newTask = await Task.create([newTaskPayload], { session });
     const task = newTask[0];
 

@@ -1358,7 +1358,197 @@ exports.customDashboardFilters = async (req, res) => {
   }
 };
 
-const PAGE_SIZE = 10;
+const PAGE_SIZE = 12;
+
+// exports.delegatedTasks = async (req, res) => {
+//   try {
+//     const {
+//       userId,
+//       page = 1,
+//       pageSize = PAGE_SIZE, // frontend can override
+//       selectedCategory,
+//       assignedBy,
+//       assignedTo,
+//       frequency,
+//       priority,
+//       filter,
+//       siteId,
+//       branch,
+//       search, // <-- global search
+//     } = req.body;
+
+//     const { start, end } = getDateRange(filter);
+
+//     const matchStage = {
+//       isActive: true,
+//       dueDate: { $gte: start, $lte: end },
+//     };
+
+//     // if (userId) matchStage.assignedBy = new mongoose.Types.ObjectId(userId);
+//     if (selectedCategory) matchStage.category = selectedCategory;
+//     if (assignedBy)
+//       matchStage.assignedBy = new mongoose.Types.ObjectId(assignedBy);
+//     if (assignedTo)
+//       matchStage.issueMember = new mongoose.Types.ObjectId(assignedTo);
+//     if (frequency) matchStage['repeat.repeatType'] = frequency;
+//     if (priority) matchStage.priority = priority;
+//     if (siteId) matchStage.siteID = new mongoose.Types.ObjectId(siteId);
+//     if (branch) matchStage.branch = branch;
+
+//     const skip = (page - 1) * pageSize;
+
+//     const pipeline = [
+//       { $match: matchStage },
+//       { $sort: { dueDate: 1 } },
+
+//       // populate assignedBy
+//       {
+//         $lookup: {
+//           from: 'users',
+//           localField: 'assignedBy',
+//           foreignField: '_id',
+//           as: 'assignedBy',
+//         },
+//       },
+//       { $unwind: { path: '$assignedBy', preserveNullAndEmptyArrays: true } },
+
+//       // populate issueMember
+//       {
+//         $lookup: {
+//           from: 'users',
+//           localField: 'issueMember',
+//           foreignField: '_id',
+//           as: 'issueMember',
+//         },
+//       },
+//       { $unwind: { path: '$issueMember', preserveNullAndEmptyArrays: true } },
+
+//       // populate comments with createdBy directly
+//       {
+//         $lookup: {
+//           from: 'comments',
+//           let: { commentIds: '$comments' },
+//           pipeline: [
+//             { $match: { $expr: { $in: ['$_id', '$$commentIds'] } } },
+//             {
+//               $lookup: {
+//                 from: 'users',
+//                 localField: 'createdBy',
+//                 foreignField: '_id',
+//                 as: 'createdBy',
+//               },
+//             },
+//             {
+//               $unwind: { path: '$createdBy', preserveNullAndEmptyArrays: true },
+//             },
+//           ],
+//           as: 'comments',
+//         },
+//       },
+//     ];
+
+//     // 🔍 Global search (task fields + user names)
+//     if (search && search.trim() !== '') {
+//       const regex = new RegExp(search.trim(), 'i');
+//       pipeline.push({
+//         $match: {
+//           $or: [
+//             { title: regex },
+//             { description: regex },
+//             { priority: regex },
+//             { status: regex },
+//             { 'assignedBy.firstname': regex },
+//             { 'assignedBy.lastname': regex },
+//             { 'issueMember.firstname': regex },
+//             { 'issueMember.lastname': regex },
+//           ],
+//         },
+//       });
+//     }
+
+//     pipeline.push(
+//       {
+//         $facet: {
+//           data: [{ $skip: skip }, { $limit: pageSize }],
+//           total: [{ $count: 'count' }],
+//           statusCounts: [
+//             {
+//               $group: {
+//                 _id: '$status',
+//                 count: { $sum: 1 },
+//               },
+//             },
+//           ],
+//         },
+//       },
+//       {
+//         $project: {
+//           data: 1,
+//           total: { $ifNull: [{ $arrayElemAt: ['$total.count', 0] }, 0] },
+//           statusCounts: {
+//             $map: {
+//               input: ['Pending', 'In Progress', 'Complete', 'Overdue'],
+//               as: 'status',
+//               in: {
+//                 status: '$$status',
+//                 count: {
+//                   $ifNull: [
+//                     {
+//                       $arrayElemAt: [
+//                         {
+//                           $map: {
+//                             input: {
+//                               $filter: {
+//                                 input: '$statusCounts',
+//                                 cond: { $eq: ['$$this._id', '$$status'] },
+//                               },
+//                             },
+//                             as: 'sc',
+//                             in: '$$sc.count',
+//                           },
+//                         },
+//                         0,
+//                       ],
+//                     },
+//                     0,
+//                   ],
+//                 },
+//               },
+//             },
+//           },
+//         },
+//       }
+//     );
+
+//     const result = await Task.aggregate(pipeline);
+//     const tasks = result[0]?.data || [];
+//     const total = result[0]?.total || 0;
+//     const totalPages = Math.ceil(total / pageSize);
+//     // const statusCounts = result[0]?.statusCounts || [];
+//     const statuses = ['Pending', 'In Progress', 'Complete', 'Overdue'];
+//     const count = statuses.map(s => ({
+//       status: s,
+//       count: tasks.filter(task => task.status === s).length,
+//     }));
+
+//     res.status(200).json({
+//       success: true,
+//       tasks,
+//       total,
+//       totalPages,
+//       page,
+//       pageSize,
+//       statusCounts: count,
+//     });
+//   } catch (error) {
+//     console.error('Error while fetching delegated tasks:', error);
+//     res.status(500).json({
+//       success: false,
+//       message: 'Error while fetching delegated tasks',
+//       error: error.message,
+//     });
+//   }
+// };
 
 exports.delegatedTasks = async (req, res) => {
   try {
@@ -1379,12 +1569,12 @@ exports.delegatedTasks = async (req, res) => {
 
     const { start, end } = getDateRange(filter);
 
+    // Base match stage
     const matchStage = {
       isActive: true,
       dueDate: { $gte: start, $lte: end },
     };
 
-    if (userId) matchStage.assignedBy = new mongoose.Types.ObjectId(userId);
     if (selectedCategory) matchStage.category = selectedCategory;
     if (assignedBy)
       matchStage.assignedBy = new mongoose.Types.ObjectId(assignedBy);
@@ -1395,11 +1585,13 @@ exports.delegatedTasks = async (req, res) => {
     if (siteId) matchStage.siteID = new mongoose.Types.ObjectId(siteId);
     if (branch) matchStage.branch = branch;
 
-    const skip = (page - 1) * pageSize;
+    // Global search
+    const searchRegex =
+      search && search.trim() !== '' ? new RegExp(search.trim(), 'i') : null;
 
+    // Build aggregation pipeline
     const pipeline = [
       { $match: matchStage },
-      { $sort: { dueDate: 1 } },
 
       // populate assignedBy
       {
@@ -1423,7 +1615,7 @@ exports.delegatedTasks = async (req, res) => {
       },
       { $unwind: { path: '$issueMember', preserveNullAndEmptyArrays: true } },
 
-      // populate comments with createdBy directly
+      // populate comments
       {
         $lookup: {
           from: 'comments',
@@ -1447,84 +1639,61 @@ exports.delegatedTasks = async (req, res) => {
       },
     ];
 
-    // 🔍 Global search (task fields + user names)
-    if (search && search.trim() !== '') {
-      const regex = new RegExp(search.trim(), 'i');
+    // Add global search match if applicable
+    if (searchRegex) {
       pipeline.push({
         $match: {
           $or: [
-            { title: regex },
-            { description: regex },
-            { priority: regex },
-            { status: regex },
-            { 'assignedBy.firstname': regex },
-            { 'assignedBy.lastname': regex },
-            { 'issueMember.firstname': regex },
-            { 'issueMember.lastname': regex },
+            { title: searchRegex },
+            { description: searchRegex },
+            { priority: searchRegex },
+            { status: searchRegex },
+            { 'assignedBy.firstname': searchRegex },
+            { 'assignedBy.lastname': searchRegex },
+            { 'issueMember.firstname': searchRegex },
+            { 'issueMember.lastname': searchRegex },
           ],
         },
       });
     }
 
-    pipeline.push(
-      {
-        $facet: {
-          data: [{ $skip: skip }, { $limit: pageSize }],
-          total: [{ $count: 'count' }],
-          statusCounts: [
-            {
-              $group: {
-                _id: '$status',
-                count: { $sum: 1 },
-              },
-            },
-          ],
-        },
-      },
-      {
-        $project: {
-          data: 1,
-          total: { $ifNull: [{ $arrayElemAt: ['$total.count', 0] }, 0] },
-          statusCounts: {
-            $map: {
-              input: ['Pending', 'In Progress', 'Complete', 'Overdue'],
-              as: 'status',
-              in: {
-                status: '$$status',
-                count: {
-                  $ifNull: [
-                    {
-                      $arrayElemAt: [
-                        {
-                          $map: {
-                            input: {
-                              $filter: {
-                                input: '$statusCounts',
-                                cond: { $eq: ['$$this._id', '$$status'] },
-                              },
-                            },
-                            as: 'sc',
-                            in: '$$sc.count',
-                          },
-                        },
-                        0,
-                      ],
-                    },
-                    0,
-                  ],
-                },
-              },
+    // Facet to get paginated data, total count, and status counts
+    pipeline.push({
+      $facet: {
+        data: [
+          { $sort: { dueDate: 1 } },
+          { $skip: (page - 1) * pageSize },
+          { $limit: pageSize },
+        ],
+        total: [{ $count: 'count' }],
+        statusCounts: [
+          {
+            $group: {
+              _id: '$status',
+              count: { $sum: 1 },
             },
           },
-        },
-      }
-    );
+        ],
+      },
+    });
 
+    // Execute aggregation
     const result = await Task.aggregate(pipeline);
+
     const tasks = result[0]?.data || [];
-    const total = result[0]?.total || 0;
+    const total = result[0]?.total[0]?.count || 0;
     const totalPages = Math.ceil(total / pageSize);
-    const statusCounts = result[0]?.statusCounts || [];
+    const hasMore = page < totalPages;
+
+    // Map status counts to all expected statuses
+    const statuses = ['Pending', 'In Progress', 'Complete', 'Overdue'];
+    const statusCountsAgg = result[0]?.statusCounts || [];
+    const statusCounts = statuses.map(s => {
+      const sc = statusCountsAgg.find(st => st._id === s);
+      return { status: s, count: sc ? sc.count : 0 };
+    });
+
+    console.log(statusCounts);
 
     res.status(200).json({
       success: true,
@@ -1533,6 +1702,7 @@ exports.delegatedTasks = async (req, res) => {
       totalPages,
       page,
       pageSize,
+      hasMore,
       statusCounts,
     });
   } catch (error) {

@@ -20,6 +20,7 @@ const { activateNextSteps } = require('../helper/nextStepActivator');
 const { createLogManually } = require('../middlewares/createLog');
 const { getDateRange } = require('../helper/dateRange');
 const { groupTasksByDate } = require('../utils/groupTask');
+const dayjs = require('dayjs');
 
 let today = new Date();
 let yyyy = today.getFullYear();
@@ -450,12 +451,12 @@ exports.getTaskByid = async (req, res) => {
         {
           path: 'assignedBy',
           model: 'User',
-          select: '_id firstname lastname roles',
+          select: '_id firstname lastname profileImage roles',
         },
         {
           path: 'issueMember',
           model: 'User',
-          select: '_id firstname lastname roles',
+          select: '_id firstname lastname profileImage roles',
         },
         {
           path: 'comments',
@@ -530,6 +531,7 @@ const commentSchema = Joi.object({
   comment: Joi.string().allow('').optional(),
   userId: Joi.string().required(),
   isWorking: Joi.string().valid('yes', 'no').optional(),
+  isForce: Joi.string().valid('yes', 'no').optional(),
   material: Joi.string().valid('yes', 'no').optional(),
   workers: Joi.number().min(0).optional(),
 });
@@ -568,7 +570,6 @@ function filterAudio(files) {
 exports.taskAddComment = async (req, res) => {
   let session;
   try {
-    // ✅ Validate body with Joi
     const { error, value } = commentSchema.validate(req.body, {
       abortEarly: false,
       stripUnknown: true,
@@ -587,6 +588,7 @@ exports.taskAddComment = async (req, res) => {
       comment = '',
       userId,
       isWorking,
+      isForce,
       material,
       workers,
     } = value;
@@ -596,6 +598,36 @@ exports.taskAddComment = async (req, res) => {
     const member = await User.findById(userId);
     if (!task || !member) {
       return res.status(404).send({ message: 'Task or user not found' });
+    }
+    
+    if (isForce === 'yes') {
+      const project = await Project.findOne({ siteID: task.siteID });
+      if (!project) throw new Error('Project not found');
+
+      const today = dayjs().startOf('day');
+
+      const exists = project.forceMajeure?.some(item => {
+        const start = dayjs(item.startDate).startOf('day');
+        const end = dayjs(item.endDate).startOf('day');
+        return start.isSame(today, 'day') && end.isSame(today, 'day');
+      });
+
+      if (exists) {
+        return res
+          .status(404)
+          .send({ message: 'Force majeure for today already exists' });
+      }
+
+      project.forceMajeure.push({
+        startDate: today.toDate(),
+        endDate: today.toDate(),
+        duration: 1,
+        reason: comment,
+      });
+
+      project.extension = (project.extension || 0) + 1;
+
+      await project.save();
     }
 
     // ---- File upload (validate + upload) ----
@@ -922,6 +954,7 @@ exports.approveTaskComment = async (req, res) => {
     const client = await Project.findOne({ siteID: siteID })
       .select('client')
       .populate('client');
+
     const task = await Task.findById(taskId);
     if (!task) {
       return res.status(404).send({ message: 'Task not found' });

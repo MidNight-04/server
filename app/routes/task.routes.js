@@ -107,6 +107,7 @@ module.exports = function (app) {
   app.post(
     '/api/task/updatechecklistpoint',
     verifyToken,
+    uploader,
     controller.updateChecklistPoint
   );
   app.post(

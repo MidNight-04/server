@@ -1,6 +1,7 @@
 const MaterialRequest = require('../models/materialRequest.model.js');
 const Material = require('../models/material.model.js');
 const mongoose = require('mongoose');
+const awsS3 = require('../middlewares/aws-s3');
 
 exports.createMaterialRequest = async (req, res) => {
   try {
@@ -240,44 +241,395 @@ exports.getOrdersBySite = async (req, res) => {
   }
 };
 
+// exports.receiveMaterials = async (req, res) => {
+//   const { requestId } = req.params;
+//   const { materials } = req.body;
+//   const userId = req.user?._id || req.userId || req.body?.userId;
+
+//   // --- Early validations (before session) ---
+//   const validationError = validateRequestInput(userId, requestId, materials);
+//   if (validationError) {
+//     return res
+//       .status(validationError.status)
+//       .json({ message: validationError.message });
+//   }
+
+//   const materialsResult = normalizeAndValidateMaterials(materials);
+//   if (materialsResult.error) {
+//     return res.status(400).json({ message: materialsResult.error });
+//   }
+
+//   const materialsArray = materialsResult.data;
+//   const materialIds = [...new Set(materialsArray.map(item => item.materialId))];
+
+//   const invalidIds = materialIds.filter(
+//     id => !mongoose.Types.ObjectId.isValid(id)
+//   );
+//   if (invalidIds.length > 0) {
+//     return res.status(400).json({
+//       message: `Invalid material IDs: ${invalidIds.join(', ')}`,
+//     });
+//   }
+
+//   // --- Start session ---
+//   const session = await mongoose.startSession();
+
+//   try {
+//     let responsePayload;
+
+//     await session.withTransaction(async () => {
+//       // --- DB Fetch ---
+//       const [request, materials_db] = await Promise.all([
+//         MaterialRequest.findById(requestId).session(session),
+//         Material.find(
+//           { _id: { $in: materialIds } },
+//           { _id: 1, name: 1 }
+//         ).session(session),
+//       ]);
+
+//       if (!request) {
+//         throw { status: 404, message: 'Material request not found' };
+//       }
+
+//       const requestValidationError = validateRequestStatus(request);
+//       if (requestValidationError) {
+//         throw requestValidationError;
+//       }
+
+//       // --- Validation against existing data ---
+//       const materialMap = new Map(materials_db.map(m => [m._id.toString(), m]));
+//       const existingReceivedItems = new Map(
+//         request.receivedItems.map(item => [item.item.toString(), item.quantity])
+//       );
+//       const orderedMap = new Map(
+//         request.materials.map(m => [m.item.toString(), m.quantity])
+//       );
+
+//       const validationErrors = validateMaterialsForReceiving(
+//         materialIds,
+//         materialsArray,
+//         materialMap,
+//         existingReceivedItems,
+//         orderedMap
+//       );
+
+//       if (validationErrors.length > 0) {
+//         throw { status: 400, message: validationErrors.join('; ') };
+//       }
+
+//       // --- Prepare Updates ---
+//       const { bulkUpdates, receivedItems, materialQuantities } =
+//         prepareBatchOperations(materialsArray, userId);
+
+//       // Apply to request document → .save() will trigger pre('save')
+//       request.receivedItems.push(...receivedItems);
+//       request.lastUpdated = new Date();
+//       await request.save({ session }); // ⬅️ pre('save') runs here
+
+//       // Update stock if needed
+//       if (bulkUpdates.length > 0) {
+//         await Material.bulkWrite(bulkUpdates, { session });
+//       }
+
+//       // Build response payload
+//       const totalReceived = request.receivedItems.reduce(
+//         (sum, item) => sum + item.quantity,
+//         0
+//       );
+//       const totalOrdered = request.materials.reduce(
+//         (sum, item) => sum + item.quantity,
+//         0
+//       );
+
+//       responsePayload = {
+//         message: `Successfully received ${materialsArray.length} material${
+//           materialsArray.length > 1 ? 's' : ''
+//         }`,
+//         request: {
+//           id: requestId,
+//           status: request.status, // ✅ updated by pre('save')
+//           receivedItemsCount: request.receivedItems.length,
+//           totalReceived,
+//           totalOrdered,
+//           isCompleted: request.status === 'received',
+//         },
+//         processedItems: materialsArray.length,
+//         stockUpdates: materialQuantities.size,
+//       };
+//     });
+
+//     return res.status(200).json(responsePayload);
+//   } catch (error) {
+//     if (error.status) {
+//       return res.status(error.status).json({ message: error.message });
+//     }
+//     return handleDatabaseError(error, res);
+//   } finally {
+//     session.endSession();
+//   }
+// };
+
+// exports.receiveMaterials = async (req, res) => {
+//   const { requestId } = req.params;
+//   const userId = req.user?._id || req.userId || req.body?.userId;
+
+//   try {
+//     const { receivedDate, materials = [] } = req.body;
+
+//     // --- Early validation ---
+//     if (!materials.length) {
+//       return res.status(400).json({ message: 'Materials array is required' });
+//     }
+
+//     // --- Normalize materials and attach uploaded files ---
+//     const parsedMaterials = materials.map((item, index) => {
+//       const material = {
+//         materialId: item.materialId,
+//         quantity: Number(item.quantity),
+//         remarks: item.remarks || '',
+//         receivedBy: userId,
+//         receivedAt: receivedDate || new Date(),
+//         image: [],
+//         video: [],
+//       };
+
+//       if (req.files && req.files.length > 0) {
+//         const base = `materials[${index}]`;
+
+//         const relatedFiles = req.files.filter(f =>
+//           f.fieldname.startsWith(base)
+//         );
+
+//         relatedFiles.forEach(async file => {
+//           if (file.fieldname.includes('[image]')) {
+//             const data = await awsS3.uploadFile(file, 'project_update');
+//             const url = `https://thekedar-bucket.s3.us-east-1.amazonaws.com/${data}`;
+//             material.image = url;
+//           } else if (file.fieldname.includes('[video]')) {
+//             const data = await awsS3.uploadFiles(file, 'project_update');
+//             const url = `https://thekedar-bucket.s3.us-east-1.amazonaws.com/${data}`;
+//             material.video = url;
+//           }
+//         }
+//       );
+//       }
+
+//       return material;
+//     });
+
+//     console.log(materials);
+
+//     // --- Input validation ---
+//     const validationError = validateRequestInput(
+//       userId,
+//       requestId,
+//       parsedMaterials
+//     );
+//     if (validationError) {
+//       return res
+//         .status(validationError.status)
+//         .json({ message: validationError.message });
+//     }
+
+//     const materialsResult = normalizeAndValidateMaterials(parsedMaterials);
+//     if (materialsResult.error) {
+//       return res.status(400).json({ message: materialsResult.error });
+//     }
+
+//     const materialsArray = materialsResult.data;
+//     const materialIds = [...new Set(materialsArray.map(m => m.materialId))];
+//     const invalidIds = materialIds.filter(
+//       id => !mongoose.Types.ObjectId.isValid(id)
+//     );
+
+//     if (invalidIds.length) {
+//       return res.status(400).json({
+//         message: `Invalid material IDs: ${invalidIds.join(', ')}`,
+//       });
+//     }
+
+//     // --- Start transaction ---
+//     const session = await mongoose.startSession();
+//     let responsePayload;
+
+//     await session.withTransaction(async () => {
+//       const [request, materials_db] = await Promise.all([
+//         MaterialRequest.findById(requestId).session(session),
+//         Material.find(
+//           { _id: { $in: materialIds } },
+//           { _id: 1, name: 1 }
+//         ).session(session),
+//       ]);
+
+//       if (!request)
+//         throw { status: 404, message: 'Material request not found' };
+
+//       const requestValidationError = validateRequestStatus(request);
+//       if (requestValidationError) throw requestValidationError;
+
+//       const materialMap = new Map(materials_db.map(m => [m._id.toString(), m]));
+//       const existingReceivedItems = new Map(
+//         request.receivedItems.map(item => [item.item.toString(), item.quantity])
+//       );
+//       const orderedMap = new Map(
+//         request.materials.map(m => [m.item.toString(), m.quantity])
+//       );
+
+//       const validationErrors = validateMaterialsForReceiving(
+//         materialIds,
+//         materialsArray,
+//         materialMap,
+//         existingReceivedItems,
+//         orderedMap
+//       );
+
+//       if (validationErrors.length) {
+//         throw { status: 400, message: validationErrors.join('; ') };
+//       }
+
+//       // --- Prepare updates ---
+//       const { bulkUpdates, receivedItems, materialQuantities } =
+//         prepareBatchOperations(materialsArray, userId);
+
+//       // Attach file metadata (optional)
+//       receivedItems.forEach((item, i) => {
+//         const mat = parsedMaterials[i];
+//         if (mat.proofOfDelivery) {
+//           item.proofOfDelivery = {
+//             filename: mat.proofOfDelivery.originalname,
+//             mimetype: mat.proofOfDelivery.mimetype,
+//           };
+//         }
+//       });
+
+//       // --- Save changes ---
+//       request.receivedItems.push(...receivedItems);
+//       request.lastUpdated = new Date();
+//       await request.save({ session });
+
+//       if (bulkUpdates.length) {
+//         await Material.bulkWrite(bulkUpdates, { session });
+//       }
+
+//       const totalReceived = request.receivedItems.reduce(
+//         (sum, item) => sum + item.quantity,
+//         0
+//       );
+//       const totalOrdered = request.materials.reduce(
+//         (sum, item) => sum + item.quantity,
+//         0
+//       );
+
+//       responsePayload = {
+//         message: `Successfully received ${materialsArray.length} material${
+//           materialsArray.length > 1 ? 's' : ''
+//         }`,
+//         request: {
+//           id: requestId,
+//           status: request.status,
+//           receivedItemsCount: request.receivedItems.length,
+//           totalReceived,
+//           totalOrdered,
+//           isCompleted: request.status === 'received',
+//         },
+//         processedItems: materialsArray.length,
+//         stockUpdates: materialQuantities.size,
+//       };
+//     });
+
+//     session.endSession();
+//     return res.status(200).json(responsePayload);
+//   } catch (error) {
+//     console.error('Error in receiveMaterials:', error);
+//     if (error.status) {
+//       return res.status(error.status).json({ message: error.message });
+//     }
+//     return handleDatabaseError(error, res);
+//   }
+// };
+
 exports.receiveMaterials = async (req, res) => {
   const { requestId } = req.params;
-  const { materials } = req.body;
   const userId = req.user?._id || req.userId || req.body?.userId;
 
-  // --- Early validations (before session) ---
-  const validationError = validateRequestInput(userId, requestId, materials);
-  if (validationError) {
-    return res
-      .status(validationError.status)
-      .json({ message: validationError.message });
-  }
-
-  const materialsResult = normalizeAndValidateMaterials(materials);
-  if (materialsResult.error) {
-    return res.status(400).json({ message: materialsResult.error });
-  }
-
-  const materialsArray = materialsResult.data;
-  const materialIds = [...new Set(materialsArray.map(item => item.materialId))];
-
-  const invalidIds = materialIds.filter(
-    id => !mongoose.Types.ObjectId.isValid(id)
-  );
-  if (invalidIds.length > 0) {
-    return res.status(400).json({
-      message: `Invalid material IDs: ${invalidIds.join(', ')}`,
-    });
-  }
-
-  // --- Start session ---
-  const session = await mongoose.startSession();
-
   try {
+    const { receivedDate, materials = [] } = req.body;
+
+    // --- Early validation ---
+    if (!materials.length) {
+      return res.status(400).json({ message: 'Materials array is required' });
+    }
+
+    // --- Normalize materials and attach uploaded files ---
+    const parsedMaterials = [];
+
+    for (let index = 0; index < materials.length; index++) {
+      const item = materials[index];
+
+      const material = {
+        materialId: item.materialId,
+        quantity: Number(item.quantity),
+        remarks: item.remarks || '',
+        receivedBy: userId,
+        receivedAt: receivedDate || new Date(),
+        image: null,
+        video: null,
+      };
+
+      if (req.files?.length) {
+        const base = `materials[${index}]`;
+        const relatedFiles = req.files.filter(f =>
+          f.fieldname.startsWith(base)
+        );
+
+        const uploadPromises = relatedFiles.map(async file => {
+          const data = await awsS3.uploadFile(file, 'project_update');
+          const url = `https://thekedar-bucket.s3.us-east-1.amazonaws.com/${data}`;
+
+          if (file.fieldname.includes('[image]')) material.image = url;
+          else if (file.fieldname.includes('[video]')) material.video = url;
+        });
+
+        await Promise.all(uploadPromises);
+      }
+
+      parsedMaterials.push(material);
+    }
+
+    // --- Input validation ---
+    const validationError = validateRequestInput(
+      userId,
+      requestId,
+      parsedMaterials
+    );
+    if (validationError) {
+      return res
+        .status(validationError.status)
+        .json({ message: validationError.message });
+    }
+
+    const materialsResult = normalizeAndValidateMaterials(parsedMaterials);
+    if (materialsResult.error) {
+      return res.status(400).json({ message: materialsResult.error });
+    }
+
+    const materialsArray = materialsResult.data;
+    const materialIds = [...new Set(materialsArray.map(m => m.materialId))];
+    const invalidIds = materialIds.filter(
+      id => !mongoose.Types.ObjectId.isValid(id)
+    );
+
+    if (invalidIds.length) {
+      return res
+        .status(400)
+        .json({ message: `Invalid material IDs: ${invalidIds.join(', ')}` });
+    }
+
+    // --- Start transaction ---
+    const session = await mongoose.startSession();
     let responsePayload;
 
     await session.withTransaction(async () => {
-      // --- DB Fetch ---
       const [request, materials_db] = await Promise.all([
         MaterialRequest.findById(requestId).session(session),
         Material.find(
@@ -286,16 +638,12 @@ exports.receiveMaterials = async (req, res) => {
         ).session(session),
       ]);
 
-      if (!request) {
+      if (!request)
         throw { status: 404, message: 'Material request not found' };
-      }
 
       const requestValidationError = validateRequestStatus(request);
-      if (requestValidationError) {
-        throw requestValidationError;
-      }
+      if (requestValidationError) throw requestValidationError;
 
-      // --- Validation against existing data ---
       const materialMap = new Map(materials_db.map(m => [m._id.toString(), m]));
       const existingReceivedItems = new Map(
         request.receivedItems.map(item => [item.item.toString(), item.quantity])
@@ -312,25 +660,32 @@ exports.receiveMaterials = async (req, res) => {
         orderedMap
       );
 
-      if (validationErrors.length > 0) {
+      if (validationErrors.length) {
         throw { status: 400, message: validationErrors.join('; ') };
       }
 
-      // --- Prepare Updates ---
+      // --- Prepare updates ---
       const { bulkUpdates, receivedItems, materialQuantities } =
         prepareBatchOperations(materialsArray, userId);
 
-      // Apply to request document → .save() will trigger pre('save')
+      // Attach file metadata (optional)
+      receivedItems.forEach((item, i) => {
+        const mat = parsedMaterials[i];
+        console.log(mat);
+        // Attach uploaded files
+        if (mat.image?.length) item.image = mat.image;
+        if (mat.video?.length) item.video = mat.video;
+      });
+
+      // --- Save changes ---
       request.receivedItems.push(...receivedItems);
       request.lastUpdated = new Date();
-      await request.save({ session }); // ⬅️ pre('save') runs here
+      await request.save({ session });
 
-      // Update stock if needed
-      if (bulkUpdates.length > 0) {
+      if (bulkUpdates.length) {
         await Material.bulkWrite(bulkUpdates, { session });
       }
 
-      // Build response payload
       const totalReceived = request.receivedItems.reduce(
         (sum, item) => sum + item.quantity,
         0
@@ -346,7 +701,7 @@ exports.receiveMaterials = async (req, res) => {
         }`,
         request: {
           id: requestId,
-          status: request.status, // ✅ updated by pre('save')
+          status: request.status,
           receivedItemsCount: request.receivedItems.length,
           totalReceived,
           totalOrdered,
@@ -357,14 +712,13 @@ exports.receiveMaterials = async (req, res) => {
       };
     });
 
+    session.endSession();
     return res.status(200).json(responsePayload);
   } catch (error) {
-    if (error.status) {
+    console.error('Error in receiveMaterials:', error);
+    if (error.status)
       return res.status(error.status).json({ message: error.message });
-    }
     return handleDatabaseError(error, res);
-  } finally {
-    session.endSession();
   }
 };
 
@@ -401,7 +755,7 @@ exports.materialRequests = async (req, res) => {
     const pipeline = [
       { $match: match },
 
-      // Lookup materials.item -> Material
+      // --- Lookup materials for requested items ---
       {
         $lookup: {
           from: 'materials',
@@ -439,7 +793,7 @@ exports.materialRequests = async (req, res) => {
       },
       { $project: { materialsData: 0 } },
 
-      // Lookup receivedItems.item -> Material
+      // --- Lookup materials for received items ---
       {
         $lookup: {
           from: 'materials',
@@ -458,6 +812,8 @@ exports.materialRequests = async (req, res) => {
                 quantity: '$$ri.quantity',
                 receivedAt: '$$ri.receivedAt',
                 remarks: '$$ri.remarks',
+                image: '$$ri.image', // uploaded image
+                video: '$$ri.video', // uploaded video
                 receivedBy: '$$ri.receivedBy',
                 material: {
                   $arrayElemAt: [
@@ -478,7 +834,7 @@ exports.materialRequests = async (req, res) => {
       },
       { $project: { receivedMaterialsData: 0 } },
 
-      // Lookup receivedItems.receivedBy -> User
+      // --- Lookup receivedBy users ---
       {
         $lookup: {
           from: 'users',
@@ -497,6 +853,8 @@ exports.materialRequests = async (req, res) => {
                 quantity: '$$ri.quantity',
                 receivedAt: '$$ri.receivedAt',
                 remarks: '$$ri.remarks',
+                image: '$$ri.image',
+                video: '$$ri.video',
                 material: '$$ri.material',
                 receivedBy: {
                   $arrayElemAt: [
@@ -517,7 +875,7 @@ exports.materialRequests = async (req, res) => {
       },
       { $project: { receivedUsers: 0 } },
 
-      // Lookup requestedBy
+      // --- Lookup requestedBy ---
       {
         $lookup: {
           from: 'users',
@@ -528,7 +886,7 @@ exports.materialRequests = async (req, res) => {
       },
       { $unwind: { path: '$requestedBy', preserveNullAndEmptyArrays: true } },
 
-      // Lookup site
+      // --- Lookup site/project ---
       {
         $lookup: {
           from: 'projects',
@@ -539,16 +897,21 @@ exports.materialRequests = async (req, res) => {
       },
       { $unwind: { path: '$site', preserveNullAndEmptyArrays: true } },
 
-      // 🔍 Global Search
+      // --- Global search ---
       ...(query
         ? [
             {
               $match: {
                 $or: [
                   { purpose: { $regex: query, $options: 'i' } },
-                  { 'materials.material.name': { $regex: query, $options: 'i' } },
                   {
-                    'receivedItems.material.name': { $regex: query, $options: 'i' },
+                    'materials.material.name': { $regex: query, $options: 'i' },
+                  },
+                  {
+                    'receivedItems.material.name': {
+                      $regex: query,
+                      $options: 'i',
+                    },
                   },
                   { 'site.name': { $regex: query, $options: 'i' } },
                   { 'site.siteID': { $regex: query, $options: 'i' } },
@@ -562,7 +925,7 @@ exports.materialRequests = async (req, res) => {
           ]
         : []),
 
-      // Final projection
+      // --- Final projection ---
       {
         $project: {
           createdAt: 1,
@@ -592,6 +955,8 @@ exports.materialRequests = async (req, res) => {
           'receivedItems.quantity': 1,
           'receivedItems.receivedAt': 1,
           'receivedItems.remarks': 1,
+          'receivedItems.image': 1, // uploaded image
+          'receivedItems.video': 1, // uploaded video
           'receivedItems.material._id': 1,
           'receivedItems.material.name': 1,
           'receivedItems.material.unit': 1,
@@ -602,7 +967,7 @@ exports.materialRequests = async (req, res) => {
         },
       },
 
-      // Sort & paginate
+      // --- Sort & paginate ---
       { $sort: { createdAt: sort === 'asc' ? 1 : -1 } },
       { $skip: (page - 1) * parseInt(limit) },
       { $limit: parseInt(limit) },
@@ -806,6 +1171,82 @@ function handleDatabaseError(error, res) {
   });
 }
 
+// function normalizeAndValidateMaterials(materials) {
+//   if (!materials) {
+//     return { error: 'Materials data is required' };
+//   }
+
+//   let materialsArray;
+
+//   // Normalize input format
+//   if (Array.isArray(materials)) {
+//     materialsArray = materials;
+//   } else if (
+//     typeof materials === 'object' &&
+//     materials.materialId &&
+//     materials.quantity !== undefined
+//   ) {
+//     materialsArray = [materials];
+//   } else {
+//     return {
+//       error:
+//         'Invalid materials format. Expected array of materials or single material object',
+//     };
+//   }
+
+//   if (materialsArray.length === 0) {
+//     return { error: 'At least one material is required' };
+//   }
+
+//   if (materialsArray.length > 100) {
+//     return { error: 'Maximum 100 materials can be processed at once' };
+//   }
+
+//   // Enhanced validation with detailed error messages
+//   const validatedMaterials = [];
+//   const errors = [];
+
+//   materialsArray.forEach((item, index) => {
+//     const itemErrors = validateMaterialItem(item, index + 1);
+//     if (itemErrors.length > 0) {
+//       errors.push(...itemErrors);
+//     } else {
+//       const qty = parseFloat(item.quantity);
+
+//       if (isNaN(qty) || qty <= 0) {
+//         errors.push(
+//           `Invalid quantity at item #${index + 1}. Must be a positive number`
+//         );
+//       } else {
+//         validatedMaterials.push({
+//           ...item,
+//           quantity: qty, // ✅ keep float instead of flooring
+//         });
+//       }
+//     }
+//   });
+
+//   if (errors.length > 0) {
+//     return { error: errors.join('; ') };
+//   }
+
+//   // Check for duplicate material IDs in the same request
+//   const materialIds = validatedMaterials.map(item => item.materialId);
+//   const duplicateIds = materialIds.filter(
+//     (id, index) => materialIds.indexOf(id) !== index
+//   );
+
+//   if (duplicateIds.length > 0) {
+//     return {
+//       error: `Duplicate materials in request: ${[...new Set(duplicateIds)].join(
+//         ', '
+//       )}`,
+//     };
+//   }
+
+//   return { data: validatedMaterials };
+// }
+
 function normalizeAndValidateMaterials(materials) {
   if (!materials) {
     return { error: 'Materials data is required' };
@@ -813,7 +1254,7 @@ function normalizeAndValidateMaterials(materials) {
 
   let materialsArray;
 
-  // Normalize input format
+  // --- Normalize input format ---
   if (Array.isArray(materials)) {
     materialsArray = materials;
   } else if (
@@ -837,35 +1278,58 @@ function normalizeAndValidateMaterials(materials) {
     return { error: 'Maximum 100 materials can be processed at once' };
   }
 
-  // Enhanced validation with detailed error messages
+  // --- Enhanced validation ---
   const validatedMaterials = [];
   const errors = [];
 
   materialsArray.forEach((item, index) => {
-    const itemErrors = validateMaterialItem(item, index + 1);
+    const prefix = `Item #${index + 1}`;
+    const itemErrors = [];
+
+    // Check required fields
+    if (!item.materialId) {
+      itemErrors.push(`${prefix}: Missing materialId`);
+    }
+
+    if (item.quantity === undefined || item.quantity === null) {
+      itemErrors.push(`${prefix}: Missing quantity`);
+    }
+
+    // Validate numeric quantity
+    const qty = parseFloat(item.quantity);
+    if (isNaN(qty) || qty <= 0) {
+      itemErrors.push(`${prefix}: Invalid quantity. Must be > 0`);
+    }
+
+    // Optional file validation
+    if (item.proofOfDelivery) {
+      const proof = item.proofOfDelivery;
+      if (
+        !proof.mimetype ||
+        !proof.originalname ||
+        !proof.buffer ||
+        typeof proof.buffer !== 'object'
+      ) {
+        itemErrors.push(`${prefix}: Invalid proofOfDelivery format`);
+      }
+    }
+
     if (itemErrors.length > 0) {
       errors.push(...itemErrors);
     } else {
-      const qty = parseFloat(item.quantity);
-
-      if (isNaN(qty) || qty <= 0) {
-        errors.push(
-          `Invalid quantity at item #${index + 1}. Must be a positive number`
-        );
-      } else {
-        validatedMaterials.push({
-          ...item,
-          quantity: qty, // ✅ keep float instead of flooring
-        });
-      }
+      validatedMaterials.push({
+        ...item,
+        quantity: qty,
+      });
     }
   });
 
+  // If any errors, return early
   if (errors.length > 0) {
     return { error: errors.join('; ') };
   }
 
-  // Check for duplicate material IDs in the same request
+  // --- Check for duplicates ---
   const materialIds = validatedMaterials.map(item => item.materialId);
   const duplicateIds = materialIds.filter(
     (id, index) => materialIds.indexOf(id) !== index

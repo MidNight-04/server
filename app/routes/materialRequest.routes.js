@@ -1,5 +1,6 @@
 const controller = require('../controllers/materialRequest.controller');
 const { verifyToken, isSenior } = require('../middlewares/authJwt');
+const anyFileUploader = require('../middlewares/anyFileUploader');
 
 module.exports = function (app) {
   app.use(function (req, res, next) {
@@ -34,6 +35,7 @@ module.exports = function (app) {
   app.put(
     '/api/materialrequest/receivematerials/:requestId',
     verifyToken,
+    anyFileUploader,
     controller.receiveMaterials
   );
 };

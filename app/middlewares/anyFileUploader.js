@@ -57,44 +57,8 @@ const fileFilter = (req, file, cb) => {
 const upload = multer({
   storage,
   fileFilter,
-  limits: { fileSize: 1024 * 1024 * 30 }, // 30 MB
-}).fields([
-  { name: 'docs', maxCount: 20 },
-  { name: 'video', maxCount: 10 },
-  { name: 'audio', maxCount: 10 },
-  { name: 'image', maxCount: 10 },
-  { name: 'file', maxCount: 10 },
-  { name: 'document', maxCount: 10 },
-]);
-
-// const MAX_MATERIALS = 10;
-
-// const dynamicFields = [
-//   { name: 'docs', maxCount: 20 },
-//   { name: 'video', maxCount: 10 },
-//   { name: 'audio', maxCount: 10 },
-//   { name: 'image', maxCount: 10 },
-//   { name: 'file', maxCount: 10 },
-//   { name: 'document', maxCount: 10 },
-// ];
-
-// for (let i = 0; i < MAX_MATERIALS; i++) {
-//   ['image', 'video', 'audio', 'docs', 'file', 'document'].forEach(type => {
-//     dynamicFields.push({ name: `materials[${i}][${type}]`, maxCount: 10 });
-//   });
-// }
-
-// const upload = multer({
-//   storage,
-//   fileFilter,
-//   limits: { fileSize: 1024 * 1024 * 30 },
-// }).fields(dynamicFields);
-
-// const upload = multer({
-//   storage,
-//   fileFilter,
-//   limits: { fileSize: 1024 * 1024 * 30 },
-// }).any();
+  limits: { fileSize: 1024 * 1024 * 30 },
+}).any();
 
 module.exports = (req, res, next) => {
   upload(req, res, err => {

@@ -51,6 +51,14 @@ const receivedItemSchema = new Schema({
     type: String,
     trim: true,
   },
+  image: {
+    type: String,
+    default: null,
+  },
+  video: {
+    type: String,
+    default: null,
+  },
 });
 
 const MaterialRequestSchema = new Schema(
@@ -155,7 +163,6 @@ function calculateRequestStatus(materials = [], receivedItems = []) {
 MaterialRequestSchema.pre('save', function (next) {
   const now = new Date();
   let statusChanged = false;
-
 
   // Update status based on quantities
   if (this.materials?.length || this.receivedItems?.length) {

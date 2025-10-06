@@ -599,7 +599,7 @@ exports.taskAddComment = async (req, res) => {
     if (!task || !member) {
       return res.status(404).send({ message: 'Task or user not found' });
     }
-    
+
     if (isForce === 'yes') {
       const project = await Project.findOne({ siteID: task.siteID });
       if (!project) throw new Error('Project not found');
@@ -696,7 +696,7 @@ exports.taskAddComment = async (req, res) => {
         .send({ message: 'Task not found (during transaction)' });
     }
 
-    // ✅ Handle completion progression
+    // Handle completion progression
     if (type === 'Complete') {
       const project = await Project.findOne({
         siteID: taskInSession.siteID,
@@ -728,7 +728,7 @@ exports.taskAddComment = async (req, res) => {
       }
     }
 
-    // ✅ Task status updates
+    // Task status updates
     if (type === 'Reopened') {
       taskInSession.status = 'In Progress';
     } else if (
@@ -738,7 +738,7 @@ exports.taskAddComment = async (req, res) => {
       taskInSession.status = type;
     }
 
-    // ✅ Build comment
+    // Build comment
     const newCommentObj = {
       comment: comment.trim(),
       type,
@@ -773,7 +773,7 @@ exports.taskAddComment = async (req, res) => {
     taskInSession.updatedOn = new Date();
     await taskInSession.save({ session });
 
-    // ✅ Logging
+    // Logging
     const logParts = ['Added new comment'];
     if (comment.trim()) logParts.push(`text: "${comment}"`);
     if (images.length > 0) logParts.push(`+ ${images.length} image(s)`);
@@ -785,7 +785,7 @@ exports.taskAddComment = async (req, res) => {
     await session.commitTransaction();
     session.endSession();
 
-    // ✅ Send notifications after commit
+    // Send notifications after commit
     for (const n of notificationQueue) {
       try {
         await sendTeamNotification({
@@ -1586,7 +1586,6 @@ const PAGE_SIZE = 12;
 exports.delegatedTasks = async (req, res) => {
   try {
     const {
-      userId,
       page = 1,
       pageSize = PAGE_SIZE, // frontend can override
       selectedCategory,
@@ -1725,8 +1724,6 @@ exports.delegatedTasks = async (req, res) => {
       const sc = statusCountsAgg.find(st => st._id === s);
       return { status: s, count: sc ? sc.count : 0 };
     });
-
-    console.log(statusCounts);
 
     res.status(200).json({
       success: true,
@@ -2387,153 +2384,46 @@ exports.dashboardFilter = async (req, res) => {
   }
 };
 
-// exports.dashboardFilter = async (req, res) => {
-//   try {
-//     const {
-//       userId,
-//       page = 1,
-//       limit = 200,
-//       selectedCategory,
-//       assignedTo,
-//       frequency,
-//       priority,
-//       filter,
-//       siteId,
-//       branch,
-//     } = req.body;
+exports.deleteAudioFile = async (req, res) => {
+  const { comment_id } = req.params;
 
-//     const siteIds = await Project.find();
+  try {
+    const taskComment = await TaskComment.findById(comment_id);
+    if (!taskComment) {
+      return res.status(404).json({ message: 'Comment not found' });
+    }
 
-//     const { start, end } = getDateRange(filter);
+    const task = await Task.findById(taskComment.taskId);
+    if (!task) {
+      return res.status(404).json({ message: 'Task not found' });
+    }
 
-//     const matchTask = {
-//       'task.isActive': true,
-//       'task.status': { $ne: 'Complete' },
-//     };
+    const audioUrl = taskComment.audio;
+    if (!audioUrl) {
+      return res.status(400).json({ message: 'No audio file to delete' });
+    }
 
-//     if (userId) matchTask['task.assignedBy'] = userId;
-//     if (assignedTo && assignedTo.trim() !== '') {
-//       matchTask['task.issueMember'] = new mongoose.Types.ObjectId(assignedTo);
-//     }
-//     if (selectedCategory && selectedCategory.trim() !== '') {
-//       matchTask['task.category'] = selectedCategory;
-//     }
-//     if (frequency && frequency.trim() !== '') {
-//       matchTask['task.repeat.repeatType'] = frequency;
-//     }
-//     if (priority && priority.trim() !== '') {
-//       matchTask['task.priority'] = priority;
-//     }
-//     // if (start && end) {
-//     //   const startDate = new Date(start);
-//     //   const endDate = new Date(end);
-//     //   if (!isNaN(startDate) && !isNaN(endDate)) {
-//     //     matchTask['task.dueDate'] = { $gte: startDate, $lte: endDate };
-//     //   }
-//     // }
+    // Delete from S3
+    const s3Key = audioUrl.split('.com/')[1];
+    await awsS3.deleteFile(s3Key);
 
-//     console.log(start, end);
-//     // Similarly, for projects
-//     const matchProject = {};
-//     if (siteId && siteId.trim() !== '') matchProject.siteID = siteId;
-//     if (branch && branch.trim() !== '') matchProject.branch = branch;
+    // Update comment
+    taskComment.audio = null;
+    await taskComment.save();
 
-//     const skip = (page - 1) * limit;
+    // Create log
+    await createLogManually(
+      req,
+      `Deleted audio file of task "${task.title}" in project "${task.siteID}"`,
+      task?.siteID,
+      task._id
+    );
 
-//     const tasksAggregation = await Project.aggregate([
-//       { $match: matchProject || {} },
-//       { $unwind: '$project_status' }, // Unwind project_status array
-//       { $unwind: '$project_status.step' }, // Unwind step array
-//       {
-//         $lookup: {
-//           // Lookup task details
-//           from: 'tasks',
-//           localField: 'project_status.step.taskId',
-//           foreignField: '_id',
-//           as: 'task',
-//         },
-//       },
-//       { $unwind: '$task' }, // Flatten task array
-//       { $match: matchTask }, // Apply task filters
-//       {
-//         $lookup: {
-//           // Populate issueMember
-//           from: 'users',
-//           localField: 'task.issueMember',
-//           foreignField: '_id',
-//           as: 'task.issueMember',
-//         },
-//       },
-//       {
-//         $lookup: {
-//           // Populate comments.createdBy
-//           from: 'comments',
-//           localField: 'task.comments',
-//           foreignField: '_id',
-//           as: 'task.comments',
-//         },
-//       },
-//       {
-//         $lookup: {
-//           // Populate roles inside comments.createdBy
-//           from: 'roles',
-//           localField: 'task.comments.createdBy.roles',
-//           foreignField: '_id',
-//           as: 'task.comments.createdBy.roles',
-//         },
-//       },
-//       {
-//         $project: {
-//           // Select needed fields
-//           branch: 1,
-//           siteID: 1,
-//           stepName: '$project_status.name',
-//           _id: '$task._id',
-//           title: '$task.title',
-//           description: '$task.description',
-//           dueDate: '$task.dueDate',
-//           status: '$task.status',
-//           issueMember: '$task.issueMember',
-//           comments: '$task.comments',
-//         },
-//       },
-//       { $sort: { dueDate: 1 } }, // Optional sorting
-//       { $skip: skip },
-//       { $limit: limit },
-//     ]);
-
-//     // Total tasks count for pagination
-//     const totalCountAgg = await Project.aggregate([
-//       { $match: matchProject },
-//       { $unwind: '$project_status' },
-//       { $unwind: '$project_status.step' },
-//       {
-//         $lookup: {
-//           from: 'tasks',
-//           localField: 'project_status.step.taskId',
-//           foreignField: '_id',
-//           as: 'task',
-//         },
-//       },
-//       { $unwind: '$task' },
-//       { $match: matchTask },
-//       { $count: 'totalTasks' },
-//     ]);
-
-//     const totalTasks = totalCountAgg[0]?.totalTasks || 0;
-
-//     const groupedTasks = groupTasksByDate(tasksAggregation, siteIds, {
-//       activeFilter: req.body.filter || 'This Month',
-//     });
-
-//     res.status(200).json({
-//       page,
-//       limit,
-//       totalTasks,
-//       tasks: tasksAggregation,
-//     });
-//   } catch (error) {
-//     console.error('Server error:', error);
-//     res.status(500).json({ message: 'Error while fetching tasks' });
-//   }
-// };
+    return res.status(200).json({ message: 'Audio file deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting audio file:', error);
+    return res
+      .status(500)
+      .json({ message: 'Failed to delete audio file', error: error.message });
+  }
+};

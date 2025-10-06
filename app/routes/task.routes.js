@@ -121,4 +121,9 @@ module.exports = function (app) {
     verifyToken,
     controller.dashboardFilter
   );
+  app.delete(
+    '/api/task/deleteaudio/:comment_id',
+    verifyToken,
+    controller.deleteAudioFile
+  );
 };

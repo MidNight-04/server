@@ -1,29 +1,30 @@
 require('dotenv').config();
-const AWS = require("aws-sdk");
-const fs = require("fs");
-const path = require("path");
+const AWS = require('aws-sdk');
+const fs = require('fs');
 
 AWS.config.update({
   accessKeyId: process.env.AWS_ACCESS_KEY_ID,
   secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-  region: "us-east-1",
+  region: 'us-east-1',
 });
 
 const s3 = new AWS.S3();
 
-const myBucket = "thekedar-bucket";
+const myBucket = 'thekedar-bucket';
 
 exports.uploadFile = function (file, key) {
   return new Promise(function (resolve, reject) {
+    let s3Key;
+    let myKey = `${key}${file.filename.replace(/ /g, '_')}`;
     fs.readFile(file.path, function (err, data) {
       if (err) {
         throw err;
       }
       params = {
         Bucket: myBucket,
-        Key: key,
+        Key: myKey,
         Body: data,
-        ACL: "public-read",
+        ACL: 'public-read',
         ContentType: file.mimetype,
       };
       s3.putObject(params, function (err, data) {
@@ -31,7 +32,8 @@ exports.uploadFile = function (file, key) {
           reject(err);
           console.log(err);
         } else {
-          resolve(key);
+          s3Key = myKey;
+          resolve(s3Key);
         }
       });
     });
@@ -43,7 +45,7 @@ exports.uploadFiles = function (files, prefix) {
     var s3KeyArr = [];
     for (var i = 0; i < files.length; i++) {
       const file = files[i];
-      let myKey = `${prefix}${file.filename.replace(/ /g, "_")}`;
+      let myKey = `${prefix}${file.filename.replace(/ /g, '_')}`;
       fs.readFile(file.path, function (err, data) {
         if (err) {
           throw err;
@@ -52,7 +54,7 @@ exports.uploadFiles = function (files, prefix) {
           Bucket: myBucket,
           Key: myKey,
           Body: data,
-          ACL: "public-read",
+          ACL: 'public-read',
           ContentType: file.mimetype,
         };
         s3.putObject(params, function (err, data) {
@@ -82,9 +84,9 @@ exports.getUploadFile = function (key) {
       Key: key,
       Expires: 0,
     };
-    const imgUrl = s3.getSignedUrl("getObject", params);
+    const imgUrl = s3.getSignedUrl('getObject', params);
     if (!imgUrl) {
-      reject("No image found");
+      reject('No image found');
     }
     resolve(imgUrl);
   });
@@ -100,7 +102,7 @@ exports.deleteFile = function (key) {
       if (err) {
         reject(err);
       } else {
-        console.log("image deleted");
+        console.log('image deleted');
         resolve(data);
       }
     });

@@ -508,7 +508,7 @@ exports.searchTask = async (req, res) => {
   }
 };
 
-// Validation schema (Joi)
+// // Validation schema (Joi)
 // const commentSchema = Joi.object({
 //   taskId: Joi.string().required(),
 //   type: Joi.string()
@@ -897,7 +897,7 @@ exports.deleteTaskCommentImage = async (req, res) => {
       users: [task.issueMember],
       title: 'Task Update',
       message: logMessage,
-      data: { page: 'tasks', id: task._id },
+      data: { route: 'tasks', id: task._id },
     });
 
     res.status(200).send({ message: 'Comment image deleted successfully' });
@@ -913,7 +913,10 @@ exports.deleteTaskComment = async (req, res) => {
     if (!commentId) {
       return res.status(400).send({ message: 'Missing commentId' });
     }
-    const comment = await TaskComment.findById(commentId);
+    const comment = await TaskComment.findById(commentId).populate({
+      path: 'createdBy',
+      model: User,
+    });
     if (!comment) {
       return res.status(404).send({ message: 'Comment not found' });
     }
@@ -922,7 +925,8 @@ exports.deleteTaskComment = async (req, res) => {
     if (result.deletedCount === 0) {
       return res.status(404).send({ message: 'Comment not found' });
     }
-    const task = await Task.findById(comment.taskId).populate('issueMember');
+    const task = await Task.findById(comment.taskId);
+    console.log('task:', task);
     if (task) {
       const update = { $pull: { comments: commentId } };
       await Task.updateOne({ _id: task._id }, update);
@@ -933,10 +937,10 @@ exports.deleteTaskComment = async (req, res) => {
     await createLogManually(req, logMessage, task?.siteID, task?._id);
 
     await sendNotification({
-      users: [task.issueMember],
+      users: [comment.createdBy],
       title: 'Task Update',
       message: logMessage,
-      data: { page: 'tasks', id: task._id },
+      data: { route: 'tasks', id: task._id },
     });
 
     res.status(200).send({ message: 'Comment deleted successfully' });
@@ -971,8 +975,8 @@ exports.approveTaskComment = async (req, res) => {
       return res.status(404).send({ message: 'Task not found' });
     }
 
-    if (!project) {
-      return res.status(404).send({ message: 'Project not found' });
+    if (!client) {
+      return res.status(404).send({ message: 'client not found' });
     }
 
     await TaskComment.updateOne(
@@ -1000,7 +1004,7 @@ exports.approveTaskComment = async (req, res) => {
     await createLogManually(req, logMessage, task?.siteID, task?._id);
 
     await sendNotification({
-      users: [task.issueMember],
+      users: [comment.createdBy],
       title: 'Task Update',
       message: logMessage,
       data: { page: 'tasks', id: task._id },
@@ -1009,8 +1013,8 @@ exports.approveTaskComment = async (req, res) => {
     await sendNotification({
       users: [client.client],
       title: 'Project Update',
-      message: `New Update on you project ${task.siteID} for task ${task.title} by ${comment.createdBy.firstname} ${comment.createdBy.lastname}`,
-      data: { page: 'tasks', id: task._id },
+      message: `New Update on your project ${task.siteID} for task ${task.title} by ${comment.createdBy.firstname} ${comment.createdBy.lastname}`,
+      data: { route: 'tasks', id: task._id },
     });
 
     res.status(200).send({ message: 'Comment approved successfully' });
@@ -1061,7 +1065,7 @@ exports.reassignTask = async (req, res) => {
       users: [newAssignee],
       title: 'Task Reassigned',
       message: `You have been assigned a new task: ${task.title} at site ${task.siteID}.`,
-      data: { page: 'tasks', id: task._id },
+      data: { route: 'tasks', id: task._id },
     });
 
     res.status(200).send({ message: 'Task reassigned successfully' });
@@ -2144,7 +2148,7 @@ exports.addChecklist = async (req, res) => {
       users: [task.issueMember],
       title: 'Checklist Added to Task',
       message: `A checklist ${checklist.name} has been added to the task: ${task.title} of project ${task.siteID}`,
-      data: { page: 'tasks', id: task._id },
+      data: { route: 'tasks', id: task._id },
     });
 
     if (task.checkList.id === checklist._id) {
@@ -2197,7 +2201,7 @@ exports.updateChecklistPoint = async (req, res) => {
       users: [project.sr_engineer],
       title: 'Checklist Updated',
       message: logMessage,
-      data: { page: 'tasks', id: task._id },
+      data: { route: 'tasks', id: task._id },
     });
 
     res.send({ message: 'Checklist updated successfully' });
@@ -2231,7 +2235,7 @@ exports.deleteChecklist = async (req, res) => {
       users: [task.issueMember],
       title: 'Task Reassigned',
       message: logMessage,
-      data: { page: 'tasks', id: task._id },
+      data: { route: 'tasks', id: task._id },
     });
 
     res.send({ message: 'Checklist deleted successfully' });
@@ -2454,7 +2458,9 @@ exports.deleteAudioFile = async (req, res) => {
       return res.status(404).json({ message: 'Comment not found' });
     }
 
-    const task = await Task.findById(taskComment.taskId).populate('issueMember');
+    const task = await Task.findById(taskComment.taskId).populate(
+      'issueMember'
+    );
     if (!task) {
       return res.status(404).json({ message: 'Task not found' });
     }
@@ -2484,7 +2490,7 @@ exports.deleteAudioFile = async (req, res) => {
       users: [task.issueMember],
       title: 'Audio Removed from Task Comment',
       message: `An audio file has been removed from a comment in the task: ${task.title} of project ${task.siteID}`,
-      data: { page: 'tasks', id: task._id },
+      data: { route: 'tasks', id: task._id },
     });
 
     return res.status(200).json({ message: 'Audio file deleted successfully' });

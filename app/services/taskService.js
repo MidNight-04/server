@@ -96,7 +96,12 @@ exports.addCommentToTask = async req => {
 
     // --- 3️⃣ Handle Force Majeure ---
     if (isForce === 'yes') {
-      const project = await Project.findOne({ siteID: task.siteID });
+      const project = await Project.findOne({ siteID: task.siteID }).populate({
+        path: 'project_admin site_engineer accountant sr_engineer sales operation architect',
+        model: 'User',
+        select: 'playerIds',
+      });
+
       if (!project) throw { status: 404, message: 'Project not found' };
 
       const today = dayjs().startOf('day');
@@ -144,9 +149,12 @@ exports.addCommentToTask = async req => {
     // --- 5️⃣ Notify Stakeholders ---
     const notifyUsers = [];
     if (task.category === 'Project') {
-      const project = await Project.findOne({ siteID: task.siteID }).populate(
-        'sr_engineer'
-      );
+      const project = await Project.findOne({ siteID: task.siteID }).populate({
+        path: 'project_admin site_engineer accountant sr_engineer sales operation architect',
+        model: 'User',
+        select: 'playerIds',
+      });
+
       const sr = project?.sr_engineer?.[0];
       if (sr && sr.toString() !== userId) notifyUsers.push(sr);
     } else {
@@ -161,7 +169,7 @@ exports.addCommentToTask = async req => {
         users: notifyUsers,
         title: 'Task Update',
         message: `${senderName} added an update to "${task.title}" at site "${task.siteID}".`,
-        data: { page: 'tasks', id: task._id },
+        data: { route: 'tasks', id: task._id },
       });
     }
 

@@ -392,14 +392,14 @@ exports.changeIssueMember = async (req, res) => {
       users: [ticket.assignedBy],
       title: 'Ticket Reassigned',
       message: `Ticket assigned to new member: ${newMember.firstname} ${newMember.lastname} (${newMember.employeeID}) from ${ticket.assignMember.firstname} ${ticket.assignMember.lastname}`,
-      data: { page: 'tickets', id: ticket._id },
+      data: { route: 'tickets', id: ticket._id },
     });
 
     await sendNotification({
       users: [ticket.issueMember],
       title: 'Ticket Reassigned',
       message: `Ticket reassigned to you: ${ticket.title} at site ${ticket.siteID} from ${ticket.assignMember.firstname} ${ticket.assignMember.lastname}`,
-      data: { page: 'tickets', id: ticket._id },
+      data: { route: 'tickets', id: ticket._id },
     });
 
     // Return populated ticket

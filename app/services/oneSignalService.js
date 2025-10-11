@@ -5,23 +5,21 @@ const { notifyUser } = require('./notificationService');
 
 async function sendNotification({ users, title, message, data = {} }) {
   if (!users || users.length === 0) throw new Error('No users provided');
-
-  // const playerIds = users.flatMap(u => u.playerIds || []).filter(Boolean);
-  // if (playerIds.length === 0) {
-  //   console.log('No playerIds available for users');
-  //   // throw new Error('No playerIds available for users');
-  //   return;
-  // }
+  const playerIds = users.flatMap(u => u.playerIds || []).filter(Boolean);
+  if (playerIds.length === 0) {
+    console.log('No playerIds available for users');
+    // throw new Error('No playerIds available for users');
+    return;
+  }
 
   const body = {
     app_id: `${process.env.ONESIGNAL_APP_ID}`,
     // include_player_ids: ['955ff67e-50b3-43e9-9b11-a6766fae0ca9'],
     include_player_ids: playerIds,
+    android_channel_id: process.env.ONESIGNAL_ANDROID_CHANNEL_ID,
     headings: { en: title },
     contents: { en: message },
   };
-
-  console.log(body);
 
   try {
     const response = await axios.post(

@@ -2,6 +2,7 @@ const { createLogManually } = require('../middlewares/createLog');
 const Ticket = require('../models/ticketModel');
 const User = require('../models/user.model');
 const TaskComment = require('../models/taskCommentModel');
+const { sendNotification } = require('../services/oneSignalService');
 
 exports.getAllTickets = async (req, res) => {
   try {
@@ -342,8 +343,8 @@ exports.changeIssueMember = async (req, res) => {
 
     const [ticket, newMember] = await Promise.all([
       Ticket.findById(ticketId).populate({
-        path: 'assignMember',
-        select: 'firstname lastname employeeID',
+        path: 'assignMember assignedBy',
+        select: 'firstname lastname employeeID playerIds',
       }),
       User.findById(newMemberId).lean(),
     ]);
@@ -386,6 +387,20 @@ exports.changeIssueMember = async (req, res) => {
       `${commentText} for Query: ${ticket.query} | Site ID: ${ticket.siteID}`,
       ticket.siteID
     );
+
+    await sendNotification({
+      users: [ticket.assignedBy],
+      title: 'Ticket Reassigned',
+      message: `Ticket assigned to new member: ${newMember.firstname} ${newMember.lastname} (${newMember.employeeID}) from ${ticket.assignMember.firstname} ${ticket.assignMember.lastname}`,
+      data: { page: 'tickets', id: ticket._id },
+    });
+
+    await sendNotification({
+      users: [ticket.issueMember],
+      title: 'Ticket Reassigned',
+      message: `Ticket reassigned to you: ${ticket.title} at site ${ticket.siteID} from ${ticket.assignMember.firstname} ${ticket.assignMember.lastname}`,
+      data: { page: 'tickets', id: ticket._id },
+    });
 
     // Return populated ticket
     const updatedTicket = await Ticket.findById(ticketId)

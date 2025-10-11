@@ -671,7 +671,6 @@ exports.receiveMaterials = async (req, res) => {
       // Attach file metadata (optional)
       receivedItems.forEach((item, i) => {
         const mat = parsedMaterials[i];
-        console.log(mat);
         // Attach uploaded files
         if (mat.image?.length) item.image = mat.image;
         if (mat.video?.length) item.video = mat.video;

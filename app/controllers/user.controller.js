@@ -128,3 +128,63 @@ exports.toggleUserStatusById = async (req, res) => {
     });
   }
 };
+
+exports.addPlayerId = async (req, res) => {
+  try {
+    const userId = req.user?._id || req.userId || req.body?.userId;
+    const { playerId } = req.params;
+
+    if (!userId || !playerId) {
+      return res
+        .status(400)
+        .json({ message: 'User ID and player ID are required' });
+    }
+
+    // Find user and update playerIds if not already present
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Avoid duplicates
+    if (!user.playerIds.includes(playerId)) {
+      user.playerIds.push(playerId);
+      await user.save();
+    }
+
+    return res.status(200).json({
+      message: 'Player ID added successfully',
+      playerIds: user.playerIds,
+    });
+  } catch (error) {
+    console.error('Error adding player ID:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+
+exports.removePlayerId = async (req, res) => {
+  try {
+    const userId = req.user?._id || req.body.userId;
+    const { playerId } = req.params;
+
+    if (!userId || !playerId) {
+      return res
+        .status(400)
+        .json({ message: 'User ID and player ID are required' });
+    }
+
+    const user = await User.findByIdAndUpdate(
+      userId,
+      { $pull: { playerIds: playerId } },
+      { new: true }
+    );
+
+    return res.status(200).json({
+      message: 'Player ID removed successfully',
+      playerIds: user.playerIds,
+    });
+  } catch (error) {
+    console.error('Error removing player ID:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};

@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 const Project = require('../models/projects.model');
 const Task = require('../models/task.model');
 const { createLogManually } = require('../middlewares/createLog');
+const { sendNotification } = require('../services/oneSignalService');
 
 async function deleteProjectPoint({ id, name, point, duration, req }) {
   const session = await mongoose.startSession();
@@ -16,6 +17,11 @@ async function deleteProjectPoint({ id, name, point, duration, req }) {
           path: 'step',
           populate: { path: 'taskId', model: Task },
         },
+      })
+      .populate({
+        path: 'project_admin site_engineer accountant sr_engineer sales operation architect',
+        model: 'User',
+        select: 'playerIds',
       })
       .session(session);
 
@@ -91,16 +97,40 @@ async function deleteProjectPoint({ id, name, point, duration, req }) {
       await Task.findByIdAndDelete(stepToRemove.taskId._id, { session });
     }
 
+    const logMessage = `Deleted step ${name} - Point ${point} from project ${id}`;
+
     // 6. Log action
     await createLogManually(
       req,
-      `Deleted point ${
-        stepToRemove.taskId?.title || point
-      } from ${name} of project ${id}`,
+      logMessage,
       id,
       stepToRemove.taskId._id,
       session
     );
+
+    const allPlayerIds = [
+      project.project_admin[0],
+      project.architect[0],
+      project.accountant[0],
+      project.sr_engineer[0],
+      project.site_engineer[0],
+      project.operation[0],
+      project.sales[0],
+    ];
+
+    console.log({
+      users: allPlayerIds,
+      title: 'New Point Added',
+      message: logMessage,
+      data: { route: 'projects', id },
+    });
+
+    await sendNotification({
+      users: allPlayerIds,
+      title: 'New Point Added',
+      message: logMessage,
+      data: { route: 'projects', id },
+    });
 
     // ✅ Commit transaction
     await session.commitTransaction();
@@ -108,7 +138,7 @@ async function deleteProjectPoint({ id, name, point, duration, req }) {
 
     return { status: 200, message: 'Point removed successfully' };
   } catch (error) {
-    // ❌ Rollback
+    // Rollback
     await session.abortTransaction();
     session.endSession();
     throw error;

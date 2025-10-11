@@ -18,7 +18,6 @@ exports.addProjectFloor = (req, res) => {
         res.status(500).send({ message: 'Could not create Floor' });
         return;
       } else {
-        console.log(result);
         res.status(201).send({ message: 'Record created Successfuly' });
       }
       return;

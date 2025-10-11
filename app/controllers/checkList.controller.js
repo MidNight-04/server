@@ -22,7 +22,6 @@ exports.addCheckList = async (req, res) => {
         return;
       } else {
         await createLogManually(req, `Created checklist ${name}.`);
-        console.log(result);
         res.status(201).send({ message: 'Record created Successfuly' });
       }
       return;

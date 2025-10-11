@@ -30,7 +30,7 @@ Jimp.loadFont(Jimp.FONT_SANS_64_WHITE).then(async (font) => {
       // Create a new image with the same dimensions as the original image
       const backgroundImage = new Jimp(originalImage.getWidth(), originalImage.getHeight(), 0xffffffff); // White background color (0xffffffff)
 
-      const text = 'Hello, ChatGPT!';
+      const text = 'Hello';
 
       // Calculate the center coordinates for the text
       const textWidth = Jimp.measureText(font, text);

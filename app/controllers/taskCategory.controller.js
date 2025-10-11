@@ -5,7 +5,6 @@ exports.addCategory = async (req, res) => {
   let data = {
     name: req.body.data.name,
   };
-  console.log(data);
   const findCategory = await TaskCategoryModel.find({ name: data.name });
   if (findCategory?.length > 0) {
     res

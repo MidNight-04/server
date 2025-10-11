@@ -63,7 +63,6 @@ exports.uploadDesign = (req, res) => {
     threeDImage: threeDIFiles,
     cadImage: cadFiles,
   };
-  console.log(query);
   const uploadDesign = new Designs(query);
   uploadDesign.save((err, design) => {
     if (err) {

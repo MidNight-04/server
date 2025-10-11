@@ -1,7 +1,9 @@
 const db = require('../models');
 const ProjectDocuments = db.projectDocument;
+const Project = db.projects;
 const { uploadToS3AndExtractUrls } = require('../helper/s3Helpers');
 const { createLogManually } = require('../middlewares/createLog');
+const { sendNotification } = require('../services/oneSignalService');
 
 // const fetch = require('node-fetch');
 const fetch = (...args) =>
@@ -32,6 +34,8 @@ exports.addProjectDocument = async (req, res) => {
         .json({ success: false, message: 'Uploading user ID is required' });
     }
 
+    const clientData = await db.user.findById(client);
+
     const filesArray = Array.isArray(req.files?.docs)
       ? req.files.docs
       : req.files?.docs
@@ -49,13 +53,19 @@ exports.addProjectDocument = async (req, res) => {
         filesArray,
         'projectDocuments'
       );
-      await createLogManually(
-        req,
-        `Uploaded project ${
-          documentFiles.length + 1
-        } document ${name} with siteID ${siteID}.`,
-        siteID
-      );
+
+      const logMessage = `Uploaded ${documentFiles.length} project document ${name} with siteID ${siteID}.`;
+
+      await createLogManually(req, logMessage, siteID);
+
+      const allPlayerIds = [clientData];
+
+      await sendNotification({
+        users: allPlayerIds,
+        title: 'Project Updated',
+        message: logMessage,
+        data: { route: 'projects', id: siteID },
+      });
     } catch (uploadErr) {
       console.error('S3 upload failed:', uploadErr);
       return res.status(500).json({
@@ -75,11 +85,6 @@ exports.addProjectDocument = async (req, res) => {
     });
 
     const savedDoc = await projectDocument.save();
-    await createLogManually(
-      req,
-      `Added project document ${name} with siteID ${siteID}.`,
-      siteID
-    );
 
     return res.status(201).json({
       success: true,
@@ -115,6 +120,7 @@ exports.getDocumentBySiteID = async (req, res) => {
     });
   }
 };
+
 exports.getDocumentByClientID = async (req, res) => {
   let id = req.params.id;
   const data = await ProjectDocuments.find({ clientID: id });
@@ -131,6 +137,7 @@ exports.getDocumentByClientID = async (req, res) => {
     });
   }
 };
+
 exports.getDocumentByID = async (req, res) => {
   let id = req.params.id;
   const data = await ProjectDocuments.find({ _id: id });
@@ -147,23 +154,56 @@ exports.getDocumentByID = async (req, res) => {
     });
   }
 };
+
 exports.updateDocumentStatusByClient = async (req, res) => {
   const { id } = req.params;
   const { status } = req.body;
   const projectDocument = await ProjectDocuments.findById(id);
+
   if (!projectDocument) {
     return res.status(404).json({ message: 'Project document not found' });
+  }
+
+  const siteID = projectDocument.siteID;
+
+  const siteData = await Project.findOne({
+    siteID: siteID,
+  }).populate({
+    path: 'project_admin site_engineer accountant sr_engineer sales operation architect',
+    model: 'User',
+    select: 'playerIds',
+  });
+
+  if (!siteData) {
+    return res
+      .status(404)
+      .json({ message: 'Project not found for the siteID' });
   }
   const data = await ProjectDocuments.updateOne(
     { _id: id },
     { $set: { status: status } }
   );
   if (data.modifiedCount === 1) {
-    await createLogManually(
-      req,
-      `Updated document status to ${status} for project document ${projectDocument.name} for site: ${projectDocument.siteID}.`,
-      projectDocument.siteID
-    );
+    const logMessage = `Updated document status to ${status} for project document ${projectDocument.name} for site: ${projectDocument.siteID}.`;
+    await createLogManually(req, logMessage, projectDocument.siteID);
+
+    const allPlayerIds = [
+      siteData.project_admin[0],
+      siteData.architect[0],
+      siteData.accountant[0],
+      siteData.sr_engineer[0],
+      siteData.site_engineer[0],
+      siteData.operation[0],
+      siteData.sales[0],
+    ];
+
+    await sendNotification({
+      users: allPlayerIds,
+      title: 'Project Updated',
+      message: logMessage,
+      data: { route: 'projects', id: siteID },
+    });
+
     res.status(200).json({
       status: 200,
       message: 'Document status update by client',

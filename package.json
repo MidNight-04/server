@@ -6,6 +6,7 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.335.0",
     "@ckeditor/ckeditor5-react": "^9.3.1",
+    "@onesignal/node-onesignal": "^5.3.1-beta1",
     "@testing-library/user-event": "^13.5.0",
     "aws-sdk": "^2.1495.0",
     "axios": "^1.2.4",
@@ -44,6 +45,7 @@
     "p-limit": "^3.1.0",
     "pdf-watermark": "^1.0.4",
     "pdfjs-dist": "^4.4.168",
+    "socket.io": "^4.8.1",
     "uuid": "^11.1.0",
     "web-vitals": "^2.1.4",
     "xlsx": "^0.18.5"

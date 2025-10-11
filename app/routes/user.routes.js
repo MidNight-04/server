@@ -24,5 +24,19 @@ module.exports = function (app) {
     controller.adminBoard
   );
   app.get('/api/user/getallusers', verifyToken, controller.getAllUsers);
-  app.get('/api/user/toggleuserstatus/:id', verifyToken, controller.toggleUserStatusById);
+  app.get(
+    '/api/user/toggleuserstatus/:id',
+    verifyToken,
+    controller.toggleUserStatusById
+  );
+  app.post(
+    '/api/user/addplayerid/:playerId',
+    verifyToken,
+    controller.addPlayerId
+  );
+  app.delete(
+    '/api/user/removePlayerId/:playerId',
+    verifyToken,
+    controller.removePlayerId
+  );
 };

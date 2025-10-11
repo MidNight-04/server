@@ -47,6 +47,13 @@ const UserSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Role',
     },
+    playerIds: {
+      type: [String],
+      default: [],
+    },
+    notifications: [
+      { type: mongoose.Schema.Types.ObjectId, ref: 'Notification' },
+    ],
   },
   { timestamps: true }
 );

@@ -128,7 +128,6 @@ exports.initiatePayment = (req, res) => {
         axios
           .request(config)
           .then((response) => {
-            console.log(response.data);
             const query = {
               vendorId,
               userId,

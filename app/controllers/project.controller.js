@@ -31,6 +31,7 @@ const {
   ticketUpdateNotification,
   sendNewTicketNotification,
 } = require('../helper/notification');
+const { sendNotification } = require('../services/oneSignalService');
 
 let today = new Date();
 let yyyy = today.getFullYear();
@@ -635,7 +636,7 @@ exports.addProjectMember = async (req, res) => {
         array => Array.isArray(array) && array.length === 0
       );
     }
-    console.log(areAllFieldsBlank(newData));
+
     if (areAllFieldsBlank(newData)) {
       return res.send({
         message: 'All data fields are blank. No operation performed.',
@@ -797,7 +798,6 @@ exports.getProjectById = (req, res) => {
         res.status(404).send({ message: 'Project not found' });
         return;
       }
-      console.log(data);
       res.status(200).send({ data: data, status: 200 });
     })
     .catch(err => {
@@ -1383,6 +1383,19 @@ exports.clientQueryForProject = async (req, res) => {
       }),
     });
 
+    const assignUser = await User.findById(assignMember);
+
+    const allPlayerIds = [assignUser];
+
+    const logMessage = `New ticket raised for site ID ${id} at step ${step} - ${content}`;
+
+    await sendNotification({
+      users: allPlayerIds,
+      title: 'Ticket Assigned',
+      message: logMessage,
+      data: { route: 'tickets', id },
+    });
+
     res.json({ status: 200, message: 'Client ticket raised successfully' });
   } catch (err) {
     await session.abortTransaction();
@@ -1965,8 +1978,12 @@ exports.AddNewProjectPoint = async (req, res) => {
   session.startTransaction();
 
   try {
-    // 1. Find project
-    const project = await Project.findOne({ siteID: id }).session(session);
+    const project = await Project.findOne({ siteID: id }).populate({
+      path: 'project_admin site_engineer accountant sr_engineer sales operation architect',
+      model: 'User',
+      select: 'playerIds',
+    });
+
     if (!project) {
       await session.abortTransaction();
       return res.status(404).json({ message: 'Project not found' });
@@ -2082,11 +2099,28 @@ exports.AddNewProjectPoint = async (req, res) => {
       );
     }
 
-    // 9. Log
     const logMessage = forceMajeure?.isForceMajeure
       ? `Added new point (force majeure: ${dur} days) to ${stepName} - ${pointName} in project ${id}`
       : `Added new point ${pointName} to ${stepName} in project ${id}`;
-    // await createLogManually(req, logMessage, id, session);
+
+    const allPlayerIds = [
+      project.project_admin[0],
+      project.architect[0],
+      project.accountant[0],
+      project.sr_engineer[0],
+      project.site_engineer[0],
+      project.operation[0],
+      project.sales[0],
+    ];
+
+    await sendNotification({
+      users: allPlayerIds,
+      title: 'New Point Added',
+      message: logMessage,
+      data: { route: 'projects', id },
+    });
+
+    // 9. Log
     await createLogManually(req, logMessage, id, null, session);
 
     // 10. Commit transaction
@@ -2135,7 +2169,12 @@ exports.ProjectStepDelete = async (req, res) => {
         .json({ message: 'Site ID and step name are required' });
     }
 
-    const project = await Project.findOne({ siteID: id });
+    const project = await Project.findOne({ siteID: id }).populate({
+      path: 'project_admin site_engineer accountant sr_engineer sales operation architect',
+      model: 'User',
+      select: 'playerIds',
+    });
+
     if (!project) {
       return res.status(404).json({ message: 'Project not found' });
     }
@@ -2163,7 +2202,25 @@ exports.ProjectStepDelete = async (req, res) => {
 
     project.project_status.splice(stepIndex, 1);
     await project.save();
-    await createLogManually(req, `Deleted step ${name} from project ${id}`, id);
+    const logMessage = `Deleted step ${name} from project ${id}`;
+    await createLogManually(req, logMessage, id);
+
+    const allPlayerIds = [
+      project.project_admin[0],
+      project.architect[0],
+      project.accountant[0],
+      project.sr_engineer[0],
+      project.site_engineer[0],
+      project.operation[0],
+      project.sales[0],
+    ];
+
+    await sendNotification({
+      users: allPlayerIds,
+      title: 'Step Removed From Project',
+      message: logMessage,
+      data: { route: 'projects', id },
+    });
 
     return res.status(200).json({ message: 'Step removed successfully' });
   } catch (error) {
@@ -2220,7 +2277,7 @@ exports.updateTicket = async (req, res) => {
 
       await ticket.populate({
         path: 'assignMember assignedBy',
-        select: 'firstname lastname',
+        select: 'firstname lastname playerIds',
       });
 
       createdBy = await User.findById(userId).session(session);
@@ -2248,13 +2305,24 @@ exports.updateTicket = async (req, res) => {
       }
       await Ticket.updateOne({ _id: ticketId }, updateData, { session });
 
-      // --- Log (ensure session is used inside createLogManually) ---
+      const logMessage = `Updated posted on ticket ${ticket.step} - ${ticket.content} of project ${ticket.siteID}.`;
+
+      // --- Log ---
       await createLogManual({
         req,
-        logMessage: `Updated ticket ${ticket.step} - ${ticket.content} of project ${ticket.siteID} to ${type}.`,
+        logMessage,
         siteId: ticket.siteID,
         ticketId: ticket._id,
         session,
+      });
+
+      const allPlayerIds = [ticket.assignMember, ticket.assignedBy];
+
+      await sendNotification({
+        users: allPlayerIds,
+        title: 'Ticket Updated',
+        message: logMessage,
+        data: { route: 'tickets', id: ticket._id },
       });
     });
 
@@ -2367,11 +2435,18 @@ exports.changeIssueMember = async (req, res) => {
       { new: true }
     );
 
-    await createLogManually(
-      req,
-      `Changed issue member (${role.name}) of project ${siteId} from ${oldMember.firstname} ${oldMember.lastname} to ${newMemberData.firstname} ${newMemberData.lastname}`,
-      siteId
-    );
+    const logMessage = `Changed issue member (${role.name}) of project ${siteId} from ${oldMember.firstname} ${oldMember.lastname} to ${newMemberData.firstname} ${newMemberData.lastname}`;
+
+    await createLogManually(req, logMessage, siteId);
+
+    const allPlayerIds = [newMemberData, oldMember];
+
+    await sendNotification({
+      users: allPlayerIds,
+      title: 'Project Updated',
+      message: logMessage,
+      data: { route: 'projects', id: siteId },
+    });
 
     return res.status(200).json({
       status: 200,

@@ -1,10 +1,12 @@
 require('dotenv').config();
 const express = require('express');
+const http = require('http');
 const cors = require('cors');
 const morgan = require('morgan');
-const rateLimit = require('express-rate-limit');
+// const rateLimit = require('express-rate-limit');
 const cron = require('node-cron');
 const path = require('path');
+const { init } = require('./socket');
 
 const sessionMiddleware = require('./app/middlewares/sessionMiddleware');
 const {
@@ -16,8 +18,9 @@ const Task = require('./app/models/task.model');
 const db = require('./app/models');
 
 const app = express();
+const server = http.createServer(app);
+const io = init(server);
 
-// Middleware setup
 app.use(cors({ origin: '*' }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -34,10 +37,8 @@ app.use(
 //   legacyHeaders: false,
 // }));
 
-// Session middleware
 app.use(sessionMiddleware);
 
-// MongoDB connection
 db.mongoose
   .connect(process.env.MONGODB_URI, {
     useNewUrlParser: true,
@@ -52,11 +53,11 @@ db.mongoose
 // Cron Jobs
 // cron.schedule('* * * * *', async () => {
 //   try {
-//     console.log('⏳ Running daily 9 AM reminder...');
+//     console.log('Running daily 9 AM reminder...');
 //     await sendWhatsAppMessage();
 //     await dueDateNotification();
 //   } catch (error) {
-//     console.error('❌ Cron job error:', error);
+//     console.error('Cron job error:', error);
 //   }
 // });
 cron.schedule('0 9 * * *', async () => {
@@ -83,19 +84,12 @@ cron.schedule('*/30 * * * *', async () => {
   }
 });
 
-// Optional: Auto scheduling logic
-// const { loadAndScheduleAllTasks } = require('./app/helper/schedule');
-// loadAndScheduleAllTasks();
-
-// Static file handling
 app.use(express.static(__dirname));
 app.use('/', express.static(path.join(__dirname, 'dist')));
 app.use('/files', express.static(path.join(__dirname, 'files')));
 
-// Route registration helper
 const registerRoutes = routes => routes.forEach(route => require(route)(app));
 
-// Register all routes
 registerRoutes([
   './app/routes/auth.routes',
   './app/routes/user.routes',
@@ -135,13 +129,11 @@ registerRoutes([
   './app/routes/signUp.routes',
 ]);
 
-// Fallback route
 app.use('*', (_, res) => {
   res.status(404).json({ message: 'API route not found' });
 });
 
-// Start server
 const PORT = process.env.PORT || 4000;
-app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+server.listen(PORT, () => {
+  console.log(`Server running at http://localhost:${PORT}`);
 });

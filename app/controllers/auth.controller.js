@@ -1561,7 +1561,6 @@ exports.verifyPayment = (req, res) => {
       axios
         .request(config)
         .then(response => {
-          console.log(response.data);
           const query = {
             architectId,
             designId,
@@ -1995,7 +1994,6 @@ exports.deleteUserById = (req, res) => {
 };
 
 exports.deleteProductRating = (req, res) => {
-  console.log(req.body.id);
   ProductRating.deleteOne({ _id: req.body.id }).then((err, product) => {
     if (err) {
       res
@@ -2013,7 +2011,6 @@ exports.deleteProductRating = (req, res) => {
 
 exports.getProductRatingById = (req, res) => {
   let id = req.body.id;
-  console.log(id);
   ProductRating.findOne({ _id: id }, (err, productRating) => {
     if (err) {
       res

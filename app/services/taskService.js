@@ -157,6 +157,8 @@ exports.addCommentToTask = async req => {
 
       const sr = project?.sr_engineer?.[0];
       if (sr && sr.toString() !== userId) notifyUsers.push(sr);
+      if (task.issueMember._id.toString() !== userId)
+        notifyUsers.push(task.issueMember);
     } else {
       if (task.assignedBy?.toString() !== userId)
         notifyUsers.push(task.assignedBy);

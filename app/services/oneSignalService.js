@@ -19,6 +19,7 @@ async function sendNotification({ users, title, message, data = {} }) {
     android_channel_id: process.env.ONESIGNAL_ANDROID_CHANNEL_ID,
     headings: { en: title },
     contents: { en: message },
+    data,
   };
 
   try {

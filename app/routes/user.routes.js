@@ -39,4 +39,16 @@ module.exports = function (app) {
     verifyToken,
     controller.removePlayerId
   );
+  app.get(
+    '/api/user/getnotifications',
+    verifyToken,
+    controller.getNotifications
+  );
+
+  app.patch(`/api/notifications/:id/read`, verifyToken, controller.markAsRead);
+  app.patch(
+    `/api/notifications/:id/dismiss`,
+    verifyToken,
+    controller.markAsDismissed
+  );
 };

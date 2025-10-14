@@ -1,5 +1,6 @@
 const Role = require('../models/role.model');
 const User = require('../models/user.model');
+const Notification = require('../models/notification.model');
 const { createLogManually } = require('../middlewares/createLog');
 const mongoose = require('mongoose');
 
@@ -186,5 +187,146 @@ exports.removePlayerId = async (req, res) => {
   } catch (error) {
     console.error('Error removing player ID:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+
+exports.getNotifications = async (req, res) => {
+  try {
+    const userId = req.user?._id || req.userId || req.body?.userId;
+
+    if (!userId) {
+      return res.status(400).json({ message: 'User ID is required' });
+    }
+
+    const userObjectId = new mongoose.Types.ObjectId(userId);
+
+    // Aggregate notifications sent to this user
+    const results = await Notification.aggregate([
+      { $match: { sentTo: userObjectId } },
+      { $sort: { createdAt: -1 } },
+      {
+        $facet: {
+          notifications: [
+            {
+              $project: {
+                notificationId: 1,
+                contents: 1,
+                data: 1,
+                includedSegments: 1,
+                sentTo: 1,
+                openedBy: 1,
+                dismissedBy: 1,
+                createdAt: 1,
+                isRead: { $in: [userObjectId, '$openedBy'] },
+                isDismissed: { $in: [userObjectId, '$dismissedBy'] },
+              },
+            },
+          ],
+          counts: [
+            {
+              $group: {
+                _id: null,
+                total: { $sum: 1 },
+                readCount: {
+                  $sum: { $cond: [{ $in: [userObjectId, '$openedBy'] }, 1, 0] },
+                },
+                dismissedCount: {
+                  $sum: {
+                    $cond: [{ $in: [userObjectId, '$dismissedBy'] }, 1, 0],
+                  },
+                },
+              },
+            },
+            {
+              $project: {
+                _id: 0,
+                total: 1,
+                readCount: 1,
+                dismissedCount: 1,
+                unreadCount: {
+                  $subtract: [
+                    '$total',
+                    { $add: ['$readCount', '$dismissedCount'] },
+                  ],
+                },
+              },
+            },
+          ],
+        },
+      },
+    ]);
+
+    const notifications = results[0]?.notifications || [];
+    const counts = results[0]?.counts?.[0] || {
+      total: 0,
+      readCount: 0,
+      unreadCount: 0,
+      dismissedCount: 0,
+    };
+
+    return res.status(200).json({
+      ...counts,
+      notifications,
+    });
+  } catch (error) {
+    console.error('Error fetching notifications (aggregate):', error);
+    return res.status(500).json({
+      message: 'Failed to fetch notifications',
+      error: error.message,
+    });
+  }
+};
+
+exports.markAsRead = async (req, res) => {
+  try {
+    const userId = req.user?._id || req.userId || req.body?.userId;
+    const { id } = req.params;
+
+    if (!userId) {
+      return res.status(400).json({ message: 'User ID required' });
+    }
+
+    const notification = await Notification.findByIdAndUpdate(
+      id,
+      { $addToSet: { openedBy: userId } }, // Prevent duplicate entries
+      { new: true }
+    );
+
+    if (!notification) {
+      return res.status(404).json({ message: 'Notification not found' });
+    }
+
+    return res.status(200).json({ message: 'Marked as read', notification });
+  } catch (error) {
+    console.error('❌ Error marking as read:', error);
+    return res.status(500).json({ message: 'Failed to mark as read' });
+  }
+};
+
+exports.markAsDismissed = async (req, res) => {
+  try {
+    const userId = req.user?._id || req.userId || req.body?.userId;
+    const { id } = req.params;
+
+    if (!userId) {
+      return res.status(400).json({ message: 'User ID required' });
+    }
+
+    const notification = await Notification.findByIdAndUpdate(
+      id,
+      { $addToSet: { dismissedBy: userId } },
+      { new: true }
+    );
+
+    if (!notification) {
+      return res.status(404).json({ message: 'Notification not found' });
+    }
+
+    return res
+      .status(200)
+      .json({ message: 'Notification dismissed', notification });
+  } catch (error) {
+    console.error('❌ Error dismissing notification:', error);
+    return res.status(500).json({ message: 'Failed to dismiss notification' });
   }
 };

@@ -118,13 +118,6 @@ async function deleteProjectPoint({ id, name, point, duration, req }) {
       project.sales[0],
     ];
 
-    console.log({
-      users: allPlayerIds,
-      title: 'New Point Added',
-      message: logMessage,
-      data: { route: 'projects', id },
-    });
-
     await sendNotification({
       users: allPlayerIds,
       title: 'New Point Added',
@@ -132,7 +125,7 @@ async function deleteProjectPoint({ id, name, point, duration, req }) {
       data: { route: 'projects', id },
     });
 
-    // ✅ Commit transaction
+    // Commit transaction
     await session.commitTransaction();
     session.endSession();
 

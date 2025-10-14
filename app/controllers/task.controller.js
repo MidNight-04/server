@@ -926,7 +926,6 @@ exports.deleteTaskComment = async (req, res) => {
       return res.status(404).send({ message: 'Comment not found' });
     }
     const task = await Task.findById(comment.taskId);
-    console.log('task:', task);
     if (task) {
       const update = { $pull: { comments: commentId } };
       await Task.updateOne({ _id: task._id }, update);
@@ -1007,7 +1006,7 @@ exports.approveTaskComment = async (req, res) => {
       users: [comment.createdBy],
       title: 'Task Update',
       message: logMessage,
-      data: { page: 'tasks', id: task._id },
+      data: { route: 'tasks', id: task._id },
     });
 
     await sendNotification({

@@ -1,4 +1,5 @@
 const Purpose = require('../models/purpose.model');
+const { createLogManually } = require('../middlewares/createLog');
 
 exports.createPurpose = async (req, res) => {
   try {
@@ -19,6 +20,8 @@ exports.createPurpose = async (req, res) => {
 
     const purpose = new Purpose({ name: trimmedName });
     await purpose.save();
+
+    createLogManually(req, `New Purpose Added: ${name}`);
 
     res.status(201).json({
       message: 'Purpose created successfully',

@@ -33,7 +33,8 @@ async function sendNotification({ users, title, message, data = {} }) {
         },
       }
     );
-    const notificationId = response.data.id;
+
+    const notificationId = response.data.id || null;
     const userIds = users.map(u => u._id);
     const notification = await notifyUser({
       notificationId,

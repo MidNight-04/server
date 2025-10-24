@@ -1,4 +1,5 @@
 const Material = require('../models/material.model');
+const { createLogManually } = require('../middlewares/createLog');
 
 exports.createMaterial = async (req, res) => {
   try {
@@ -19,6 +20,8 @@ exports.createMaterial = async (req, res) => {
 
     const material = new Material({ name: trimmedName });
     await material.save();
+
+    createLogManually(req, `New Material Added: ${trimmedName}`);
 
     res.status(201).json({
       message: 'Material created successfully',
@@ -72,6 +75,9 @@ exports.updateMaterial = async (req, res) => {
     if (!material) {
       return res.status(404).json({ message: 'Material not found.' });
     }
+
+    createLogManually(req, `Material Updated: ${material.name}`);
+
     res
       .status(200)
       .json({ message: 'Material updated successfully', material });
@@ -83,6 +89,8 @@ exports.updateMaterial = async (req, res) => {
 
 exports.deleteMaterial = async (req, res) => {
   try {
+    const material = await Material.findById(req.params.id);
+    createLogManually(req, `Material Deleted: ${material.name}`);
     await Material.findByIdAndDelete(req.params.id);
     res.status(200).json({ message: 'Material deleted successfully.' });
   } catch (error) {
@@ -111,8 +119,13 @@ exports.toggleMaterialStatus = async (req, res) => {
     if (!material) {
       return res.status(404).json({ message: 'Material not found.' });
     }
-    material.active = !material.active;
+    material.isActive = !material.isActive;
     await material.save();
+
+    createLogManually(
+      req,
+      `Material Status Changed To: ${material.isActive ? 'Active' : 'Not Active'}`
+    );
     res
       .status(200)
       .json({ message: 'Material status updated successfully.', material });

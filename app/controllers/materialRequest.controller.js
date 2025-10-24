@@ -1,9 +1,16 @@
 const MaterialRequest = require('../models/materialRequest.model.js');
 const Material = require('../models/material.model.js');
+const Project = require('../models/projects.model.js');
+const User = require('../models/user.model.js');
 const mongoose = require('mongoose');
 const awsS3 = require('../middlewares/aws-s3');
+const { createLogManual } = require('../middlewares/createLog');
+const { sendNotification } = require('../services/oneSignalService');
 
 exports.createMaterialRequest = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
   try {
     const { siteId, purpose, priority, materials, date } = req.body;
     const requestedBy = req.user?._id || req.userId || req.body?.userId;
@@ -43,20 +50,66 @@ exports.createMaterialRequest = async (req, res) => {
       requestedBy,
     });
 
-    const savedRequest = await newRequest.save();
+    const savedRequest = await newRequest.save({ session });
 
-    // Optional: populate before returning
     await savedRequest.populate([
-      { path: 'site', select: 'name location' },
-      { path: 'materials.item', select: 'name unit' },
-      { path: 'requestedBy', select: 'username email' },
+      { path: 'site', select: 'name location siteID', session },
+      { path: 'materials.item', select: 'name unit', session },
+      {
+        path: 'requestedBy',
+        select: 'username email firstname lastname',
+        session,
+      },
     ]);
+
+    const project = await Project.findById(siteId)
+      .select('project_admin accountant sr_engineer operation')
+      .populate({
+        path: 'project_admin accountant sr_engineer operation',
+        model: 'User',
+        select: 'playerId',
+        session,
+      })
+      .lean();
+
+    const allUsers = [
+      project.project_admin[0],
+      project.accountant[0],
+      project.sr_engineer[0],
+      project.operation[0],
+    ];
+
+    const logMessage = `Material request created by ${
+      savedRequest.requestedBy.firstname
+    } ${savedRequest.requestedBy.lastname || ''} for site "${
+      savedRequest.site.siteID || 'N/A'
+    }" with ${formattedMaterials.length} item(s).`;
+
+    await createLogManual({
+      req,
+      logMessage,
+      siteId: savedRequest.site.siteID,
+      materialRequestId: savedRequest._id,
+      session,
+    });
+
+    await sendNotification({
+      users: allUsers,
+      title: 'New Material Request Created',
+      message: logMessage,
+      data: { route: 'receivematerials', id: savedRequest._id },
+    });
+
+    await session.commitTransaction();
+    session.endSession();
 
     res.status(201).json({
       message: 'Material request created successfully.',
       request: savedRequest,
     });
   } catch (error) {
+    await session.abortTransaction();
+    session.endSession();
     console.error('Error creating material request:', error.message);
     res.status(500).json({
       message: 'Server error creating material request.',
@@ -71,7 +124,7 @@ exports.getMaterialRequestById = async (req, res) => {
       .populate([
         {
           path: 'materials.item',
-          select: 'name unit price',
+          select: 'name unit',
         },
         {
           path: 'requestedBy',
@@ -81,6 +134,14 @@ exports.getMaterialRequestById = async (req, res) => {
         {
           path: 'site',
           select: 'siteID',
+        },
+        {
+          path: 'receivedItems.receivedBy',
+          select: 'firstname lastname',
+        },
+        {
+          path: 'receivedItems.item',
+          select: 'name unit',
         },
       ])
       .lean();
@@ -97,11 +158,14 @@ exports.getMaterialRequestById = async (req, res) => {
 };
 
 exports.updateMaterialRequest = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
   try {
     const { siteId, purpose, priority, materials, date } = req.body;
     const requestedBy = req.user?._id || req.userId || req.body?.userId;
 
-    // Validate materials if provided
+    // Validate & format materials
     let formattedMaterials;
     if (materials && Array.isArray(materials)) {
       formattedMaterials = materials.map(m => {
@@ -118,6 +182,26 @@ exports.updateMaterialRequest = async (req, res) => {
       });
     }
 
+    // Fetch existing request
+    const existingRequest = await MaterialRequest.findById(req.params.id)
+      .populate([
+        { path: 'materials.item', select: 'name unit price' },
+        {
+          path: 'requestedBy',
+          select:
+            'firstname lastname employeeId email phone profileImage roles',
+        },
+        { path: 'site', select: 'siteID' },
+      ])
+      .session(session);
+
+    if (!existingRequest) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(404).json({ message: 'Material request not found.' });
+    }
+
+    // Prepare update data
     const updateData = {
       ...(siteId && { site: siteId }),
       ...(purpose && { purpose }),
@@ -127,89 +211,153 @@ exports.updateMaterialRequest = async (req, res) => {
       ...(requestedBy && { requestedBy }),
     };
 
+    const project = siteId
+      ? await Project.findById(siteId)
+          .select('_id siteID project_admin accountant sr_engineer operation')
+          .populate({
+            path: 'project_admin accountant sr_engineer operation',
+            model: 'User',
+            select: 'playerId',
+            session,
+          })
+          .lean()
+          .session(session)
+      : null;
+
+    const changeDescriptions = [];
+
+    // Compare changes
+    if (
+      siteId &&
+      existingRequest.site?._id?.toString() !== project?._id.toString()
+    ) {
+      changeDescriptions.push(
+        `Site changed from "${existingRequest.site?.siteID || 'N/A'}" to "${
+          project?.siteID || 'N/A'
+        }".`
+      );
+    }
+
+    if (purpose && existingRequest.purpose !== purpose) {
+      changeDescriptions.push(
+        `Purpose changed from "${existingRequest.purpose}" to "${purpose}".`
+      );
+    }
+
+    if (priority && existingRequest.priority !== priority) {
+      changeDescriptions.push(
+        `Priority changed from "${existingRequest.priority}" to "${priority}".`
+      );
+    }
+
+    if (
+      date &&
+      new Date(existingRequest.requiredBefore).toISOString() !==
+        new Date(date).toISOString()
+    ) {
+      changeDescriptions.push(
+        `Required before changed from "${existingRequest.requiredBefore.toDateString()}" to "${new Date(
+          date
+        ).toDateString()}".`
+      );
+    }
+
+    if (formattedMaterials) {
+      const oldMaterials = existingRequest.materials.map(
+        m => `${m.item?.name || 'Unknown'} (${m.quantity})`
+      );
+
+      const newMaterials = await Promise.all(
+        formattedMaterials.map(async m => {
+          const mat = await Material.findById(m.item)
+            .select('name')
+            .session(session);
+          return `${mat?.name || 'Unknown'} (${m.quantity})`;
+        })
+      );
+
+      if (JSON.stringify(oldMaterials) !== JSON.stringify(newMaterials)) {
+        changeDescriptions.push(
+          `Materials updated from ${oldMaterials.join(
+            ', '
+          )} to ${newMaterials.join(', ')}.`
+        );
+      }
+    }
+
+    const allUsers = [
+      project?.project_admin[0],
+      project?.accountant[0],
+      project?.sr_engineer[0],
+      project?.operation[0],
+    ];
+
+    // Generate remarks and log entry
+    const remarks =
+      changeDescriptions.length > 0
+        ? `Updated fields: ${changeDescriptions.join(' ')}`
+        : 'No major changes detected.';
+
+    const updateLog = {
+      status: 'updated',
+      updatedBy: requestedBy,
+      updatedAt: new Date(),
+      remarks,
+    };
+
+    // Perform update with session
     const updatedOrder = await MaterialRequest.findByIdAndUpdate(
       req.params.id,
-      updateData,
-      { new: true }
-    ).populate([
       {
-        path: 'materials.item',
-        select: 'name unit price',
+        $set: updateData,
+        $push: { updates: updateLog },
       },
+      { new: true, session }
+    ).populate([
+      { path: 'materials.item', select: 'name unit price' },
       {
         path: 'requestedBy',
         select: 'firstname lastname employeeId email phone profileImage roles',
       },
-      {
-        path: 'site',
-        select: 'siteID',
-      },
+      { path: 'site', select: 'siteID' },
     ]);
 
     if (!updatedOrder) {
+      await session.abortTransaction();
+      session.endSession();
       return res.status(404).json({ message: 'Material request not found.' });
     }
+
+    await createLogManual({
+      req,
+      logMessage: remarks,
+      siteId: project.siteID,
+      materialRequestId: req.params.id,
+      session,
+    });
+
+    await sendNotification({
+      users: allUsers,
+      title: 'Existing Material Request Updated.',
+      message: remarks,
+      data: { route: 'materialrequest', id: updatedOrder._id },
+    });
+
+    await session.commitTransaction();
+    session.endSession();
 
     res.status(200).json({
       message: 'Material request updated successfully.',
       request: updatedOrder,
     });
   } catch (error) {
-    console.error('Error updating material request:', error.message);
+    await session.abortTransaction();
+    session.endSession();
+    console.error('Transaction aborted:', error.message);
     res.status(500).json({
       message: 'Server error updating material request.',
       error: error.message,
     });
-  }
-};
-
-exports.addMaterialToOrder = async (req, res) => {
-  try {
-    const { materialId, quantity, price } = req.body;
-
-    if (!materialId || !quantity) {
-      return res
-        .status(400)
-        .json({ message: 'Material ID and quantity are required.' });
-    }
-
-    const order = await Order.findById(req.params.id);
-    if (!order) {
-      return res.status(404).json({ message: 'Order not found.' });
-    }
-
-    order.materials.push({ materialId, quantity, price });
-    await order.save();
-
-    res.status(200).json(order);
-  } catch (error) {
-    console.error('Error adding material:', error);
-    res.status(500).json({ message: 'Server error adding material.' });
-  }
-};
-
-exports.removeMaterialFromOrder = async (req, res) => {
-  try {
-    const { materialId } = req.body;
-
-    if (!materialId) {
-      return res.status(400).json({ message: 'Material ID is required.' });
-    }
-
-    const order = await Order.findById(req.params.id);
-    if (!order) {
-      return res.status(404).json({ message: 'Order not found.' });
-    }
-
-    order.materials = order.materials.filter(
-      item => item.materialId.toString() !== materialId
-    );
-    await order.save();
-
-    res.status(200).json(order);
-  } catch (error) {
-    console.error('Error removing material:', error);
-    res.status(500).json({ message: 'Server error removing material.' });
   }
 };
 
@@ -227,326 +375,6 @@ exports.deleteOrder = async (req, res) => {
     res.status(500).json({ message: 'Server error deleting order.' });
   }
 };
-
-exports.getOrdersBySite = async (req, res) => {
-  try {
-    const siteId = req.params.siteId;
-    const orders = await Order.find({ siteId })
-      .populate('vendor', 'name contact')
-      .populate('materials.materialId', 'name unit price');
-    res.status(200).json(orders);
-  } catch (error) {
-    console.error('Error fetching orders for site:', error);
-    res.status(500).json({ message: 'Server error fetching orders for site.' });
-  }
-};
-
-// exports.receiveMaterials = async (req, res) => {
-//   const { requestId } = req.params;
-//   const { materials } = req.body;
-//   const userId = req.user?._id || req.userId || req.body?.userId;
-
-//   // --- Early validations (before session) ---
-//   const validationError = validateRequestInput(userId, requestId, materials);
-//   if (validationError) {
-//     return res
-//       .status(validationError.status)
-//       .json({ message: validationError.message });
-//   }
-
-//   const materialsResult = normalizeAndValidateMaterials(materials);
-//   if (materialsResult.error) {
-//     return res.status(400).json({ message: materialsResult.error });
-//   }
-
-//   const materialsArray = materialsResult.data;
-//   const materialIds = [...new Set(materialsArray.map(item => item.materialId))];
-
-//   const invalidIds = materialIds.filter(
-//     id => !mongoose.Types.ObjectId.isValid(id)
-//   );
-//   if (invalidIds.length > 0) {
-//     return res.status(400).json({
-//       message: `Invalid material IDs: ${invalidIds.join(', ')}`,
-//     });
-//   }
-
-//   // --- Start session ---
-//   const session = await mongoose.startSession();
-
-//   try {
-//     let responsePayload;
-
-//     await session.withTransaction(async () => {
-//       // --- DB Fetch ---
-//       const [request, materials_db] = await Promise.all([
-//         MaterialRequest.findById(requestId).session(session),
-//         Material.find(
-//           { _id: { $in: materialIds } },
-//           { _id: 1, name: 1 }
-//         ).session(session),
-//       ]);
-
-//       if (!request) {
-//         throw { status: 404, message: 'Material request not found' };
-//       }
-
-//       const requestValidationError = validateRequestStatus(request);
-//       if (requestValidationError) {
-//         throw requestValidationError;
-//       }
-
-//       // --- Validation against existing data ---
-//       const materialMap = new Map(materials_db.map(m => [m._id.toString(), m]));
-//       const existingReceivedItems = new Map(
-//         request.receivedItems.map(item => [item.item.toString(), item.quantity])
-//       );
-//       const orderedMap = new Map(
-//         request.materials.map(m => [m.item.toString(), m.quantity])
-//       );
-
-//       const validationErrors = validateMaterialsForReceiving(
-//         materialIds,
-//         materialsArray,
-//         materialMap,
-//         existingReceivedItems,
-//         orderedMap
-//       );
-
-//       if (validationErrors.length > 0) {
-//         throw { status: 400, message: validationErrors.join('; ') };
-//       }
-
-//       // --- Prepare Updates ---
-//       const { bulkUpdates, receivedItems, materialQuantities } =
-//         prepareBatchOperations(materialsArray, userId);
-
-//       // Apply to request document → .save() will trigger pre('save')
-//       request.receivedItems.push(...receivedItems);
-//       request.lastUpdated = new Date();
-//       await request.save({ session }); // ⬅️ pre('save') runs here
-
-//       // Update stock if needed
-//       if (bulkUpdates.length > 0) {
-//         await Material.bulkWrite(bulkUpdates, { session });
-//       }
-
-//       // Build response payload
-//       const totalReceived = request.receivedItems.reduce(
-//         (sum, item) => sum + item.quantity,
-//         0
-//       );
-//       const totalOrdered = request.materials.reduce(
-//         (sum, item) => sum + item.quantity,
-//         0
-//       );
-
-//       responsePayload = {
-//         message: `Successfully received ${materialsArray.length} material${
-//           materialsArray.length > 1 ? 's' : ''
-//         }`,
-//         request: {
-//           id: requestId,
-//           status: request.status, // ✅ updated by pre('save')
-//           receivedItemsCount: request.receivedItems.length,
-//           totalReceived,
-//           totalOrdered,
-//           isCompleted: request.status === 'received',
-//         },
-//         processedItems: materialsArray.length,
-//         stockUpdates: materialQuantities.size,
-//       };
-//     });
-
-//     return res.status(200).json(responsePayload);
-//   } catch (error) {
-//     if (error.status) {
-//       return res.status(error.status).json({ message: error.message });
-//     }
-//     return handleDatabaseError(error, res);
-//   } finally {
-//     session.endSession();
-//   }
-// };
-
-// exports.receiveMaterials = async (req, res) => {
-//   const { requestId } = req.params;
-//   const userId = req.user?._id || req.userId || req.body?.userId;
-
-//   try {
-//     const { receivedDate, materials = [] } = req.body;
-
-//     // --- Early validation ---
-//     if (!materials.length) {
-//       return res.status(400).json({ message: 'Materials array is required' });
-//     }
-
-//     // --- Normalize materials and attach uploaded files ---
-//     const parsedMaterials = materials.map((item, index) => {
-//       const material = {
-//         materialId: item.materialId,
-//         quantity: Number(item.quantity),
-//         remarks: item.remarks || '',
-//         receivedBy: userId,
-//         receivedAt: receivedDate || new Date(),
-//         image: [],
-//         video: [],
-//       };
-
-//       if (req.files && req.files.length > 0) {
-//         const base = `materials[${index}]`;
-
-//         const relatedFiles = req.files.filter(f =>
-//           f.fieldname.startsWith(base)
-//         );
-
-//         relatedFiles.forEach(async file => {
-//           if (file.fieldname.includes('[image]')) {
-//             const data = await awsS3.uploadFile(file, 'project_update');
-//             const url = `https://thekedar-bucket.s3.us-east-1.amazonaws.com/${data}`;
-//             material.image = url;
-//           } else if (file.fieldname.includes('[video]')) {
-//             const data = await awsS3.uploadFiles(file, 'project_update');
-//             const url = `https://thekedar-bucket.s3.us-east-1.amazonaws.com/${data}`;
-//             material.video = url;
-//           }
-//         }
-//       );
-//       }
-
-//       return material;
-//     });
-
-//     console.log(materials);
-
-//     // --- Input validation ---
-//     const validationError = validateRequestInput(
-//       userId,
-//       requestId,
-//       parsedMaterials
-//     );
-//     if (validationError) {
-//       return res
-//         .status(validationError.status)
-//         .json({ message: validationError.message });
-//     }
-
-//     const materialsResult = normalizeAndValidateMaterials(parsedMaterials);
-//     if (materialsResult.error) {
-//       return res.status(400).json({ message: materialsResult.error });
-//     }
-
-//     const materialsArray = materialsResult.data;
-//     const materialIds = [...new Set(materialsArray.map(m => m.materialId))];
-//     const invalidIds = materialIds.filter(
-//       id => !mongoose.Types.ObjectId.isValid(id)
-//     );
-
-//     if (invalidIds.length) {
-//       return res.status(400).json({
-//         message: `Invalid material IDs: ${invalidIds.join(', ')}`,
-//       });
-//     }
-
-//     // --- Start transaction ---
-//     const session = await mongoose.startSession();
-//     let responsePayload;
-
-//     await session.withTransaction(async () => {
-//       const [request, materials_db] = await Promise.all([
-//         MaterialRequest.findById(requestId).session(session),
-//         Material.find(
-//           { _id: { $in: materialIds } },
-//           { _id: 1, name: 1 }
-//         ).session(session),
-//       ]);
-
-//       if (!request)
-//         throw { status: 404, message: 'Material request not found' };
-
-//       const requestValidationError = validateRequestStatus(request);
-//       if (requestValidationError) throw requestValidationError;
-
-//       const materialMap = new Map(materials_db.map(m => [m._id.toString(), m]));
-//       const existingReceivedItems = new Map(
-//         request.receivedItems.map(item => [item.item.toString(), item.quantity])
-//       );
-//       const orderedMap = new Map(
-//         request.materials.map(m => [m.item.toString(), m.quantity])
-//       );
-
-//       const validationErrors = validateMaterialsForReceiving(
-//         materialIds,
-//         materialsArray,
-//         materialMap,
-//         existingReceivedItems,
-//         orderedMap
-//       );
-
-//       if (validationErrors.length) {
-//         throw { status: 400, message: validationErrors.join('; ') };
-//       }
-
-//       // --- Prepare updates ---
-//       const { bulkUpdates, receivedItems, materialQuantities } =
-//         prepareBatchOperations(materialsArray, userId);
-
-//       // Attach file metadata (optional)
-//       receivedItems.forEach((item, i) => {
-//         const mat = parsedMaterials[i];
-//         if (mat.proofOfDelivery) {
-//           item.proofOfDelivery = {
-//             filename: mat.proofOfDelivery.originalname,
-//             mimetype: mat.proofOfDelivery.mimetype,
-//           };
-//         }
-//       });
-
-//       // --- Save changes ---
-//       request.receivedItems.push(...receivedItems);
-//       request.lastUpdated = new Date();
-//       await request.save({ session });
-
-//       if (bulkUpdates.length) {
-//         await Material.bulkWrite(bulkUpdates, { session });
-//       }
-
-//       const totalReceived = request.receivedItems.reduce(
-//         (sum, item) => sum + item.quantity,
-//         0
-//       );
-//       const totalOrdered = request.materials.reduce(
-//         (sum, item) => sum + item.quantity,
-//         0
-//       );
-
-//       responsePayload = {
-//         message: `Successfully received ${materialsArray.length} material${
-//           materialsArray.length > 1 ? 's' : ''
-//         }`,
-//         request: {
-//           id: requestId,
-//           status: request.status,
-//           receivedItemsCount: request.receivedItems.length,
-//           totalReceived,
-//           totalOrdered,
-//           isCompleted: request.status === 'received',
-//         },
-//         processedItems: materialsArray.length,
-//         stockUpdates: materialQuantities.size,
-//       };
-//     });
-
-//     session.endSession();
-//     return res.status(200).json(responsePayload);
-//   } catch (error) {
-//     console.error('Error in receiveMaterials:', error);
-//     if (error.status) {
-//       return res.status(error.status).json({ message: error.message });
-//     }
-//     return handleDatabaseError(error, res);
-//   }
-// };
 
 exports.receiveMaterials = async (req, res) => {
   const { requestId } = req.params;
@@ -709,6 +537,45 @@ exports.receiveMaterials = async (req, res) => {
         processedItems: materialsArray.length,
         stockUpdates: materialQuantities.size,
       };
+
+      const project = await Project.findById(request.site)
+        .select('_id siteID project_admin accountant sr_engineer operation')
+        .populate({
+          path: 'project_admin accountant sr_engineer operation',
+          model: 'User',
+          select: 'playerId',
+          session,
+        })
+        .lean()
+        .session(session);
+
+      const user = await User.findById(userId);
+
+      const remarks = `Successfully received ${materialsArray.length} material${
+        materialsArray.length > 1 ? 's' : ''
+      } by ${user.firstname} ${user.lastname}`;
+
+      const allUsers = [
+        project.project_admin[0],
+        project.accountant[0],
+        project.sr_engineer[0],
+        project.operation[0],
+      ];
+
+      await createLogManual({
+        req,
+        logMessage: remarks,
+        siteId: project.siteID,
+        materialRequestId: requestId,
+        session,
+      });
+
+      await sendNotification({
+        users: allUsers,
+        title: `Materials received for Site: ${project.siteID}`,
+        message: remarks,
+        data: { route: 'materialrequest', id: request._id },
+      });
     });
 
     session.endSession();
@@ -1169,82 +1036,6 @@ function handleDatabaseError(error, res) {
     error: process.env.NODE_ENV === 'development' ? error.message : undefined,
   });
 }
-
-// function normalizeAndValidateMaterials(materials) {
-//   if (!materials) {
-//     return { error: 'Materials data is required' };
-//   }
-
-//   let materialsArray;
-
-//   // Normalize input format
-//   if (Array.isArray(materials)) {
-//     materialsArray = materials;
-//   } else if (
-//     typeof materials === 'object' &&
-//     materials.materialId &&
-//     materials.quantity !== undefined
-//   ) {
-//     materialsArray = [materials];
-//   } else {
-//     return {
-//       error:
-//         'Invalid materials format. Expected array of materials or single material object',
-//     };
-//   }
-
-//   if (materialsArray.length === 0) {
-//     return { error: 'At least one material is required' };
-//   }
-
-//   if (materialsArray.length > 100) {
-//     return { error: 'Maximum 100 materials can be processed at once' };
-//   }
-
-//   // Enhanced validation with detailed error messages
-//   const validatedMaterials = [];
-//   const errors = [];
-
-//   materialsArray.forEach((item, index) => {
-//     const itemErrors = validateMaterialItem(item, index + 1);
-//     if (itemErrors.length > 0) {
-//       errors.push(...itemErrors);
-//     } else {
-//       const qty = parseFloat(item.quantity);
-
-//       if (isNaN(qty) || qty <= 0) {
-//         errors.push(
-//           `Invalid quantity at item #${index + 1}. Must be a positive number`
-//         );
-//       } else {
-//         validatedMaterials.push({
-//           ...item,
-//           quantity: qty, // ✅ keep float instead of flooring
-//         });
-//       }
-//     }
-//   });
-
-//   if (errors.length > 0) {
-//     return { error: errors.join('; ') };
-//   }
-
-//   // Check for duplicate material IDs in the same request
-//   const materialIds = validatedMaterials.map(item => item.materialId);
-//   const duplicateIds = materialIds.filter(
-//     (id, index) => materialIds.indexOf(id) !== index
-//   );
-
-//   if (duplicateIds.length > 0) {
-//     return {
-//       error: `Duplicate materials in request: ${[...new Set(duplicateIds)].join(
-//         ', '
-//       )}`,
-//     };
-//   }
-
-//   return { data: validatedMaterials };
-// }
 
 function normalizeAndValidateMaterials(materials) {
   if (!materials) {

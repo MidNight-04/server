@@ -21,7 +21,6 @@ const uploadImage = require('../middlewares/uploadImage');
 const awsS3 = require('../middlewares/aws-s3');
 const dayjs = require('dayjs');
 const ConstructionStep = require('../models/ConstructionStep');
-const { updateTaskAndReschedule } = require('../helper/schedule');
 const {
   createLogManually,
   createLogManual,
@@ -2018,6 +2017,8 @@ exports.AddNewProjectPoint = async (req, res) => {
           (1000 * 60 * 60 * 24) +
         1;
     }
+
+    console.log(dur)
 
     // 5. Create Task
     const newTaskPayload = {

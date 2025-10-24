@@ -15,6 +15,10 @@ const logModel = mongoose.model(
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Tickets',
       },
+      materialRequestId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'MaterialRequest',
+      },
       userId: {
         type: mongoose.Schema.Types.ObjectId,
         required: true,

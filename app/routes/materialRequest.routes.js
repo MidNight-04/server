@@ -13,25 +13,26 @@ module.exports = function (app) {
     verifyToken,
     controller.createMaterialRequest
   );
-  app.get('/api/materialrequest/requests', controller.materialRequests);
+  app.get(
+    '/api/materialrequest/requests',
+    verifyToken,
+    controller.materialRequests
+  );
   app.get(
     '/api/materialrequest/getorderbyid/:id',
+    verifyToken,
     controller.getMaterialRequestById
   );
-  app.get(
-    '/api/materialrequest/getordersbysite/:siteId',
-    controller.getOrdersBySite
-  );
-  app.put('/api/materialrequest/update/:id', controller.updateMaterialRequest);
   app.put(
-    '/api/materialrequest/addmaterialtoorder/:id',
-    controller.addMaterialToOrder
+    '/api/materialrequest/update/:id',
+    verifyToken,
+    controller.updateMaterialRequest
   );
   app.delete(
-    '/api/materialrequest/removematerialfromorder/:id',
-    controller.removeMaterialFromOrder
+    '/api/materialrequest/deleteorder/:id',
+    verifyToken,
+    controller.deleteOrder
   );
-  app.delete('/api/materialrequest/deleteorder/:id', controller.deleteOrder);
   app.put(
     '/api/materialrequest/receivematerials/:requestId',
     verifyToken,

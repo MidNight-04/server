@@ -52,8 +52,8 @@ exports.createLog = logInput => async (req, res, next) => {
 exports.createLogManually = async (
   req,
   logMessage,
-  siteId,
-  taskId,
+  siteId = null,
+  taskId = null,
   session = null
 ) => {
   try {
@@ -94,6 +94,7 @@ exports.createLogManual = async ({
   siteId = null,
   taskId = null,
   ticketId = null,
+  materialRequestId = null,
   session = null,
 }) => {
   try {
@@ -111,6 +112,7 @@ exports.createLogManual = async ({
       siteID,
       taskId,
       ticketId,
+      materialRequestId,
       date: new Date(),
     });
 

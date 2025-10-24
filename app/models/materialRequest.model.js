@@ -61,6 +61,16 @@ const receivedItemSchema = new Schema({
   },
 });
 
+const requestUpdates = new Schema({
+  status: String,
+  updatedBy: {
+    type: Schema.Types.ObjectId,
+    ref: 'User',
+  },
+  updatedAt: { type: Date, default: Date.now },
+  remarks: String,
+});
+
 const MaterialRequestSchema = new Schema(
   {
     site: {
@@ -104,6 +114,10 @@ const MaterialRequestSchema = new Schema(
       ],
       default: 'pending',
     },
+    updates: {
+      type: [requestUpdates],
+      default: [],
+    },
     requestedBy: {
       type: Schema.Types.ObjectId,
       ref: 'User',
@@ -112,6 +126,9 @@ const MaterialRequestSchema = new Schema(
     requiredBefore: {
       type: Date,
       required: true,
+    },
+    expectedDeliveryDate: {
+      type: Date,
     },
   },
   { timestamps: true }

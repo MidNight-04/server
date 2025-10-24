@@ -1,5 +1,4 @@
 const db = require('../models');
-const config = require('../config/auth.config');
 const ProjectLog = db.projectlogs;
 
 exports.addLog = (req, res) => {
@@ -35,91 +34,65 @@ exports.addLog = (req, res) => {
   });
 };
 
-// exports.getAllLog = async (req, res) => {
-//   try {
-//     const page = parseInt(req.query.page) || 1;
-//     const limit = parseInt(req.query.limit) || 20;
-//     const skip = (page - 1) * limit;
-
-//     const total = await ProjectLog.countDocuments();
-//     const logs = await ProjectLog.find({})
-//       .sort({ createdAt: -1 })
-//       .skip(skip)
-//       .limit(limit)
-//       .populate({
-//         path: 'userId',
-//         select: 'firstname lastname employeeId profileImage',
-//       });
-
-//     const hasNextPage = skip + logs.length < total;
-//     return res.status(200).send({
-//       data: logs,
-//       nextPage: hasNextPage ? page + 1 : null,
-//     });
-//   } catch (error) {
-//     console.error('Error fetching logs:', error);
-//     return res.status(500).send({
-//       message: 'There was a problem in getting the list of logs',
-//     });
-//   }
-// };
-
 exports.getAllLog = async (req, res) => {
   try {
     const page = Math.max(1, parseInt(req.query.page) || 1);
     const limit = Math.min(100, parseInt(req.query.limit) || 20);
     const skip = (page - 1) * limit;
 
-    const search = req.query.search || '';
-    const startDate = req.query.startDate
-      ? new Date(req.query.startDate)
-      : null;
-    const endDate = req.query.endDate ? new Date(req.query.endDate) : null;
+    const { search = '', filter = '', startDate, endDate } = req.query;
 
-    // Build match conditions
-    const matchConditions = [];
+    // Base match for pre-lookup fields (only those in ProjectLog)
+    const preLookupMatch = {};
 
-    // Global search
-    if (search) {
-      matchConditions.push({
-        $or: [
-          { action: { $regex: search, $options: 'i' } },
-          { siteID: { $regex: search, $options: 'i' } },
-          { 'user.firstname': { $regex: search, $options: 'i' } },
-          { 'user.lastname': { $regex: search, $options: 'i' } },
-          { 'user.employeeId': { $regex: search, $options: 'i' } },
-        ],
-      });
+    // Date filtering
+    if (startDate || endDate) {
+      preLookupMatch.createdAt = {};
+      if (startDate) preLookupMatch.createdAt.$gte = new Date(startDate);
+      if (endDate) preLookupMatch.createdAt.$lte = new Date(endDate);
     }
 
-    // Date filter
-    if (startDate && endDate) {
-      matchConditions.push({
-        createdAt: { $gte: startDate, $lte: endDate },
-      });
-    } else if (startDate) {
-      matchConditions.push({ createdAt: { $gte: startDate } });
-    } else if (endDate) {
-      matchConditions.push({ createdAt: { $lte: endDate } });
+    // Category filter
+    if (filter === 'task') {
+      preLookupMatch.taskId = { $exists: true, $ne: null };
+    } else if (filter === 'projects') {
+      preLookupMatch.siteID = { $exists: true, $ne: null };
+    } else if (filter === 'tickets') {
+      preLookupMatch.ticketId = { $exists: true, $ne: null };
+    } else if (filter === 'materials') {
+      preLookupMatch.materialRequestId = { $exists: true, $ne: null };
     }
 
-    const matchStage =
-      matchConditions.length > 0
-        ? { $match: { $and: matchConditions } }
-        : { $match: {} };
-
-    // Aggregation pipeline
-    const pipeline = [
-      {
-        $lookup: {
-          from: 'users',
-          localField: 'userId',
-          foreignField: '_id',
-          as: 'user',
-        },
+    const lookupUser = {
+      $lookup: {
+        from: 'users',
+        localField: 'userId',
+        foreignField: '_id',
+        as: 'user',
       },
-      { $unwind: { path: '$user', preserveNullAndEmptyArrays: true } },
-      matchStage,
+    };
+    const unwindUser = {
+      $unwind: { path: '$user', preserveNullAndEmptyArrays: true },
+    };
+
+    // Build post-lookup match (for search)
+    const postLookupMatch = {};
+    if (search) {
+      postLookupMatch.$or = [
+        { action: { $regex: search, $options: 'i' } },
+        { siteID: { $regex: search, $options: 'i' } },
+        { 'user.firstname': { $regex: search, $options: 'i' } },
+        { 'user.lastname': { $regex: search, $options: 'i' } },
+        { 'user.employeeId': { $regex: search, $options: 'i' } },
+      ];
+    }
+
+    // Get paginated logs
+    const logs = await ProjectLog.aggregate([
+      { $match: preLookupMatch },
+      lookupUser,
+      unwindUser,
+      ...(search ? [{ $match: postLookupMatch }] : []),
       { $sort: { createdAt: -1 } },
       { $skip: skip },
       { $limit: limit },
@@ -128,12 +101,11 @@ exports.getAllLog = async (req, res) => {
           _id: 1,
           action: 1,
           log: 1,
-          date: 1,
           siteID: 1,
           taskId: 1,
           ticketId: 1,
+          materialRequestId: 1,
           createdAt: 1,
-          updatedAt: 1,
           'user._id': 1,
           'user.firstname': 1,
           'user.lastname': 1,
@@ -141,42 +113,52 @@ exports.getAllLog = async (req, res) => {
           'user.profileImage': 1,
         },
       },
-    ];
+    ]);
 
-    const logs = await ProjectLog.aggregate(pipeline);
-
-    // Count total with same filters
+    // Accurate count (same filters, no skip/limit)
     const countPipeline = [
-      {
-        $lookup: {
-          from: 'users',
-          localField: 'userId',
-          foreignField: '_id',
-          as: 'user',
-        },
-      },
-      { $unwind: { path: '$user', preserveNullAndEmptyArrays: true } },
-      matchStage,
+      { $match: preLookupMatch },
+      lookupUser,
+      unwindUser,
+      ...(search ? [{ $match: postLookupMatch }] : []),
       { $count: 'total' },
     ];
-
     const countResult = await ProjectLog.aggregate(countPipeline);
     const total = countResult[0]?.total || 0;
 
-    const totalPages = Math.ceil(total / limit);
-    const hasNextPage = page < totalPages;
+    // Category counts (unfiltered)
+    const [totalLogs, totalTasks, totalTickets, totalProjects, totalMaterials] =
+      await Promise.all([
+        ProjectLog.countDocuments(),
+        ProjectLog.countDocuments({ taskId: { $exists: true, $ne: null } }),
+        ProjectLog.countDocuments({ ticketId: { $exists: true, $ne: null } }),
+        ProjectLog.countDocuments({ siteID: { $exists: true, $ne: null } }),
+        ProjectLog.countDocuments({
+          materialRequestId: { $exists: true, $ne: null },
+        }),
+      ]);
 
-    return res.status(200).send({
+    // Response
+    res.status(200).json({
       data: logs,
-      currentPage: page,
-      nextPage: hasNextPage ? page + 1 : null,
-      totalPages,
-      totalItems: total,
+      pagination: {
+        currentPage: page,
+        totalPages: Math.ceil(total / limit),
+        totalItems: total,
+        nextPage: page * limit < total ? page + 1 : null,
+      },
+      counts: {
+        totalLogs,
+        totalTasks,
+        totalTickets,
+        totalProjects,
+        totalMaterials,
+      },
     });
   } catch (error) {
     console.error('Error fetching logs:', error);
-    return res.status(500).send({
-      message: 'There was a problem in getting the list of logs',
+    res.status(500).json({
+      message: 'Error fetching logs',
       error: error.message,
     });
   }

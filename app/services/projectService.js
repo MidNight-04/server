@@ -120,7 +120,7 @@ async function deleteProjectPoint({ id, name, point, duration, req }) {
 
     await sendNotification({
       users: allPlayerIds,
-      title: 'New Point Added',
+      title: 'Point Removed From Project',
       message: logMessage,
       data: { route: 'projects', id },
     });

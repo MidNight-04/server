@@ -54,13 +54,14 @@ async function deleteProjectPoint({ id, name, point, duration, req }) {
 
     // 3. Remove step
     const updatePayload = {
-      $pull: { 'project_status.$[status].step': { point } },
+      $pull: {
+        'project_status.$[status].step': { point },
+        ...(stepToRemove.taskId.forceMajeure && {
+          forceMajeure: { reason: stepToRemove.taskId.title },
+        }),
+      },
+      $inc: { extension: -extension },
     };
-
-    if (stepToRemove.taskId?.forceMajeure) {
-      updatePayload.$unset = { forceMajeure: '' };
-      updatePayload.$inc = { extension: -extension };
-    }
 
     const updateResult = await Project.updateOne(
       { siteID: id, 'project_status.name': name },

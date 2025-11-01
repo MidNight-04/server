@@ -39,4 +39,21 @@ module.exports = function (app) {
     anyFileUploader,
     controller.receiveMaterials
   );
+
+  app.post(
+    '/api/materialrequest/addvendordetails/:requestId',
+    verifyToken,
+    controller.addVendorDetails
+  );
+
+  app.post(
+    '/api/materialrequest/changerequeststatus/:requestId',
+    verifyToken,
+    controller.changeRequestStatus
+  );
+  app.get(
+    '/api/materialrequest/getrequestupdates/:requestId',
+    verifyToken,
+    controller.getRequestUpdates
+  );
 };

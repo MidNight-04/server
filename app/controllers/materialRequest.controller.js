@@ -7,6 +7,9 @@ const awsS3 = require('../middlewares/aws-s3');
 const { createLogManual } = require('../middlewares/createLog');
 const { sendNotification } = require('../services/oneSignalService');
 
+const level1 = ['accountant', 'operations', 'sr. engineer'];
+const level2 = ['accountant', 'operations'];
+
 exports.createMaterialRequest = async (req, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();
@@ -286,11 +289,11 @@ exports.updateMaterialRequest = async (req, res) => {
     }
 
     const allUsers = [
-      project?.project_admin[0],
-      project?.accountant[0],
-      project?.sr_engineer[0],
-      project?.operation[0],
-    ];
+      project?.project_admin?.[0],
+      project?.accountant?.[0],
+      project?.sr_engineer?.[0],
+      project?.operation?.[0],
+    ].filter(Boolean);
 
     // Generate remarks and log entry
     const remarks =
@@ -640,6 +643,7 @@ exports.materialRequests = async (req, res) => {
                 quantity: '$$m.quantity',
                 unit: '$$m.unit',
                 vendor: '$$m.vendor',
+                rate: '$$m.rate',
                 material: {
                   $arrayElemAt: [
                     {
@@ -800,6 +804,7 @@ exports.materialRequests = async (req, res) => {
           purpose: 1,
           priority: 1,
           requiredBefore: 1,
+          approvals: 1,
           'site._id': 1,
           'site.siteID': 1,
           'site.name': 1,
@@ -814,6 +819,7 @@ exports.materialRequests = async (req, res) => {
           'materials.quantity': 1,
           'materials.unit': 1,
           'materials.vendor': 1,
+          'materials.rate': 1,
           'materials.material._id': 1,
           'materials.material.name': 1,
           'materials.material.unit': 1,
@@ -913,6 +919,402 @@ exports.materialRequests = async (req, res) => {
   }
 };
 
+exports.addVendorDetails = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const { requestId } = req.params;
+    const { status, expectedDate, materials } = req.body;
+    const requestedBy = req.user?._id || req.userId || req.body?.userId;
+
+    if (!requestId) throw new Error('Request ID is required');
+    if (!status) throw new Error('Status is required');
+    if (!expectedDate) throw new Error('Expected Date is required');
+    if (!materials || !Array.isArray(materials))
+      throw new Error('Materials must be a valid array');
+
+    // --- Fetch material request ---
+    const materialRequest = await MaterialRequest.findById(requestId)
+      .populate('materials.item', 'name unit')
+      .session(session);
+
+    if (!materialRequest) throw new Error('Material request not found');
+
+    // --- Format incoming materials ---
+    const formattedMaterials = materials.map(m => {
+      if (!m.materialId || !m.quantity) {
+        throw new Error('Each material must include materialId and quantity.');
+      }
+      return {
+        item: m.materialId,
+        quantity: Number(m.quantity),
+        unit: m.unit || '',
+        vendor: m.vendor || '',
+        rate: m.rate || null,
+      };
+    });
+
+    // --- Compare materials ---
+    const oldMaterials = materialRequest.materials.map(m => ({
+      itemId: m.item?._id?.toString() || '',
+      name: m.item?.name || 'Unknown',
+      quantity: Number(m.quantity) || 0,
+      unit: m.unit || '',
+      vendor: m.vendor?.toString?.() || '',
+      rate: m.rate || null,
+    }));
+
+    const newMaterials = await Promise.all(
+      formattedMaterials.map(async m => {
+        const mat = await Material.findById(m.item)
+          .select('name')
+          .session(session);
+        return {
+          itemId: m.item.toString(),
+          name: mat?.name || 'Unknown',
+          quantity: Number(m.quantity) || 0,
+          unit: m.unit || '',
+          vendor: m.vendor?.toString?.() || '',
+          rate: m.rate || null,
+        };
+      })
+    );
+
+    const materialsChanged =
+      oldMaterials.length !== newMaterials.length ||
+      oldMaterials.some((old, i) => {
+        const neu = newMaterials[i];
+        return (
+          old.itemId !== neu.itemId ||
+          old.quantity !== neu.quantity ||
+          old.vendor !== neu.vendor ||
+          old.rate !== neu.rate
+        );
+      });
+
+    const changeDescriptions = [];
+    if (materialsChanged) {
+      const oldDesc = oldMaterials
+        .map(
+          m =>
+            `${m.name} (${m.quantity})` +
+            (m.vendor ? ` - Vendor: ${m.vendor}` : '') +
+            (m.rate ? ` - Rate: ${m.rate}` : '')
+        )
+        .join(', ');
+
+      const newDesc = newMaterials
+        .map(
+          m =>
+            `${m.name} (${m.quantity})` +
+            (m.vendor ? ` - Vendor: ${m.vendor}` : '') +
+            (m.rate ? ` - Rate: ${m.rate}` : '')
+        )
+        .join(', ');
+
+      changeDescriptions.push(
+        `Materials updated from ${oldDesc} to ${newDesc}.`
+      );
+      materialRequest.set('materials', formattedMaterials);
+      materialRequest.markModified('materials');
+    }
+
+    // --- Project lookup (for approval notifications) ---
+    const project = materialRequest?.site
+      ? await Project.findById(materialRequest.site)
+          .select('_id siteID project_admin accountant sr_engineer operation')
+          .populate({
+            path: 'project_admin accountant sr_engineer operation',
+            model: 'User',
+            select: 'playerId',
+          })
+          .lean()
+      : null;
+
+    const user = await User.findById(requestedBy)
+      .select('firstname lastname roles')
+      .populate('roles');
+
+    const userRole = user?.roles?.name?.toLowerCase?.() || '';
+
+    const approvals = materialRequest.approvals || [];
+    if (
+      status &&
+      (level1.includes(userRole) ||
+        level2.includes(userRole) ||
+        userRole === 'admin')
+    ) {
+      let levelToUpdate;
+      const level1Approved = approvals.some(
+        a => a.level === 1 && a.status === 'approved'
+      );
+
+      if (!level1Approved) {
+        if (!level1.includes(userRole) && userRole !== 'admin')
+          throw new Error('User not authorized for Level 1 approval');
+        levelToUpdate = 1;
+      } else {
+        if (!level2.includes(userRole) && userRole !== 'admin')
+          throw new Error('User not authorized for Level 2 approval');
+        levelToUpdate = 2;
+      }
+
+      const approvalEntry = {
+        level: levelToUpdate,
+        approverId: requestedBy,
+        status,
+        approvedAt: new Date(),
+      };
+
+      const existing = approvals.find(a => a.level === levelToUpdate);
+      if (existing) Object.assign(existing, approvalEntry);
+      else approvals.push(approvalEntry);
+
+      materialRequest.approvals = approvals;
+      if (status === 'approved') {
+        materialRequest.status =
+          levelToUpdate === 1 ? 'approved' : 'order placed';
+      } else if (status === 'rejected') {
+        materialRequest.status = 'rejected';
+      }
+
+      changeDescriptions.push(
+        `Request ${status} at level ${levelToUpdate} by ${user.firstname} ${user.lastname}`
+      );
+    }
+
+    // --- Update expected date ---
+    materialRequest.expectedDeliveryDate = expectedDate;
+
+    // --- Add update log ---
+    if (changeDescriptions.length > 0) {
+      materialRequest.updates.push({
+        updatedBy: requestedBy,
+        updatedAt: new Date(),
+        status: materialRequest.status,
+        remarks: changeDescriptions.join('\n'),
+      });
+    }
+
+    // --- Save changes ---
+    await materialRequest.save({ session, validateBeforeSave: false });
+    await session.commitTransaction();
+    session.endSession();
+
+    return res.status(200).json({
+      success: true,
+      message: 'Vendor details and approvals updated successfully',
+    });
+  } catch (error) {
+    await session.abortTransaction();
+    session.endSession();
+    console.error('Error in addVendorDetails:', error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+exports.changeRequestStatus = async (req, res) => {
+  try {
+    const { requestId } = req.params;
+    const { status } = req.body;
+    const requestedBy = req.user?._id || req.userId || req.body?.userId;
+
+    if (!requestId) throw new Error('Request ID is required');
+    if (!status) throw new Error('Status is required');
+
+    const normalizedStatus = status.toLowerCase();
+
+    // ---- Fetch material request ----
+    const materialRequest = await MaterialRequest.findById(requestId).populate(
+      'materials.item',
+      'name unit'
+    );
+
+    if (!materialRequest) throw new Error('Material request not found');
+
+    // ---- Approval role levels ----
+    const level1 = ['accountant', 'operations', 'sr. engineer'];
+    const level2 = ['accountant', 'operations'];
+
+    // ---- Fetch project (optional) ----
+    const project = materialRequest?.site
+      ? await Project.findById(materialRequest.site)
+          .select('_id siteID project_admin accountant sr_engineer operation')
+          .populate({
+            path: 'project_admin accountant sr_engineer operation',
+            model: 'User',
+            select: 'playerId',
+          })
+          .lean()
+      : null;
+
+    // ---- Flatten project members ----
+    const allUsers = [
+      ...(project?.project_admin || []),
+      ...(project?.accountant || []),
+      ...(project?.sr_engineer || []),
+      ...(project?.operation || []),
+    ].filter(Boolean);
+
+    // ---- Fetch user & roles ----
+    const user = await User.findById(requestedBy)
+      .select('firstname lastname roles')
+      .populate('roles', 'name');
+
+    let userRoles = [];
+    if (Array.isArray(user.roles)) {
+      userRoles = user.roles.map(role => role.name.toLowerCase());
+    } else if (user.roles?.name) {
+      userRoles = [user.roles.name.toLowerCase()];
+    }
+
+    const approvals = materialRequest.approvals || [];
+
+    // ---- Determine approval level ----
+    const level1Approved = approvals.some(
+      a => a.level === 1 && a.status === 'approved'
+    );
+
+    let levelToUpdate = null;
+    if (!level1Approved) {
+      // Level 1 approval
+      if (
+        !userRoles.some(r => level1.includes(r)) &&
+        !userRoles.includes('admin')
+      ) {
+        throw new Error('User not authorized for Level 1 approval');
+      }
+      levelToUpdate = 1;
+    } else {
+      // Level 2 approval
+      if (
+        !userRoles.some(r => level2.includes(r)) &&
+        !userRoles.includes('admin')
+      ) {
+        throw new Error('User not authorized for Level 2 approval');
+      }
+      levelToUpdate = 2;
+    }
+
+    // ---- Update approval entry ----
+    const approvalEntry = {
+      level: levelToUpdate,
+      approverId: requestedBy,
+      status: normalizedStatus,
+      approvedAt: new Date(),
+    };
+
+    const existingIndex = approvals.findIndex(a => a.level === levelToUpdate);
+    if (existingIndex > -1) {
+      approvals[existingIndex] = approvalEntry;
+    } else {
+      approvals.push(approvalEntry);
+    }
+
+    // ---- Update material request status ----
+    if (normalizedStatus === 'approved') {
+      materialRequest.status =
+        levelToUpdate === 1 ? 'approved' : 'order placed';
+    } else if (normalizedStatus === 'rejected') {
+      materialRequest.status = 'rejected';
+    }
+
+    // ---- Log update ----
+    const changeDescription = `Request ${normalizedStatus} at level ${levelToUpdate} by ${user.firstname} ${user.lastname}`;
+
+    const updateLog = {
+      updatedBy: requestedBy,
+      updatedAt: new Date(),
+      status: materialRequest.status,
+      remarks: changeDescription,
+    };
+
+    materialRequest.updates = materialRequest.updates || [];
+    materialRequest.updates.push(updateLog);
+
+    // ---- Save changes ----
+    materialRequest.approvals = approvals;
+    await materialRequest.save();
+
+    return res.status(200).json({
+      success: true,
+      message: `Request ${normalizedStatus} successfully`,
+      data: materialRequest,
+    });
+  } catch (error) {
+    console.error('Error in changeRequestStatus:', error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+exports.getRequestUpdates = async (req, res) => {
+  try {
+    const { requestId } = req.params;
+
+    if (!requestId) {
+      return res.status(400).json({ message: 'Request ID is required' });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(requestId)) {
+      return res.status(400).json({ message: 'Invalid request ID format' });
+    }
+
+    const result = await MaterialRequest.aggregate([
+      { $match: { _id: new mongoose.Types.ObjectId(requestId) } },
+
+      // Flatten updates array
+      { $unwind: { path: '$updates', preserveNullAndEmptyArrays: true } },
+
+      // Lookup updatedBy user details (if updates.updatedBy is a ref)
+      {
+        $lookup: {
+          from: 'users',
+          localField: 'updates.updatedBy',
+          foreignField: '_id',
+          as: 'updates.updatedBy',
+          pipeline: [
+            { $project: { firstname: 1, lastname: 1, profileImage: 1 } },
+          ],
+        },
+      },
+
+      // Flatten the updatedBy array (from lookup)
+      {
+        $unwind: {
+          path: '$updates.updatedBy',
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+
+      // Sort updates by updatedAt descending
+      { $sort: { 'updates.updatedAt': -1 } },
+
+      // Group back into one document
+      {
+        $group: {
+          _id: '$_id',
+          status: { $first: '$status' },
+          updatedAt: { $first: '$updatedAt' },
+          updates: { $push: '$updates' },
+        },
+      },
+    ]);
+
+    if (!result || result.length === 0) {
+      return res.status(404).json({ message: 'Material request not found' });
+    }
+
+    return res.status(200).json({ data: result[0] });
+  } catch (error) {
+    console.error('Error in getRequestUpdates:', error);
+    if (error.status) {
+      return res.status(error.status).json({ message: error.message });
+    }
+    return handleDatabaseError(error, res);
+  }
+};
+
 /* ------------ Validation + Helpers ------------ */
 
 function validateRequestInput(userId, requestId, materials) {
@@ -926,7 +1328,7 @@ function validateRequestInput(userId, requestId, materials) {
 function validateRequestStatus(request) {
   if (!request) return { status: 404, message: 'Material request not found' };
 
-  if (!['approved', 'pending', 'partially received'].includes(request.status)) {
+  if (!['order placed', 'partially received'].includes(request.status)) {
     return {
       status: 400,
       message: `Cannot receive materials for request with status: ${request.status}`,

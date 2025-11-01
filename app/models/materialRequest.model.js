@@ -21,9 +21,18 @@ const itemSchema = new Schema({
     type: String,
     required: true,
   },
+  rate: {
+    type: Number,
+  },
+  // vendor: {
+  //   _id: {
+  //     type: Schema.Types.ObjectId,
+  //     ref: 'Vendor',
+  //   },
+  //   foreignKey: { type: String },
+  // },
   vendor: {
-    type: Schema.Types.ObjectId,
-    ref: 'Vendor',
+    type: String,
   },
 });
 
@@ -69,6 +78,17 @@ const requestUpdates = new Schema({
   },
   updatedAt: { type: Date, default: Date.now },
   remarks: String,
+});
+
+const approvalSchema = new Schema({
+  level: { type: Number, required: true },
+  approverId: { type: Schema.Types.ObjectId, ref: 'User' },
+  status: {
+    type: String,
+    enum: ['pending', 'approved', 'rejected'],
+    default: 'pending',
+  },
+  approvedAt: Date,
 });
 
 const MaterialRequestSchema = new Schema(
@@ -130,6 +150,13 @@ const MaterialRequestSchema = new Schema(
     expectedDeliveryDate: {
       type: Date,
     },
+    approvals: {
+      type: [approvalSchema],
+      default: [
+        { level: 1, status: 'pending' },
+        { level: 2, status: 'pending' },
+      ],
+    },
   },
   { timestamps: true }
 );
@@ -177,24 +204,61 @@ function calculateRequestStatus(materials = [], receivedItems = []) {
 }
 
 // Use this instead of the three separate hooks above if preferred
+// MaterialRequestSchema.pre('save', function (next) {
+//   const now = new Date();
+//   let statusChanged = false;
+//   if (this.materials?.length || this.receivedItems?.length) {
+//     const newStatus = calculateRequestStatus(
+//       this.materials,
+//       this.receivedItems
+//     );
+//     if (this.status !== newStatus) {
+//       this.status = newStatus;
+//       statusChanged = true;
+//     }
+//   }
+//   if (statusChanged) {
+//     this.lastUpdated = now;
+//   }
+
+//   next();
+// });
+
 MaterialRequestSchema.pre('save', function (next) {
   const now = new Date();
-  let statusChanged = false;
+  const manualStatus = this.status?.toLowerCase();
 
-  // Update status based on quantities
-  if (this.materials?.length || this.receivedItems?.length) {
-    const newStatus = calculateRequestStatus(
-      this.materials,
-      this.receivedItems
-    );
-    if (this.status !== newStatus) {
-      this.status = newStatus;
-      statusChanged = true;
+  // Step 1: Calculate material-based status (pending, partially received, completed)
+  let receivingStatus = calculateRequestStatus(
+    this.materials,
+    this.receivedItems
+  );
+
+  // Step 2: Combine approval + receiving logic
+  // Priority: rejection > order/approval > receiving
+  let finalStatus = 'pending';
+
+  if (manualStatus === 'rejected') {
+    finalStatus = 'rejected';
+  } else if (manualStatus === 'order placed') {
+    if (receivingStatus === 'completed') {
+      finalStatus = 'completed';
+    } else if (receivingStatus === 'partially received') {
+      finalStatus = 'partially received';
+    } else {
+      finalStatus = 'order placed';
     }
+  } else if (manualStatus === 'approved') {
+    // When approved but not yet ordered or received
+    finalStatus = 'approved';
+  } else {
+    // Fallback to receiving-based logic for unapproved requests
+    finalStatus = receivingStatus;
   }
 
-  // Set lastUpdated if status changed
-  if (statusChanged) {
+  // Step 3: Update only if status actually changes
+  if (this.status !== finalStatus) {
+    this.status = finalStatus;
     this.lastUpdated = now;
   }
 
